@@ -1,0 +1,24 @@
+{
+  "checkUpdates": true,
+  "region": null,
+  "hoverDelay": 0,
+  "lockDelay": 0,
+  "mapPreferences": {
+      "ascent":"/Game/Maps/Ascent/Ascent",
+      "bind":"/Game/Maps/Duality/Duality",
+      "breeze":"/Game/Maps/Foxtrot/Foxtrot",
+      "fracture":"/Game/Maps/Canyon/Canyon",
+      "haven":"/Game/Maps/Triad/Triad",
+      "icebox":"/Game/Maps/Port/Port",
+      "pearl":"/Game/Maps/Pitt/Pitt",
+      "split":"/Game/Maps/Bonsai/Bonsai",
+      "lotus":"/Game/Maps/Jam/Jam",
+      "alley":"/Game/Maps/HURM/HURM_Alley/HURM_Alley",
+      "bowl":"/Game/Maps/HURM/HURM_Bowl/HURM_Bowl",
+      "yard":"/Game/Maps/HURM/HURM_Yard/HURM_Yard"
+  },
+  "serverPreferences": {
+    "ashburn": "aresriot.aws-rclusterprod-use1-1.na-gp-ashburn-awsedge-1",
+    "chicago": "aresriot.aws-rclusterprod-use1-1.na-gp-chicago-awsedge-1"
+  }
+}

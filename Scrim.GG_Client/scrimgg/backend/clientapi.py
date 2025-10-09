@@ -1,0 +1,331 @@
+import requests, os, json, time, asyncio
+from valclient import Client
+from datetime import datetime
+from pugapi import PugSocketClient
+
+
+folder_name = 'data'
+file_name = 'data.json'
+file_path = os.path.join(os.path.dirname(__file__), folder_name, file_name)
+
+class ValorantAPI(object):
+    def __init__(self):
+        self.client = None
+        self.args = None
+        self.pugsocket = None
+        self.pugsocket_url = "ws://localhost:8000/ws/matchmaking/"
+        self.session_id = None
+        self.puuid = None
+        try:
+            with open(file_path, 'r') as file:
+                data = json.load(file)
+                self.args = data
+        except Exception as e:
+            print(f"An error occurred while reading the JSON file: {e}")
+    
+    ### LOGIN ###
+    async def login(self, region):
+        try:
+            if not self.client:
+                self.client = Client(region=region)
+                self.client.activate()
+                print("Client activated.")
+            if self.client.puuid:
+                jsonargs = {
+                    'puuid': self.client.puuid,
+                    'region': region,
+                    'username': f'{self.client.player_name}#{self.client.player_tag}',
+                    'alias': f'{self.client.player_name}#{self.client.player_tag}',
+                }
+                url = 'http://127.0.0.1:8000/login/login/'
+                try:
+                    response = requests.post(url, json=jsonargs)
+                    if response.status_code == 200:
+                        self.pugsocket_url = f"ws://localhost:8000/ws/matchmaking/{self.client.puuid}/"
+                        data = response.json()
+                        self.session_id = data.get('sessionid')
+                        print(f"Client successfully activated for: {self.client.puuid}")
+                        connection_status = await self.start_websocket_connection()
+                        if connection_status["status"] == "success":
+                            return {
+                                "status": "success",
+                                "message": f"Client successfully activated and WebSocket connected for: {self.client.puuid}"
+                            }
+                        else:
+                            return {
+                                "status": "failed",
+                                "details": connection_status["message"]
+                            }
+                    else:
+                        print(f"Login request failed with status code: {response.status_code}")
+                        return {
+                            "error": "Request failed",
+                            "status_code": response.status_code
+                        }
+                except Exception as e:
+                    print(f"Exception during login request: {e}")
+                    return {"error": str(e)}
+            else:
+                print("Client activation failed.")
+                return {"status": "error", "message": "Client activation failed"}
+        except Exception as e:
+            print(f"Exception during login: {e}")
+            return {"status": "error", "message": str(e)}
+          
+    ### WEBSOCKET INIT ###
+    async def start_websocket_connection(self, max_retries=3, backoff=2):
+        if not self.pugsocket:
+            self.pugsocket = PugSocketClient()
+        for attempt in range(1, max_retries + 1):
+            print(f"Attempting WebSocket connection [Attempt {attempt}/{max_retries}] to {self.pugsocket_url}")
+            connection_status = await self.pugsocket.start_connection(self.pugsocket_url)
+            if connection_status["status"] == "success":
+                print("WebSocket connection established.")
+                await asyncio.sleep(1)
+                return connection_status
+            print(f"Connection failed: {connection_status.get('message', 'No message provided')}")
+            if attempt < max_retries:
+                sleep_time = backoff * attempt
+                print(f"Waiting {sleep_time} seconds before next attempt...")
+                await asyncio.sleep(sleep_time)
+        print(f"Failed to connect after {max_retries} attempts.")
+        return {
+            "status": "failure",
+            "message": f"Could not establish WebSocket after {max_retries} tries"
+        }
+        
+    ### INFO ###
+        
+    async def get_player_model(self):
+        if not self.pugsocket or not self.pugsocket.is_connected():
+            print("WebSocket is not connected. Cannot fetch player model.")
+            return {"error": "WebSocket is not connected"}
+        self.pugsocket.player_data_event.clear()
+        print(f"Emitting player_model for {self.client.puuid}")
+        message = {
+            "puuid": self.client.puuid
+        }
+        try:
+            await self.pugsocket.send_message("get_player_model", message)
+            print("Sent 'get_player_model' message.")
+            timeout = 5
+            try:
+                await asyncio.wait_for(self.pugsocket.player_data_event.wait(), timeout=timeout)
+                print("Player data event received.")
+                return {
+                    "status": "success",
+                    "message": f"Player model successfully retrieved for: {self.client.puuid}",
+                    "data": self.pugsocket.player_data,
+                    "puuid": self.client.puuid,
+                }
+            except asyncio.TimeoutError:
+                print("Player model retrieval timed out.")
+                return {"error": "Player model retrieval timed out"}
+        except Exception as e:
+            print(f"Error sending 'get_player_model' message: {e}")
+            return {"error": f"Error sending 'get_player_model' message: {str(e)}"}
+        
+    ### CHAT ###
+    
+    async def send_lobby_message(self, payload):
+        """
+        Sends a chat message to the lobby.
+        """
+        message = payload.get("message")
+        user_alias = payload.get("userAlias")
+        lobby_id = payload.get("lobby_id")
+        timestamp = payload.get("timestamp", datetime.now().isoformat())
+        if not message or not user_alias or not lobby_id:
+            raise ValueError("Message, user alias, and lobby ID are required.")
+        if not self.pugsocket or not self.pugsocket.is_connected():
+            raise ValueError("WebSocket is not connected.")
+        try:
+            ws_payload = {
+                "event": "lobby_message",
+                "payload": {
+                    "message": message,
+                    "lobby_id": lobby_id,
+                    "userAlias": user_alias,
+                    "timestamp": timestamp
+                }
+            }
+            await self.pugsocket.send_lobby_message(ws_payload)
+            return {"status": "success", "message": "Lobby message sent successfully"}
+        except Exception as e:
+            print(f"Error sending lobby message: {e}")
+            raise e
+
+
+
+    async def send_direct_message(self, payload):
+        """
+        Sends a direct message to a specific player.
+        """
+        if not self.pugsocket or not self.pugsocket.is_connected():
+            raise ValueError("WebSocket is not connected.")
+        message = payload.get("message")
+        user_alias = payload.get("userAlias")
+        recipient_puuid = payload.get("recipientPuuid")
+        timestamp = payload.get("timestamp", datetime.now().isoformat())
+        if not message or not user_alias or not recipient_puuid:
+            raise ValueError("Message, user alias, and recipient PUUID are required.")
+        try:
+            await self.pugsocket.send_direct_message(message, user_alias, recipient_puuid, timestamp)
+            return {"status": "success", "message": "Direct message sent successfully"}
+        except Exception as e:
+            print(f"Error sending direct message: {e}")
+            raise e
+  
+            
+    ### LOBBY ###
+    async def createlobby(self):
+        if not self.pugsocket or not self.pugsocket.is_connected():
+            print("WebSocket is not connected. Cannot create lobby.")
+            return {"error": "WebSocket is not connected"}
+        self.pugsocket.lobby_created_event.clear()
+        print(f"Emitting lobby creation for {self.client.puuid}")
+        message = {
+            "puuid": self.client.puuid
+        }
+        try:
+            await self.pugsocket.send_message("create_lobby", message)
+            print("Sent 'create_lobby' message.")
+            timeout = 5  # Increased timeout
+            try:
+                await asyncio.wait_for(self.pugsocket.lobby_created_event.wait(), timeout=timeout)
+                print("Lobby creation event received.")
+                return {
+                    "status": "success",
+                    "message": f"Lobby successfully created for: {self.client.puuid}",
+                    'data': self.pugsocket.lobby_data,
+                    "puuid": self.client.puuid,
+                }
+            except asyncio.TimeoutError:
+                print("Lobby creation timed out.")
+                return {"error": "Lobby creation timed out"}
+        except Exception as e:
+            print(f"Error sending 'create_lobby' message: {e}")
+            return {"error": f"Error sending 'create_lobby' message: {str(e)}"}
+          
+    # def queueup():
+        
+    def queueupbypass(self,lobbyid,mapchoices,serverchoices):
+        url = 'http://127.0.0.1:8000/matchmaking/queueup/'
+        jsonargs = {
+                    'puuid':self.client.puuid,
+                    'lobbyid':lobbyid,
+                    'mapchoices':mapchoices,
+                    'serverchoices':serverchoices
+            }
+        response = requests.post(url, json=jsonargs)
+        if response.status_code in [200, 201]:
+            data = response.json()
+            if data["status"] == 'build':
+                if data["constructor"] == self.client.puuid:
+                    partyid = self.client.party_fetch_player()
+                    custom = self.client.party_change_to_custom()
+                    buildargs = {
+                        "Map": self.args['mapPreferences'][data["match_map"]],
+                        "Mode": "/Game/GameModes/Bomb/BombGameMode.BombGameMode_C",
+                        "GamePod": self.args['serverPreferences'][data["match_server"]],
+                        "UseBots":False,
+                        "GameRules":{
+                            "AllowGameModifiers": "true",
+                            "PlayOutAllRounds": "true",
+                            "SkipMatchHistory": "true",
+                            "TournamentMode": "false",
+                            "IsOvertimeWinByTwo": "true",
+                        },
+                    }
+                    setroom = 'http://127.0.0.1:8000/matchmaking/setroom/'
+                    jsonargs = {
+                            'pregame_id':custom["ID"],
+                            'match_id':data['match_id']
+                    }
+                    response = requests.post(setroom, json=jsonargs)
+                    if response.status_code in [200, 201]:
+                        data = response.json()
+                        settings = self.client.party_set_custom_game_settings(buildargs)
+                        time.sleep(4)
+                        self.client.party_start_custom_game()
+                        return {"status": "success", "message": f"Matchroom successfully set for : {self.client.puuid}", 'data': data, 'buildargs': buildargs, 'custom_info':settings,'party_id':partyid}
+                    else:
+                        return {"error": "Request failed", "status_code": response.status_code}
+                else:
+                    time.sleep(2)
+                    matchid = data["match_id"]
+                    fetchroom = 'http://127.0.0.1:8000/matchmaking/fetchroom/'
+                    jsonargs = {
+                            'match':matchid,
+                    }
+                    response = requests.post(fetchroom, json=jsonargs)
+                    if response.status_code in [200, 201]:
+                        data = response.json()
+                        self.client.party_join(data['pregame_id'])
+                        return {"status": "success", "message": f"Matchroom successfully set for : {self.client.puuid}", 'data': data,}           
+            else:
+                    return data
+        else:
+                return {"error": "Request failed", "status_code": response.status_code}
+              
+              
+    def matchfound(self,lobbyid,mapchoices,serverchoices):
+        url = 'http://127.0.0.1:8000/matchmaking/queueup/'
+        jsonargs = {
+                    'puuid':self.client.puuid,
+                    'lobbyid':lobbyid,
+                    'mapchoices':mapchoices,
+                    'serverchoices':serverchoices
+            }
+        response = requests.post(url, json=jsonargs)
+        if response.status_code in [200, 201]:
+            data = response.json()
+            if data["status"] == 'build':
+                if data["constructor"] == self.client.puuid:
+                    partyid = self.client.party_fetch_player()
+                    custom = self.client.party_change_to_custom()
+                    buildargs = {
+                        "Map": self.args['mapPreferences'][data["match_map"]],
+                        "Mode": "/Game/GameModes/Bomb/BombGameMode.BombGameMode_C",
+                        "GamePod": self.args['serverPreferences'][data["match_server"]],
+                        "UseBots":False,
+                        "GameRules":{
+                            "AllowGameModifiers": "true",
+                            "PlayOutAllRounds": "true",
+                            "SkipMatchHistory": "true",
+                            "TournamentMode": "false",
+                            "IsOvertimeWinByTwo": "true",
+                        },
+                    }
+                    setroom = 'http://127.0.0.1:8000/matchmaking/setroom/'
+                    jsonargs = {
+                            'pregame_id':custom["ID"],
+                            'match_id':data['match_id']
+                    }
+                    response = requests.post(setroom, json=jsonargs)
+                    if response.status_code in [200, 201]:
+                        data = response.json()
+                        settings = self.client.party_set_custom_game_settings(buildargs)
+                        time.sleep(4)
+                        self.client.party_start_custom_game()
+                        return {"status": "success", "message": f"Matchroom successfully set for : {self.client.puuid}", 'data': data, 'buildargs': buildargs, 'custom_info':settings,'party_id':partyid}
+                    else:
+                        return {"error": "Request failed", "status_code": response.status_code}
+                else:
+                    time.sleep(2)
+                    matchid = data["match_id"]
+                    fetchroom = 'http://127.0.0.1:8000/matchmaking/fetchroom/'
+                    jsonargs = {
+                            'match':matchid,
+                    }
+                    response = requests.post(fetchroom, json=jsonargs)
+                    if response.status_code in [200, 201]:
+                        data = response.json()
+                        self.client.party_join(data['pregame_id'])
+                        return {"status": "success", "message": f"Matchroom successfully set for : {self.client.puuid}", 'data': data,}           
+                    
+            else:
+                    return data
+        else:
+                return {"error": "Request failed", "status_code": response.status_code}
+              
