@@ -5,7 +5,7 @@
 ### 1. Clean Up Unused Packages
 
 ```bash
-cd Scrim.GG_Client/scrimgg/frontend/scrimgg
+cd client/frontend
 npm uninstall axios socket.io-client websocket
 ```
 
@@ -23,7 +23,7 @@ npm install
 ### Terminal 1: Backend
 
 ```bash
-cd Scrim.GG_Client/scrimgg/backend
+cd client/backend
 pipenv shell
 python bootstrap.py
 ```
@@ -42,7 +42,7 @@ python bootstrap.py
 ### Terminal 2: Frontend
 
 ```bash
-cd Scrim.GG_Client/scrimgg/frontend/scrimgg
+cd client/frontend
 npm start
 ```
 
@@ -153,12 +153,12 @@ Time between these should be < 20ms.
 
 | File | Change |
 |------|--------|
-| `src/contexts/WebSocketContext.jsx` | NEW - WebSocket hook |
-| `src/index.js` | Added WebSocketProvider |
-| `src/pages/login.jsx` | Uses WebSocket for auth |
-| `src/components/lobby/lobby.jsx` | Uses WebSocket for all actions |
-| `src/components/home/home.jsx` | Uses WebSocket for player data |
-| `backend/bootstrap.py` | Rewritten for WebSocket |
+| `client/frontend/src/contexts/WebSocketContext.jsx` | NEW - WebSocket hook |
+| `client/frontend/src/index.js` | Added WebSocketProvider |
+| `client/frontend/src/pages/login.jsx` | Uses WebSocket for auth |
+| `client/frontend/src/components/lobby/lobby.jsx` | Uses WebSocket for all actions |
+| `client/frontend/src/components/home/home.jsx` | Uses WebSocket for player data |
+| `client/backend/bootstrap.py` | Rewritten for WebSocket |
 
 ---
 

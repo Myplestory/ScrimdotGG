@@ -64,7 +64,7 @@ cd scrimgg
 
 #### 2. Server Setup
 ```bash
-cd ScrimGG/scrimgg/server/scrimgg
+cd server
 pipenv install
 pipenv shell
 python manage.py migrate
@@ -82,7 +82,7 @@ docker run -d -p 6379:6379 redis
 
 #### 4. Client Backend
 ```bash
-cd Scrim.GG_Client/scrimgg/backend
+cd client/backend
 pipenv install
 pipenv shell
 python bootstrap.py
@@ -90,7 +90,7 @@ python bootstrap.py
 
 #### 5. Client Frontend
 ```bash
-cd Scrim.GG_Client/scrimgg/frontend/scrimgg
+cd client/frontend
 npm install
 npm start
 ```
@@ -100,9 +100,9 @@ npm start
 | Document | Description |
 |----------|-------------|
 | [Quick Start](QUICK_START.md) | Get up and running quickly |
-| [Architecture](ARCHITECTURE_IMPROVEMENTS.md) | System design and architecture |
-| [Implementation Roadmap](IMPLEMENTATION_ROADMAP.md) | 9-week development plan |
-| [WebSocket Refactor](WEBSOCKET_REFACTOR_SUMMARY.md) | WebSocket implementation details |
+| [Architecture](docs/ARCHITECTURE_IMPROVEMENTS.md) | System design and architecture |
+| [Implementation Roadmap](docs/IMPLEMENTATION_ROADMAP.md) | 9-week development plan |
+| [WebSocket Refactor](docs/WEBSOCKET_REFACTOR_SUMMARY.md) | WebSocket implementation details |
 
 ## 🎮 Features
 
