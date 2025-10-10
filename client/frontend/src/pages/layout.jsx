@@ -137,9 +137,22 @@ const Layout = ({ children, setActiveComponent }) => {
               />
             )}
           />
-          <IconButton color="inherit" sx={{ padding: '4px' }}>
-            <Badge badgeContent={4} color="secondary">
-              <NotificationsIcon sx={{ fontSize: '1.2rem' }} />
+          <IconButton 
+            color="inherit" 
+            sx={{ 
+              padding: '4px',
+              '&:hover': {
+                backgroundColor: 'transparent',
+                '& .MuiSvgIcon-root': {
+                  filter: 'drop-shadow(0 0 8px rgba(255, 255, 255, 0.8))',
+                  transform: 'scale(1.1)',
+                }
+              },
+              transition: 'all 0.2s ease',
+            }}
+          >
+            <Badge badgeContent={0} color="secondary">
+              <NotificationsIcon sx={{ fontSize: '1.4rem' }} />
             </Badge>
           </IconButton>
           
@@ -149,9 +162,13 @@ const Layout = ({ children, setActiveComponent }) => {
             sx={{ 
               padding: '4px 8px',
               marginLeft: '8px',
+              fontSize: '1.6rem',
               '&:hover': {
-                backgroundColor: 'rgba(255, 255, 255, 0.1)',
-              }
+                backgroundColor: 'transparent',
+                textShadow: '0 0 8px rgba(255, 255, 255, 0.8)',
+                transform: 'scale(1.1)',
+              },
+              transition: 'all 0.2s ease',
             }}
             onClick={() => {
               if (window.electronAPI && window.electronAPI.closeApp) {

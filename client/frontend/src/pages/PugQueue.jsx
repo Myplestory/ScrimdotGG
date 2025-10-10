@@ -585,10 +585,10 @@ const PugQueue = () => {
         {/* Chatbox Section - Fixed height to prevent expansion */}
         <Box sx={{ 
           position: 'absolute',
-          bottom: theme.spacing(1),
+          bottom: theme.spacing(2),
           left: theme.spacing(2),
           right: theme.spacing(2),
-          height: activeTab === 'servers' ? '25vh' : '20vh',
+          height: '26vh',
           display: 'flex', 
           flexDirection: 'column', 
           border: '1px solid grey', 
