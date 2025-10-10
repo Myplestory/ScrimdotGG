@@ -4,13 +4,11 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-requests = "*"
+quart = "*"
+quart-cors = "*"
 valclient = "*"
-zerorpc = "*"
-flask-cors = "*"
-flask = "*"
-socketio = "*"
-python-socketio = "*"
+websockets = "*"
+requests = "*"
 
 [dev-packages]
 

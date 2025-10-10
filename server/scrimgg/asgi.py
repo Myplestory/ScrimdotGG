@@ -24,11 +24,9 @@ from matchmaking.routing import websocket_urlpatterns
 
 application = ProtocolTypeRouter({
     "http": get_asgi_application(), 
-    "websocket": 
-        AuthMiddlewareStack(
-            URLRouter(
-                websocket_urlpatterns  
-            
+    "websocket": AuthMiddlewareStack(
+        URLRouter(
+            websocket_urlpatterns  
         )
     ),
 })

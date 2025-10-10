@@ -15,11 +15,12 @@ const AuthenticationScreen = ({ onAuthentication }) => {
   const [password, setpassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [authTimeout, setAuthTimeout] = useState(null);
   const [theme, colorMode] = useMode();
   const navigate = useNavigate();
   
   // Use WebSocket context
-  const { connected, authenticated, api, on } = useWebSocket();
+  const { connected, authenticated, systemStatus, api, on } = useWebSocket();
 
   // Listen for authentication success
   useEffect(() => {
@@ -35,10 +36,29 @@ const AuthenticationScreen = ({ onAuthentication }) => {
     const unsubscribe = on('authentication_error', (payload) => {
       setError(payload.message || 'Authentication failed');
       setLoading(false);
+      
+      // Clear any existing timeout
+      if (authTimeout) {
+        clearTimeout(authTimeout);
+      }
+      
+      // Set timeout for retry if specified
+      if (payload.timeout) {
+        const timeoutId = setTimeout(() => {
+          setError('');
+          setLoading(false);
+        }, payload.timeout * 1000);
+        setAuthTimeout(timeoutId);
+      }
     });
     
-    return unsubscribe;
-  }, [on]);
+    return () => {
+      unsubscribe();
+      if (authTimeout) {
+        clearTimeout(authTimeout);
+      }
+    };
+  }, [on, authTimeout]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -90,9 +110,17 @@ const AuthenticationScreen = ({ onAuthentication }) => {
         >
           ScrimGG
         </Typography>
-        {/* Connection Status */}
-        <Typography variant="body2" color={connected ? 'success.main' : 'error.main'} sx={{ mb: 2 }}>
-          {connected ? '🟢 Connected to local backend' : '🔴 Not connected to backend'}
+        {/* Combined Game Status */}
+        <Typography variant="body2" sx={{ mb: 2 }}>
+          {!connected ? (
+            <span style={{ color: '#f44336' }}>🔴 Backend Disconnected</span>
+          ) : systemStatus.valorant.status === 'running' ? (
+            <span style={{ color: '#4caf50' }}>🟢 Game Connected</span>
+          ) : systemStatus.valorant.status === 'not_running' ? (
+            <span style={{ color: '#ff9800' }}>⚠️ Valorant Not Running</span>
+          ) : (
+            <span style={{ color: '#2196f3' }}>🔍 Checking Game Status...</span>
+          )}
         </Typography>
         
         <Box
@@ -105,7 +133,7 @@ const AuthenticationScreen = ({ onAuthentication }) => {
             type="submit"
             fullWidth
             variant="contained"
-            disabled={!connected || loading}
+            disabled={!connected || loading || systemStatus.valorant.status === 'not_running'}
             sx={{
               backgroundColor: theme.palette.secondary.dark,
               width: '60%',

@@ -13,7 +13,14 @@ from quart import Quart, websocket
 from quart_cors import cors
 
 from clientapi import ValorantAPI
-import auth
+
+# Optional auth import - only needed for certain functions
+try:
+    import auth
+    print("[OK] Auth module imported successfully")
+except ImportError as e:
+    print(f"[WARNING] Auth module import failed: {e}")
+    auth = None
 
 # Initialize Quart application
 app = Quart(__name__)
@@ -49,7 +56,12 @@ signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
 # Global Valorant API instance
-valorant_api = ValorantAPI()
+try:
+    valorant_api = ValorantAPI()
+    print("[OK] ValorantAPI initialized successfully")
+except Exception as e:
+    print(f"[WARNING] ValorantAPI initialization failed: {e}")
+    valorant_api = None
 
 
 # ============================================================
@@ -62,25 +74,22 @@ async def websocket_route():
     Main WebSocket endpoint for frontend communication.
     Handles all events via event-driven architecture.
     """
-    ws = websocket._get_current_object()
-    active_connections.add(ws)
-    client_id = id(ws)
-    
-    client_states[client_id] = {
-        'puuid': None,
-        'authenticated': False,
-        'lobby_id': None,
-        'match_id': None,
-    }
-    
-    print(f"✅ Frontend WebSocket connected: {client_id}")
-    
     try:
+        ws = websocket
+        active_connections.add(ws)
+        client_id = id(ws)
+        
+        client_states[client_id] = {
+            'puuid': None,
+            'authenticated': False,
+            'lobby_id': None,
+            'match_id': None,
+        }
+        
+        print(f"[OK] Frontend WebSocket connected: {client_id}")
+        
         # Send connection confirmation
-        await ws.send(json.dumps({
-            'event': 'connected',
-            'payload': {'message': 'Connected to Scrim.GG client service'}
-        }))
+        await send_message(ws, 'connected', {'message': 'Connected to Scrim.GG client service'})
         
         # Message loop
         while True:
@@ -89,18 +98,21 @@ async def websocket_route():
             event = data.get('event')
             payload = data.get('payload', {})
             
-            print(f"📥 Received: {event}")
+            print(f"[RECV] Received: {event}")
             
             # Route to appropriate handler
             await route_event(event, payload, client_id, ws)
             
     except Exception as e:
         print(f"WebSocket error: {e}")
+        import traceback
+        traceback.print_exc()
     finally:
-        active_connections.discard(ws)
-        if client_id in client_states:
+        if 'ws' in locals():
+            active_connections.discard(ws)
+        if 'client_id' in locals() and client_id in client_states:
             del client_states[client_id]
-        print(f"❌ Frontend WebSocket disconnected: {client_id}")
+        print(f"[DISCONNECT] Frontend WebSocket disconnected")
 
 
 async def route_event(event: str, payload: dict, client_id: int, ws):
@@ -108,7 +120,9 @@ async def route_event(event: str, payload: dict, client_id: int, ws):
     Route incoming events to appropriate handlers.
     """
     handlers = {
-        # Authentication
+        # Connection and Status
+        'connected': handle_connected,
+        'get_status': handle_get_status,
         'authenticate': handle_authenticate,
         'get_initial_state': handle_get_initial_state,
         
@@ -147,12 +161,115 @@ async def route_event(event: str, payload: dict, client_id: int, ws):
 # Event Handlers
 # ============================================================
 
+async def check_valorant_status():
+    """
+    Check if Valorant client is running and accessible.
+    Always performs a fresh check, not relying on cached client.
+    """
+    try:
+        # Check if valorant_api is initialized
+        if valorant_api is None:
+            return {
+                'status': 'not_running',
+                'message': 'Valorant API not initialized',
+                'details': None
+            }
+        
+        # Always try to create a fresh client instance to verify Valorant is actually running
+        # This ensures we don't rely on stale/cached client data
+        from valclient import Client
+        temp_client = Client(region='na')
+        
+        # CRITICAL: Call activate() to actually test if Valorant is running
+        # This is what throws the exception when Valorant is not running
+        temp_client.activate()
+        
+        # If we get here, Valorant is running and we can connect to it
+        is_authenticated = (valorant_api.client is not None and 
+                          hasattr(valorant_api.client, 'puuid') and 
+                          valorant_api.client.puuid is not None)
+        
+        return {
+            'status': 'running',
+            'message': 'Valorant client is running',
+            'details': {
+                'region': temp_client.region,
+                'is_authenticated': is_authenticated
+            }
+        }
+            
+    except Exception as e:
+        # If we can't create a client or activate it, Valorant is probably not running
+        error_msg = str(e).lower()
+        if 'unable to activate' in error_msg or 'valorant running' in error_msg:
+            return {
+                'status': 'not_running',
+                'message': 'Valorant client is not running or not accessible',
+                'details': None
+            }
+        elif 'connection' in error_msg or 'refused' in error_msg or 'timeout' in error_msg:
+            return {
+                'status': 'not_running',
+                'message': 'Valorant client is not running or not accessible',
+                'details': None
+            }
+        else:
+            return {
+                'status': 'not_running',
+                'message': f'Valorant client error: {str(e)}',
+                'details': None
+            }
+
+async def handle_connected(payload: dict, client_id: int, ws):
+    """
+    Handle client connection - send initial status.
+    """
+    try:
+        print(f"[CONNECT] Client {client_id} connected")
+        # Send initial status immediately when client connects
+        await handle_get_status(payload, client_id, ws)
+    except Exception as e:
+        print(f"[ERROR] Error handling connection: {str(e)}")
+
+async def handle_get_status(payload: dict, client_id: int, ws):
+    """
+    Get current system status (backend + Valorant).
+    """
+    try:
+        valorant_status = await check_valorant_status()
+        status = {
+            'backend_connected': True,
+            'valorant': valorant_status,
+            'authenticated': client_states[client_id].get('authenticated', False)
+        }
+        await send_message(ws, 'status_update', status)
+    except Exception as e:
+        await send_error(ws, f"Error getting status: {str(e)}")
+
 async def handle_authenticate(payload: dict, client_id: int, ws):
     """
     Authenticate with local Valorant client.
     """
     try:
-        print("🔐 Authenticating with Valorant client...")
+        print("[AUTH] Authenticating with Valorant client...")
+        
+        # Check if valorant_api is initialized
+        if valorant_api is None:
+            await send_message(ws, 'authentication_error', {
+                'message': 'Valorant API not initialized. Please restart the client.',
+                'timeout': 5
+            })
+            return
+        
+        # First check if Valorant is running
+        valorant_status = await check_valorant_status()
+        if valorant_status['status'] != 'running':
+            await send_message(ws, 'authentication_error', {
+                'message': 'Valorant client is not running. Please launch Valorant first.',
+                'timeout': 5
+            })
+            return
+        
         result = await valorant_api.login("na")
         
         if result.get('status') == 'success':
@@ -223,7 +340,7 @@ async def handle_queue_lobby(payload: dict, client_id: int, ws):
     map_preferences = payload.get('map_preferences', [])
     server_preferences = payload.get('server_preferences', [])
     
-    print(f"🎮 Queueing lobby {lobby_id} with preferences:", map_preferences, server_preferences)
+    print(f"[QUEUE] Queueing lobby {lobby_id} with preferences:", map_preferences, server_preferences)
     
     # Send queue request to Django server via WebSocket
     await valorant_api.pugsocket.send_message('add_lobby_to_queue', {
@@ -248,7 +365,7 @@ async def handle_accept_match(payload: dict, client_id: int, ws):
         await send_error(ws, "No match ID provided")
         return
     
-    print(f"✅ Accepting match {match_id}")
+    print(f"[ACCEPT] Accepting match {match_id}")
     
     # Send acceptance to Django server
     await valorant_api.pugsocket.send_message('accept_match', {
@@ -271,7 +388,7 @@ async def handle_decline_match(payload: dict, client_id: int, ws):
     if not match_id:
         return
     
-    print(f"❌ Declining match {match_id}")
+    print(f"[DECLINE] Declining match {match_id}")
     
     await valorant_api.pugsocket.send_message('decline_match', {
         'match_id': match_id,
@@ -337,9 +454,15 @@ async def send_event(ws, event: str, payload: dict):
     message = json.dumps({'event': event, 'payload': payload})
     try:
         await ws.send(message)
-        print(f"📤 Sent: {event}")
+        print(f"[SENT] Sent: {event}")
     except Exception as e:
         print(f"Error sending event {event}: {e}")
+
+async def send_message(ws, event: str, payload: dict):
+    """
+    Alias for send_event for backward compatibility.
+    """
+    await send_event(ws, event, payload)
 
 
 async def send_error(ws, message: str):
@@ -370,12 +493,15 @@ async def broadcast_to_all(event: str, payload: dict):
 if __name__ == '__main__':
     try:
         print("=" * 60)
-        print("🚀 Starting Scrim.GG Client Service")
+        print("Starting Scrim.GG Client Service")
         print("=" * 60)
-        print("📡 WebSocket server: ws://localhost:5888/ws")
-        print("🎮 Ready to connect to Valorant")
+        print("WebSocket server: ws://localhost:5888/ws")
+        print("Ready to connect to Valorant")
         print("=" * 60)
         
-        app.run(host='0.0.0.0', port=5888, debug=False)  # debug=False for better performance
+        print(f"ValorantAPI status: {'Initialized' if valorant_api else 'None'}")
+        print(f"Auth module status: {'Available' if auth else 'None'}")
+        
+        app.run(host='0.0.0.0', port=5888, debug=True)  # debug=True for troubleshooting
     finally:
         cleanup()

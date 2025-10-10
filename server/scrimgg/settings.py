@@ -92,7 +92,7 @@ CHANNEL_LAYERS = {
     },
 }
 
-ASGI_APPLICATION = 'scrimgg.routing.application'
+ASGI_APPLICATION = 'scrimgg.asgi.application'
 
 CORS_ORIGIN_ALLOW_ALL = True
 

@@ -24,7 +24,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         Lobby = apps.get_model('scrimgg', 'Lobby')
         try:
             player = await sync_to_async(Player.objects.get)(puuid=self.puuid)
-            lobby = await sync_to_async(Lobby.objects.filter(players=player, is_active=True).first)()
+            lobby = await sync_to_async(lambda: Lobby.objects.filter(players=player, is_active=True).first())()
             if lobby:
                 self.lobby_group_name = f"lobby_{lobby.id}"
                 await self.channel_layer.group_add(self.lobby_group_name, self.channel_name)

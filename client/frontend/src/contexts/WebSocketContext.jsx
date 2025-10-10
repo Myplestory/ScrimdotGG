@@ -21,6 +21,11 @@ export const WebSocketProvider = ({ children }) => {
   
   // State management
   const [authenticated, setAuthenticated] = useState(false);
+  const [systemStatus, setSystemStatus] = useState({
+    backend_connected: false,
+    valorant: { status: 'unknown', message: 'Checking...' },
+    authenticated: false
+  });
   const [gameState, setGameState] = useState({
     status: 'disconnected', // disconnected, menus, in_party, in_pregame, in_match
     party_id: null,
@@ -41,8 +46,8 @@ export const WebSocketProvider = ({ children }) => {
 
   // Connect to WebSocket
   const connectWebSocket = useCallback(() => {
-    if (socket?.readyState === WebSocket.OPEN) {
-      console.log('WebSocket already connected');
+    if (socket?.readyState === WebSocket.OPEN || socket?.readyState === WebSocket.CONNECTING) {
+      console.log('WebSocket already connected or connecting');
       return;
     }
 
@@ -55,6 +60,10 @@ export const WebSocketProvider = ({ children }) => {
       setReconnecting(false);
       setSocket(ws);
       reconnectAttempts.current = 0;
+      
+      // Send connected event to backend
+      const message = JSON.stringify({ event: 'connected', payload: {} });
+      ws.send(message);
     };
     
     ws.onclose = (event) => {
@@ -62,8 +71,8 @@ export const WebSocketProvider = ({ children }) => {
       setConnected(false);
       setSocket(null);
       
-      // Attempt reconnection with exponential backoff
-      if (reconnectAttempts.current < maxReconnectAttempts) {
+      // Only attempt reconnection if it wasn't a clean close and we haven't exceeded max attempts
+      if (!event.wasClean && reconnectAttempts.current < maxReconnectAttempts) {
         const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 10000);
         console.log(`🔄 Reconnecting in ${delay}ms (attempt ${reconnectAttempts.current + 1}/${maxReconnectAttempts})...`);
         setReconnecting(true);
@@ -72,8 +81,12 @@ export const WebSocketProvider = ({ children }) => {
           reconnectAttempts.current++;
           connectWebSocket();
         }, delay);
-      } else {
+      } else if (reconnectAttempts.current >= maxReconnectAttempts) {
         console.error('❌ Max reconnection attempts reached');
+        setReconnecting(false);
+      } else {
+        // Clean close, don't reconnect
+        console.log('✅ WebSocket closed cleanly, not reconnecting');
         setReconnecting(false);
       }
     };
@@ -94,6 +107,19 @@ export const WebSocketProvider = ({ children }) => {
     setSocket(ws);
   }, [socket]);
 
+  // Send event to backend
+  const sendEvent = useCallback((event, payload = {}) => {
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      const message = JSON.stringify({ event, payload });
+      socket.send(message);
+      console.log(`📤 Sent: ${event}`, payload);
+      return true;
+    } else {
+      console.warn('⚠️ WebSocket not connected. Cannot send event:', event);
+      return false;
+    }
+  }, [socket]);
+
   // Initialize connection on mount
   useEffect(() => {
     connectWebSocket();
@@ -103,10 +129,10 @@ export const WebSocketProvider = ({ children }) => {
         clearTimeout(reconnectTimeout.current);
       }
       if (socket) {
-        socket.close();
+        socket.close(1000, 'Component unmounting'); // Clean close
       }
     };
-  }, []);
+  }, []); // Remove connectWebSocket from dependencies to prevent re-connection loops
 
   // Event handler router
   const handleEvent = useCallback((event, payload) => {
@@ -116,6 +142,12 @@ export const WebSocketProvider = ({ children }) => {
     switch (event) {
       case 'connected':
         console.log('Backend confirmed connection');
+        // Backend will automatically send status_update, no need to request it
+        break;
+        
+      case 'status_update':
+        setSystemStatus(payload);
+        setAuthenticated(payload.authenticated);
         break;
         
       case 'authentication_success':
@@ -214,17 +246,6 @@ export const WebSocketProvider = ({ children }) => {
     }
   }, []);
 
-  // Send event to backend
-  const sendEvent = useCallback((event, payload = {}) => {
-    if (socket && socket.readyState === WebSocket.OPEN) {
-      const message = JSON.stringify({ event, payload });
-      socket.send(message);
-      console.log(`📤 Sent: ${event}`, payload);
-    } else {
-      console.error('⚠️ WebSocket not connected. Cannot send event:', event);
-    }
-  }, [socket]);
-
   // Register custom event handler
   const on = useCallback((event, handler) => {
     eventHandlers.current[event] = handler;
@@ -278,6 +299,7 @@ export const WebSocketProvider = ({ children }) => {
     connected,
     reconnecting,
     authenticated,
+    systemStatus,
     
     // Game state
     gameState,

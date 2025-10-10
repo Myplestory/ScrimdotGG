@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { w3cwebsocket as W3CWebSocket } from 'websocket';
 
-const client = new W3CWebSocket('ws://localhost:8000');
+const client = new W3CWebSocket('ws://localhost:5888/ws');
 
 const MatchAcceptancePopup = ({ onClose }) => {
   const [timeLeft, setTimeLeft] = useState(30); // example: 30 seconds to accept

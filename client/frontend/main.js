@@ -1,8 +1,10 @@
 const { app, BrowserWindow } = require('electron');
-const { spawn } = require('child_process');
+const { spawn, exec } = require('child_process');
 const path = require('path');
+const process = require('process');
 
 let pythonProcess;
+let pythonProcessPid;
 
 function createWindow() {
   // Create the browser window.
@@ -20,41 +22,183 @@ function createWindow() {
   }
 
   function startPythonBackend() {
-    const backendPath = path.join(__dirname, '..', '..', 'backend', 'bootstrap.py');
+    const backendPath = path.join(__dirname, '..', 'backend', 'bootstrap.py');
+    const backendDir = path.join(__dirname, '..', 'backend');
+    
+    console.log('🚀 Starting Python backend...');
+    console.log('📁 Backend directory:', backendDir);
+    console.log('🐍 Backend script:', backendPath);
+    
     try {
-        pythonProcess = spawn('python', [backendPath], {
-            env: { ...process.env, PYTHONUNBUFFERED: '1' } // Unbuffered output
+        // Determine Python command based on environment
+        const isDev = process.env.NODE_ENV === 'development';
+        const pipenvVenvPath = 'C:\\Users\\Charl\\.virtualenvs\\backend--754moSM\\Scripts\\python.exe';
+        
+        let pythonCommand, pythonArgs;
+        
+        if (isDev) {
+            // Development: use pipenv virtual environment
+            try {
+                require('fs').accessSync(pipenvVenvPath);
+                pythonCommand = pipenvVenvPath;
+                pythonArgs = ['bootstrap.py'];
+                console.log(`✅ [DEV] Using pipenv virtual environment Python: ${pythonCommand}`);
+            } catch (e) {
+                console.log(`❌ [DEV] Pipenv virtual environment not found, falling back to pipenv command`);
+                pythonCommand = 'pipenv';
+                pythonArgs = ['run', 'python', 'bootstrap.py'];
+            }
+        } else {
+            // Production: use system Python or compiled executable
+            const compiledExe = path.join(backendDir, 'bootstrap.exe');
+            try {
+                require('fs').accessSync(compiledExe);
+                pythonCommand = compiledExe;
+                pythonArgs = [];
+                console.log(`✅ [PROD] Using compiled executable: ${pythonCommand}`);
+            } catch (e) {
+                pythonCommand = 'python';
+                pythonArgs = ['bootstrap.py'];
+                console.log(`✅ [PROD] Using system Python: ${pythonCommand}`);
+            }
+        }
+        
+        pythonProcess = spawn(pythonCommand, pythonArgs, {
+            cwd: backendDir,
+            shell: true,
+            env: { ...process.env, PYTHONUNBUFFERED: '1' },
+            detached: false  // Keep process attached so it dies with parent
         });
 
+        // Store the PID for cleanup
+        pythonProcessPid = pythonProcess.pid;
+        console.log(`🔢 Backend process PID: ${pythonProcessPid}`);
+
         pythonProcess.stdout.on('data', (data) => {
-            console.log(`Python stdout: ${data.toString().trim()}`);
+            console.log(`🐍 [Backend] ${data.toString().trim()}`);
         });
 
         pythonProcess.stderr.on('data', (data) => {
-            console.error(`Python stderr: ${data.toString().trim()}`);
+            console.log(`[Backend] ${data.toString().trim()}`);
         });
 
         pythonProcess.on('close', (code) => {
-            console.log(`Python process exited with code ${code}`);
+            console.log(`🔄 [Backend] Process exited with code ${code}`);
+            pythonProcessPid = null;
         });
+
+        pythonProcess.on('error', (err) => {
+            console.error('💥 [Backend] Failed to start:', err.message);
+            console.log('💡 Make sure pipenv is installed and backend dependencies are set up');
+        });
+
+        console.log('✅ Python backend process started');
     } catch (err) {
-        console.error('Error spawning Python process:', err);
+        console.error('💥 Error spawning Python process:', err);
     }
 }
   
   app.whenReady().then(() => {
-    startPythonBackend(); 
-    createWindow();
+    console.log('🚀 Electron app is ready, cleaning up any existing processes...');
+    
+    // Kill any existing Python processes before starting new one
+    forceKillAllPythonProcesses();
+    
+    // Wait a moment for cleanup, then start fresh backend
+    setTimeout(() => {
+      console.log('🚀 Starting fresh backend...');
+      startPythonBackend(); 
+      console.log('🚀 Electron app is ready, creating window...');
+      createWindow();
+    }, 2000); // Wait 2 seconds for cleanup to complete
   });
+
+  // Function to kill Python backend process
+  function killPythonBackend() {
+    if (pythonProcess && pythonProcessPid) {
+      console.log(`🛑 Killing Python backend process (PID: ${pythonProcessPid})...`);
+      
+      if (process.platform === 'win32') {
+        // Windows: Use taskkill to forcefully kill the process and its children
+        exec(`taskkill /pid ${pythonProcessPid} /T /F`, (error, stdout, stderr) => {
+          if (error) {
+            console.error(`❌ Error killing process: ${error.message}`);
+          } else {
+            console.log(`✅ Python backend killed successfully`);
+          }
+        });
+      } else {
+        // Unix-like: Use SIGKILL
+        try {
+          process.kill(pythonProcessPid, 'SIGKILL');
+          console.log(`✅ Python backend killed successfully`);
+        } catch (error) {
+          console.error(`❌ Error killing process: ${error.message}`);
+        }
+      }
+      
+      pythonProcess = null;
+      pythonProcessPid = null;
+    }
+  }
+
+  // Enhanced cleanup function that waits for process termination
+  function forceKillAllPythonProcesses() {
+    console.log(`🛑 Force killing ALL Python processes...`);
+    
+    if (process.platform === 'win32') {
+      // Kill all python.exe processes (more aggressive)
+      exec(`taskkill /f /im python.exe`, (error, stdout, stderr) => {
+        if (error) {
+          // Ignore "process not found" errors - that means no Python processes were running
+          if (!error.message.includes('not found')) {
+            console.error(`❌ Error killing Python processes: ${error.message}`);
+          } else {
+            console.log(`✅ No Python processes found to kill`);
+          }
+        } else {
+          console.log(`✅ All Python processes killed successfully`);
+        }
+      });
+    } else {
+      // Unix-like: Kill all python processes
+      exec(`pkill -f python`, (error, stdout, stderr) => {
+        if (error) {
+          console.log(`✅ No Python processes found to kill`);
+        } else {
+          console.log(`✅ All Python processes killed successfully`);
+        }
+      });
+    }
+  }
 
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {
-      // Close Python backend process when Electron app is closed
-      if (pythonProcess) {
-        pythonProcess.kill();
-      }
-      app.quit();
+      // Try specific process first, then fallback to all Python processes
+      killPythonBackend();
+      setTimeout(() => {
+        forceKillAllPythonProcesses();
+        app.quit();
+      }, 1000); // Wait 1 second for initial kill to complete
     }
+  });
+  
+  // Also kill backend when app is quitting
+  app.on('before-quit', (event) => {
+    // Prevent immediate quit, allow cleanup to complete
+    event.preventDefault();
+    
+    // Try specific process first
+    killPythonBackend();
+    
+    // Force kill all Python processes after a short delay
+    setTimeout(() => {
+      forceKillAllPythonProcesses();
+      // Now allow the app to quit
+      setTimeout(() => {
+        app.exit(0);
+      }, 500);
+    }, 1000);
   });
 
 app.on('activate', () => {
