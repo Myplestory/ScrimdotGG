@@ -20,6 +20,16 @@ import { PlayerInfoCard } from '../components/home/playerinfo';
 
 const drawerWidth = 175;
 
+const StyledToolbar = styled(Toolbar)(({ theme }) => ({
+  minHeight: '48px !important', // 3/4 of MUI's default 64px height
+  padding: '4px 16px !important',
+  '@media (min-width: 600px)': {
+    minHeight: '48px !important', // Override tablet breakpoint
+  },
+  '@media (min-width: 0px)': {
+    minHeight: '48px !important', // Override mobile breakpoint
+  },
+}));
 
 const AppBar = styled(MuiAppBar, {
   shouldForwardProp: (prop) => prop !== 'open',
@@ -80,18 +90,14 @@ const Layout = ({ children, setActiveComponent }) => {
       <CssBaseline />
       {/* AppBar */}
       <AppBar position="fixed" open={open}>
-      <Toolbar
-          sx={{
-            minHeight: 0, // Remove default height
-            padding: 0,   // Remove padding
-          }}
-        >
+      <StyledToolbar>
           <IconButton
             edge="start"
             color="inherit"
             onClick={toggleDrawer}
             sx={{
-              marginRight: 2,
+              marginRight: 1,
+              padding: '4px',
               ...(open && { display: 'none' }),
             }}
           >
@@ -109,39 +115,38 @@ const Layout = ({ children, setActiveComponent }) => {
               maxWidth: '20%',
               marginRight: 'auto',
             }}
-            renderInput={(params) => (
+                renderInput={(params) => (
               <TextField
                 {...params}
                 label="Search"
                 variant="outlined"
+                size="small"
                 InputProps={{
                   ...params.InputProps,
                   sx: {
                     backgroundColor: theme.palette.background.dark,
                     color: theme.palette.text.primary,
+                    height: '32px',
                   },
                 }}
               />
             )}
           />
-          <IconButton color="inherit">
+          <IconButton color="inherit" sx={{ padding: '4px' }}>
             <Badge badgeContent={4} color="secondary">
-              <NotificationsIcon />
+              <NotificationsIcon sx={{ fontSize: '1.2rem' }} />
             </Badge>
           </IconButton>
-        </Toolbar>
+        </StyledToolbar>
       </AppBar>
 
       {/* Drawer */}
       <Drawer variant="permanent" open={open}>
-        <Toolbar
+        <StyledToolbar
           sx={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            padding: 0, // Remove padding
-            minHeight: 0, // Remove default height
-            height: 'auto', // Allow it to adjust naturally
           }}
         >
           <ButtonBase
@@ -156,7 +161,7 @@ const Layout = ({ children, setActiveComponent }) => {
               ScrimGG
             </Typography>
           </ButtonBase>
-        </Toolbar>
+        </StyledToolbar>
         <Divider />
         <List component="nav" sx={{
             padding: 0, // Remove padding from the nav
@@ -193,7 +198,7 @@ const Layout = ({ children, setActiveComponent }) => {
           }),
         }}
       >
-        <Toolbar /> {/* Offset for the AppBar */}
+        <StyledToolbar /> {/* Offset for the AppBar */}
         <Box
           sx={{
             flexGrow: 1,

@@ -13,10 +13,10 @@ const CustomPaper = styled(Paper)(({ theme, hasPlayer }) => ({
   flexDirection: 'column',
   alignItems: 'center',
   justifyContent: 'center',
-  minHeight: '300px',
+  minHeight: '200px',
   backgroundColor: hasPlayer ? theme.palette.primary.dark : theme.palette.dark, // Use a darker color
   borderRadius: theme.shape.borderRadius,
-  padding: theme.spacing(2),
+  padding: theme.spacing(1),
   boxShadow: hasPlayer
     ? 'inset 0 0 10px rgba(0, 0, 0, 0.5)' // Add a subtle dark shadow
     : 'inset 0 0 10px rgba(255, 255, 255, 0.1)', // Subtle light shadow for empty slots
@@ -24,9 +24,9 @@ const CustomPaper = styled(Paper)(({ theme, hasPlayer }) => ({
 }));
 
 const StyledAvatar = styled(Avatar)(({ theme }) => ({
-  width: theme.spacing(11),
-  height: theme.spacing(11),
-  marginBottom: theme.spacing(1),
+  width: theme.spacing(8),
+  height: theme.spacing(8),
+  marginBottom: theme.spacing(0.5),
   border: `2px solid ${theme.palette.primary.main}`,
 }));
 
@@ -46,7 +46,7 @@ const PlayerSlot = ({ player, handleEmptySlotClick, slotIndex }) => {
         <>
           {player.isLeader && (
             <LeaderCrown>
-              <Icon path={mdiCrown} size={1} color="gold" />
+              <Icon path={mdiCrown} size={0.8} color="gold" />
             </LeaderCrown>
           )}
           <StyledAvatar src={player.profile_picture || 'path/to/default/avatar.png'} alt={`${player.alias}'s avatar`} />

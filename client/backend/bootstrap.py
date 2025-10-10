@@ -157,11 +157,21 @@ async def route_event(event: str, payload: dict, client_id: int, ws):
         'queue_lobby': handle_queue_lobby,
         'dequeue_lobby': handle_dequeue_lobby,
         
+        # PUG Queue operations (new)
+        'join_pug_queue': handle_join_pug_queue,
+        'leave_pug_queue': handle_leave_pug_queue,
+        
         # Match operations
         'accept_match': handle_accept_match,
         'decline_match': handle_decline_match,
         'match_started': handle_match_started,
         'match_ended': handle_match_ended,
+        
+        # PUG Match flow events (from Django)
+        'pug_match_found': handle_pug_match_found,
+        'teams_assigned': handle_teams_assigned,
+        'veto_update': handle_veto_update,
+        'map_selected': handle_map_selected,
         
         # Chat
         'lobby_chat': handle_lobby_chat,
@@ -669,7 +679,154 @@ async def handle_get_player_data(payload: dict, client_id: int, ws):
 async def handle_join_lobby(payload: dict, client_id: int, ws): pass
 async def handle_leave_lobby(payload: dict, client_id: int, ws): pass
 async def handle_dequeue_lobby(payload: dict, client_id: int, ws): pass
+
+async def handle_join_pug_queue(payload: dict, client_id: int, ws):
+    """
+    Player joins PUG queue (solo or with party)
+    """
+    if not client_states[client_id]['authenticated']:
+        await send_error(ws, "Not authenticated")
+        return
+    
+    try:
+        # Get player data for queue
+        player_data = {
+            'puuid': client_states[client_id]['puuid'],
+            'queue_type': payload.get('queue_type', 'pug'),  # 'pug' or 'scrim'
+            'party_id': payload.get('party_id', None),  # If queuing with friends
+            'preferred_maps': payload.get('preferred_maps', []),
+            'elo_range': payload.get('elo_range', None),  # For scrims
+        }
+        
+        print(f"[PUG QUEUE] Player {client_states[client_id]['puuid']} joining {player_data['queue_type']} queue")
+        
+        # Send to Django matchmaking service
+        await valorant_api.pugsocket.send_message('join_pug_queue', player_data)
+        
+        # Update local state
+        client_states[client_id]['in_queue'] = True
+        client_states[client_id]['queue_type'] = player_data['queue_type']
+        
+        await send_event(ws, 'queue_joined', {
+            'queue_type': player_data['queue_type'],
+            'estimated_wait': 60  # Django will calculate this
+        })
+        
+    except Exception as e:
+        await send_error(ws, f"Failed to join queue: {str(e)}")
+
+async def handle_leave_pug_queue(payload: dict, client_id: int, ws):
+    """
+    Player leaves PUG queue
+    """
+    if not client_states[client_id]['authenticated']:
+        await send_error(ws, "Not authenticated")
+        return
+    
+    try:
+        await valorant_api.pugsocket.send_message('leave_pug_queue', {
+            'puuid': client_states[client_id]['puuid']
+        })
+        
+        client_states[client_id]['in_queue'] = False
+        client_states[client_id]['queue_type'] = None
+        
+        await send_event(ws, 'queue_left', {})
+        print(f"[PUG QUEUE] Player {client_states[client_id]['puuid']} left queue")
+        
+    except Exception as e:
+        await send_error(ws, f"Failed to leave queue: {str(e)}")
+
 async def handle_direct_message(payload: dict, client_id: int, ws): pass
+
+
+# ============================================================
+# PUG Match Flow Handlers
+# ============================================================
+
+async def handle_pug_match_found(payload: dict, client_id: int, ws):
+    """
+    Django found a PUG match - 10 players of similar ELO
+    """
+    match_data = payload['match_data']
+    # {
+    #   'match_id': 'abc123',
+    #   'players': [10 players with ELO],
+    #   'average_elo': 1500,
+    #   'elo_range': [1450, 1550],
+    #   'accept_timeout': 30
+    # }
+    
+    # Update state
+    client_states[client_id]['pending_match'] = match_data['match_id']
+    client_states[client_id]['in_queue'] = False
+    
+    print(f"[PUG MATCH] Match found for {len(match_data['players'])} players, avg ELO: {match_data['average_elo']}")
+    
+    # Notify frontend
+    await send_event(ws, 'pug_match_found', {
+        'match_id': match_data['match_id'],
+        'players': match_data['players'],
+        'average_elo': match_data['average_elo'],
+        'elo_range': match_data['elo_range'],
+        'accept_deadline': match_data.get('accept_deadline', 30)
+    })
+
+async def handle_teams_assigned(payload: dict, client_id: int, ws):
+    """
+    Django has balanced teams and selected captains
+    """
+    team_data = payload['team_data']
+    # {
+    #   'team_a': {
+    #     'captain': {'puuid': '...', 'elo': 1600},
+    #     'players': [5 players],
+    #     'average_elo': 1520
+    #   },
+    #   'team_b': {
+    #     'captain': {'puuid': '...', 'elo': 1580},
+    #     'players': [5 players],
+    #     'average_elo': 1518
+    #   },
+    #   'elo_difference': 2
+    # }
+    
+    client_states[client_id]['team'] = payload.get('my_team')  # 'team_a' or 'team_b'
+    client_states[client_id]['is_captain'] = payload.get('is_captain', False)
+    
+    print(f"[PUG TEAMS] Teams assigned - Player is on {payload.get('my_team', 'unknown')}, captain: {payload.get('is_captain', False)}")
+    
+    await send_event(ws, 'teams_assigned', team_data)
+
+async def handle_veto_update(payload: dict, client_id: int, ws):
+    """
+    Receive veto updates from Django
+    """
+    veto_state = payload['veto_state']
+    # {
+    #   'banned': ['Breeze', 'Fracture', 'Pearl'],
+    #   'remaining': ['Ascent', 'Bind', 'Haven'],
+    #   'current_turn': 'team_a',
+    #   'action': 'pick',  // Next action
+    #   'time_left': 25
+    # }
+    
+    print(f"[VETO] Update - {veto_state['current_turn']} is {veto_state['action']}ing")
+    
+    await send_event(ws, 'veto_update', veto_state)
+
+async def handle_map_selected(payload: dict, client_id: int, ws):
+    """
+    Final map has been selected after veto
+    """
+    selected_map = payload['map']
+    
+    print(f"[VETO] Map selected: {selected_map}")
+    
+    await send_event(ws, 'map_selected', {
+        'map': selected_map,
+        'message': f'Map: {selected_map}'
+    })
 
 
 # ============================================================

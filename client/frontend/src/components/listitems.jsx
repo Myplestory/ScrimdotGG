@@ -29,6 +29,7 @@ export const MainListItems = ({ setActiveComponent }) => (
         </AccordionSummary>
         <AccordionDetails>
           <List>
+            <CustomListItem text="Find Match" onClick={() => setActiveComponent('pug')} />
             <CustomListItem text="Create Party" onClick={() => setActiveComponent('lobby')} />
             <CustomListItem text="Join Party" navigateTo="/joinparty" />
             {/* Add more options as needed */}

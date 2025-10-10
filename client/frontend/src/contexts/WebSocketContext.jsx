@@ -293,6 +293,10 @@ export const WebSocketProvider = ({ children }) => {
     // Player operations
     getPlayerData: () => sendEvent('get_player_data', {}),
     updatePlayerSettings: (settings) => sendEvent('update_settings', settings),
+    
+    // PUG Queue operations
+    joinPugQueue: (queueData) => sendEvent('join_pug_queue', queueData),
+    leavePugQueue: () => sendEvent('leave_pug_queue', {}),
   };
 
   const value = {
