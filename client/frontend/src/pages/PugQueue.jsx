@@ -74,6 +74,7 @@ const PugQueue = () => {
     'US East', 'US West', 'EU West', 'EU East', 'Asia Pacific'
   ];
 
+
   // Initialize with current player
   useEffect(() => {
     if (playerData && players.length === 0) {
@@ -222,6 +223,7 @@ const PugQueue = () => {
           backgroundColor: theme.palette.background.dark,
           padding: theme.spacing(2),
           overflow: 'hidden',
+          position: 'relative',
         }}
       >
         {/* Header */}
@@ -368,17 +370,22 @@ const PugQueue = () => {
                       cursor: 'pointer',
                       border: selectedQueueType === 'pug' ? `2px solid ${theme.palette.secondary.main}` : '1px solid transparent',
                       backgroundColor: selectedQueueType === 'pug' ? theme.palette.action.hover : 'transparent',
-                      '&:hover': { backgroundColor: theme.palette.action.hover }
+                      '&:hover': { backgroundColor: theme.palette.action.hover },
+                      height: '100%',
+                      display: 'flex',
+                      flexDirection: 'column'
                     }}
                     onClick={() => setSelectedQueueType('pug')}
                   >
-                    <CardContent sx={{ p: 1.5 }}>
+                    <CardContent sx={{ p: 1, pb: 0.5, display: 'flex', flexDirection: 'column', height: '100%' }}>
                       <Typography variant="h6" gutterBottom>
                         5v5 Match
                       </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        A competitive experience, with fast balanced matches.
-                      </Typography>
+                      <Box sx={{ flexGrow: 1 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          A competitive experience, with fast balanced matches.
+                        </Typography>
+                      </Box>
                     </CardContent>
                   </Card>
                 </Grid>
@@ -389,20 +396,25 @@ const PugQueue = () => {
                       border: selectedQueueType === 'scrim' ? `2px solid ${theme.palette.secondary.main}` : '1px solid transparent',
                       backgroundColor: selectedQueueType === 'scrim' ? theme.palette.action.hover : 'transparent',
                       '&:hover': { backgroundColor: theme.palette.action.hover },
-                      opacity: 0.6
+                      opacity: 0.6,
+                      height: '100%',
+                      display: 'flex',
+                      flexDirection: 'column'
                     }}
                     onClick={() => {/* setSelectedQueueType('scrim') */}}
                   >
-                    <CardContent sx={{ p: 1.5 }}>
+                    <CardContent sx={{ p: 1, pb: 0.5, display: 'flex', flexDirection: 'column', height: '100%' }}>
                       <Typography variant="h6" gutterBottom>
                         5v5 Super Match
                       </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Solo, duo, trio only • 400 Elo range • Veteran matching • Vote kick • Premium matching
-                      </Typography>
-                      <Button variant="contained" color="success" size="small" sx={{ mt: 1 }}>
-                        UPGRADE
-                      </Button>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexGrow: 1 }}>
+                        <Typography variant="body2" color="text.secondary" sx={{ flexGrow: 1, maxWidth: '70%' }}>
+                          Solo, duo, trio only • 400 Elo range • Veteran matching • Vote kick • Premium matching
+                        </Typography>
+                        <Button variant="contained" color="success" size="small">
+                          UPGRADE
+                        </Button>
+                      </Box>
                     </CardContent>
                   </Card>
                 </Grid>
@@ -417,7 +429,7 @@ const PugQueue = () => {
               </Typography>
               <Grid container spacing={0.25}>
                 {availableMaps.map((map) => (
-                  <Grid item xs={4} sm={3} md={2.4} key={map}>
+                  <Grid item xs={3} sm={2.4} md={1.8} key={map}>
                     <Card
                       sx={{
                         cursor: 'pointer',
@@ -427,8 +439,8 @@ const PugQueue = () => {
                       }}
                       onClick={() => toggleMap(map)}
                     >
-                      <CardContent sx={{ p: 0.5, '&:last-child': { pb: 0.5 } }}>
-                        <Typography variant="caption" align="center" sx={{ fontSize: '0.75rem' }}>
+                      <CardContent sx={{ p: 0.5, '&:last-child': { pb: 0.5 }, textAlign: 'center' }}>
+                        <Typography variant="caption" sx={{ fontSize: '0.75rem', textAlign: 'center' }}>
                           {map}
                         </Typography>
                       </CardContent>
@@ -449,7 +461,7 @@ const PugQueue = () => {
               </Typography>
               <Grid container spacing={0.25}>
                 {availableServers.map((server) => (
-                  <Grid item xs={6} sm={4} key={server}>
+                  <Grid item xs={3} sm={2.4} md={1.8} key={server}>
                     <Card
                       sx={{
                         cursor: 'pointer',
@@ -459,8 +471,8 @@ const PugQueue = () => {
                       }}
                       onClick={() => toggleServer(server)}
                     >
-                      <CardContent sx={{ p: 0.5, '&:last-child': { pb: 0.5 } }}>
-                        <Typography variant="caption" align="center" sx={{ fontSize: '0.75rem' }}>
+                      <CardContent sx={{ p: 0.5, '&:last-child': { pb: 0.5 }, textAlign: 'center' }}>
+                        <Typography variant="caption" sx={{ fontSize: '0.75rem', textAlign: 'center' }}>
                           {server}
                         </Typography>
                       </CardContent>
@@ -474,19 +486,13 @@ const PugQueue = () => {
             </Box>
           )}
         </Box>
-
-        {selectedMaps.length < 5 && (
-          <Typography color="error" align="center" sx={{ mt: 1 }}>
-            Select at least 5 maps to queue
-          </Typography>
-        )}
         
-        {/* Chatbox Section */}
+        {/* Chatbox Section - Fills remaining space */}
         <Box sx={{ 
-          mt: 3, 
+          flexGrow: 1,
           display: 'flex', 
           flexDirection: 'column', 
-          height: '25vh', 
+          minHeight: activeTab === 'servers' ? '25vh' : '20vh',
           border: '1px solid grey', 
           borderRadius: '8px', 
           overflow: 'hidden',
