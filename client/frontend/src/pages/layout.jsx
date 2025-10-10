@@ -21,13 +21,13 @@ import { PlayerInfoCard } from '../components/home/playerinfo';
 const drawerWidth = 175;
 
 const StyledToolbar = styled(Toolbar)(({ theme }) => ({
-  minHeight: '48px !important', // 3/4 of MUI's default 64px height
+  minHeight: '62px !important', // Increased by 8px for better proportions
   padding: '4px 16px !important',
   '@media (min-width: 600px)': {
-    minHeight: '48px !important', // Override tablet breakpoint
+    minHeight: '62px !important', // Override tablet breakpoint
   },
   '@media (min-width: 0px)': {
-    minHeight: '48px !important', // Override mobile breakpoint
+    minHeight: '62px !important', // Override mobile breakpoint
   },
 }));
 
@@ -85,7 +85,7 @@ const Layout = ({ children, setActiveComponent }) => {
         overflow: 'hidden', // Prevent overflow
         backgroundColor: theme.palette.primary.dark,
         color: theme.palette.text.primary,
-        paddingTop: '30px', // Account for DragBar height
+        paddingTop: '16px', // Account for minimal DragBar height
       }}
     >
       <CssBaseline />
@@ -115,6 +115,10 @@ const Layout = ({ children, setActiveComponent }) => {
               minWidth: '200px',
               maxWidth: '20%',
               marginRight: 'auto',
+              height: '40px',
+              '& .MuiAutocomplete-inputRoot': {
+                height: '40px',
+              },
             }}
                 renderInput={(params) => (
               <TextField
@@ -137,6 +141,25 @@ const Layout = ({ children, setActiveComponent }) => {
             <Badge badgeContent={4} color="secondary">
               <NotificationsIcon sx={{ fontSize: '1.2rem' }} />
             </Badge>
+          </IconButton>
+          
+          {/* Close Button */}
+          <IconButton 
+            color="inherit" 
+            sx={{ 
+              padding: '4px 8px',
+              marginLeft: '8px',
+              '&:hover': {
+                backgroundColor: 'rgba(255, 255, 255, 0.1)',
+              }
+            }}
+            onClick={() => {
+              if (window.electronAPI && window.electronAPI.closeApp) {
+                window.electronAPI.closeApp();
+              }
+            }}
+          >
+            ×
           </IconButton>
         </StyledToolbar>
       </AppBar>

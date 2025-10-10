@@ -82,14 +82,14 @@ const AuthenticationScreen = ({ onAuthentication }) => {
     <Box
       sx={{
         backgroundColor: theme.palette.background.dark, // Dark background
-        height: "calc(100vh - 30px)", // Subtract DragBar height from total height
+        height: "calc(100vh - 30px)", // Subtract full DragBar height from total height
         width: "100vw", // Full width
         display: "flex",
         alignItems: "center", // Center vertically
         justifyContent: "center", // Center horizontally
         margin: 0, // Ensure no margin
         padding: 0, // No padding
-        marginTop: "30px", // Account for DragBar height
+        marginTop: "30px", // Account for full DragBar height on auth screen
       }}
     >
       <CssBaseline />

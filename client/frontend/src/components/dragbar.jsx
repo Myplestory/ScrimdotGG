@@ -1,10 +1,10 @@
 import React from 'react';
 import { styled } from '@mui/material/styles';
+import { useLocation } from 'react-router-dom';
 import { theme } from '../theme'
 
 const DragBarStyled = styled('div')(({ theme }) => ({
   WebkitAppRegion: 'drag',
-  backgroundColor: theme.palette.background.dark,
   color: theme.palette.text.primary,
   height: '30px',
   maxHeight: '30px',
@@ -18,7 +18,22 @@ const DragBarStyled = styled('div')(({ theme }) => ({
   top: 0,
   left: 0,
   right: 0,
-  width: '100%'
+  width: '100%',
+  border: 'none',
+  outline: 'none',
+  boxShadow: 'none',
+  backgroundColor: 'transparent', // Fully transparent
+  color: theme.palette.text.primary, // Match AppBar text color
+  '&::before': {
+    content: '""',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: '174px',
+    height: '100%',
+    backgroundColor: theme.palette.background.paper,
+    zIndex: -1,
+  },
 }));
 
 const noDragStyle = {
@@ -47,14 +62,22 @@ const CloseButton = styled('button')(({ theme }) => ({
 
 
 const DragBar = () => {
+  const location = useLocation();
+  const isAuthPage = location.pathname === '/' || location.pathname.includes('login');
+  
   const handleClose = () => {
     window.electronAPI.closeApp();
   };
 
   return (
-    <DragBarStyled>
+    <DragBarStyled
+      sx={{
+        height: isAuthPage ? '30px' : '16px',
+        maxHeight: isAuthPage ? '30px' : '16px',
+      }}
+    >
       <div></div>
-      <CloseButton onClick={handleClose}>×</CloseButton>
+      {isAuthPage && <CloseButton onClick={handleClose}>×</CloseButton>}
     </DragBarStyled>
   );
 };

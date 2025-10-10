@@ -51,7 +51,7 @@ const PlayerSlot = ({ player, handleEmptySlotClick, slotIndex }) => {
           )}
           <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <StyledAvatar src={player.profile_picture || 'path/to/default/avatar.png'} alt={`${player.alias}'s avatar`} />
-            <Typography variant="subtitle1" fontFamily={"Francker W01 Condensed Bold"} fontWeight={'bold'} sx={{ mb: 0.5 }}>
+            <Typography variant="subtitle2" fontFamily={"Francker W01 Condensed Bold"} fontWeight={'bold'} sx={{ mb: 1.5, fontSize: '0.75rem' }}>
               {player.alias || 'Unknown Player'}
             </Typography>
             <RankComponent 

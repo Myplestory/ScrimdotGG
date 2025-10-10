@@ -23,20 +23,31 @@ const CustomListItem = ({ text, onClick }) => {
 
 export const MainListItems = ({ setActiveComponent }) => (
   <React.Fragment>
-    <Accordion >
+    <Accordion sx={{ 
+      '&:before': { display: 'none' }, 
+      boxShadow: 'none', 
+      margin: '0 !important',
+      '&.MuiAccordion-root': { margin: '0 !important' },
+      '&.MuiAccordion-root:before': { display: 'none' }
+    }}>
         <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          <ListItemText primary="Pugs & Ranks" />
+          <ListItemText primary="Matchmake" />
         </AccordionSummary>
         <AccordionDetails>
           <List>
-            <CustomListItem text="Find Match" onClick={() => setActiveComponent('pug')} />
-            <CustomListItem text="Create Party" onClick={() => setActiveComponent('lobby')} />
-            <CustomListItem text="Join Party" navigateTo="/joinparty" />
+            <CustomListItem text="Play" onClick={() => setActiveComponent('pug')} />
+            <CustomListItem text="Scrim" onClick={() => setActiveComponent('lobby')} />
             {/* Add more options as needed */}
           </List>
       </AccordionDetails>
     </Accordion>
-    <Accordion>
+    <Accordion sx={{ 
+      '&:before': { display: 'none' }, 
+      boxShadow: 'none', 
+      margin: '0 !important',
+      '&.MuiAccordion-root': { margin: '0 !important' },
+      '&.MuiAccordion-root:before': { display: 'none' }
+    }}>
         <AccordionSummary expandIcon={<ExpandMoreIcon />}>
           <ListItemText primary="League" />
         </AccordionSummary>
@@ -50,7 +61,13 @@ export const MainListItems = ({ setActiveComponent }) => (
           </List>
       </AccordionDetails>
     </Accordion>
-    <Accordion>
+    <Accordion sx={{ 
+      '&:before': { display: 'none' }, 
+      boxShadow: 'none', 
+      margin: '0 !important',
+      '&.MuiAccordion-root': { margin: '0 !important' },
+      '&.MuiAccordion-root:before': { display: 'none' }
+    }}>
         <AccordionSummary expandIcon={<ExpandMoreIcon />}>
           <ListItemText primary="Forums" />
         </AccordionSummary>
@@ -61,7 +78,13 @@ export const MainListItems = ({ setActiveComponent }) => (
           </List>
       </AccordionDetails>
       </Accordion>
-      <Accordion>
+      <Accordion sx={{ 
+      '&:before': { display: 'none' }, 
+      boxShadow: 'none', 
+      margin: '0 !important',
+      '&.MuiAccordion-root': { margin: '0 !important' },
+      '&.MuiAccordion-root:before': { display: 'none' }
+    }}>
         <AccordionSummary expandIcon={<ExpandMoreIcon />}>
           <ListItemText primary="Support" />
         </AccordionSummary>
@@ -72,7 +95,13 @@ export const MainListItems = ({ setActiveComponent }) => (
           </List>
       </AccordionDetails>
     </Accordion>
-    <Accordion>
+    <Accordion sx={{ 
+      '&:before': { display: 'none' }, 
+      boxShadow: 'none', 
+      margin: '0 !important',
+      '&.MuiAccordion-root': { margin: '0 !important' },
+      '&.MuiAccordion-root:before': { display: 'none' }
+    }}>
         <AccordionSummary expandIcon={<ExpandMoreIcon />}>
           <ListItemText primary="Client" />
         </AccordionSummary>

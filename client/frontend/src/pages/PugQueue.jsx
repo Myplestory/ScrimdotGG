@@ -303,7 +303,7 @@ const PugQueue = () => {
           flexDirection: 'column',
           height: '100%',
           backgroundColor: theme.palette.background.dark,
-          padding: theme.spacing(2),
+          padding: `${theme.spacing(1)} ${theme.spacing(2)} ${theme.spacing(2)} ${theme.spacing(2)}`,
           overflow: 'hidden',
           position: 'relative',
         }}
