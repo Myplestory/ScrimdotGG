@@ -1,7 +1,7 @@
 // AuthenticationScreen.jsx
 import React, { useState, useEffect } from 'react';
 import { ColorModeContext, useMode } from "../theme";
-import { Box, Button, Container, CssBaseline, Typography, CircularProgress } from "@mui/material";
+import { Box, Button, Container, CssBaseline, Typography, CircularProgress, FormControl, InputLabel, Select, MenuItem } from "@mui/material";
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import { useNavigate } from 'react-router-dom';
 import { useWebSocket } from '../contexts/WebSocketContext';
@@ -13,6 +13,7 @@ function onlyLettersAndNumbers(str) {
 const AuthenticationScreen = ({ onAuthentication }) => {
   const [username, setusername] = useState('');
   const [password, setpassword] = useState('');
+  const [selectedRegion, setSelectedRegion] = useState('na');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [authTimeout, setAuthTimeout] = useState(null);
@@ -71,8 +72,8 @@ const AuthenticationScreen = ({ onAuthentication }) => {
     setLoading(true);
     setError('');
     
-    // Send authentication request via WebSocket
-    api.authenticate();
+    // Send authentication request via WebSocket with selected region
+    api.authenticate({ region: selectedRegion });
   };
   
       
@@ -81,13 +82,14 @@ const AuthenticationScreen = ({ onAuthentication }) => {
     <Box
       sx={{
         backgroundColor: theme.palette.background.dark, // Dark background
-        minHeight: "100vh", // Full height
+        height: "calc(100vh - 30px)", // Subtract DragBar height from total height
         width: "100vw", // Full width
         display: "flex",
         alignItems: "center", // Center vertically
         justifyContent: "center", // Center horizontally
         margin: 0, // Ensure no margin
-        padding: 0, // Ensure no padding
+        padding: 0, // No padding
+        marginTop: "30px", // Account for DragBar height
       }}
     >
       <CssBaseline />
@@ -105,26 +107,10 @@ const AuthenticationScreen = ({ onAuthentication }) => {
           sx={{
             fontSize: "3rem",
             color: theme.palette.secondary.dark,
-            marginBottom: "2rem",
+            marginBottom: "0.5rem",
           }}
         >
           ScrimGG
-        </Typography>
-        {/* Combined Game Status */}
-        <Typography variant="body2" sx={{ mb: 2 }}>
-          {!connected ? (
-            <span style={{ color: '#f44336' }}>🔴 Backend Disconnected</span>
-          ) : systemStatus.valorant.status === 'running' ? (
-            <span style={{ color: '#4caf50' }}>🟢 Game Connected</span>
-          ) : systemStatus.valorant.status === 'riot_only' ? (
-            <span style={{ color: '#ff9800' }}>🟡 Please Launch Valorant</span>
-          ) : systemStatus.valorant.status === 'not_running' ? (
-            <span style={{ color: '#f44336' }}>🔴 Riot Client Not Running</span>
-          ) : systemStatus.valorant.status === 'error' ? (
-            <span style={{ color: '#f44336' }}>🔴 Status Check Error</span>
-          ) : (
-            <span style={{ color: '#2196f3' }}>🔍 Checking Game Status...</span>
-          )}
         </Typography>
         
         <Box
@@ -149,10 +135,45 @@ const AuthenticationScreen = ({ onAuthentication }) => {
               backgroundColor: theme.palette.secondary.dark,
               width: '60%',
               margin: "auto",
+              mb: 2
             }}
           >
             {loading ? <CircularProgress size={24} color="inherit" /> : 'Authenticate'}
           </Button>
+          
+          <FormControl sx={{ mb: 2, width: '66.67%' }}>
+            <InputLabel id="region-select-label">Region</InputLabel>
+            <Select
+              labelId="region-select-label"
+              id="region-select"
+              value={selectedRegion}
+              label="Region"
+              onChange={(e) => setSelectedRegion(e.target.value)}
+              size="small"
+              sx={{ 
+                backgroundColor: theme.palette.background.paper,
+                height: '32px',
+                '& .MuiOutlinedInput-notchedOutline': {
+                  borderColor: theme.palette.divider,
+                },
+                '& .MuiSelect-select': {
+                  padding: '6px 14px',
+                  height: '20px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  textAlign: 'center',
+                  justifyContent: 'center'
+                }
+              }}
+            >
+              <MenuItem value="na">North America</MenuItem>
+              <MenuItem value="eu">Europe</MenuItem>
+              <MenuItem value="latam">Latin America</MenuItem>
+              <MenuItem value="br">Brazil</MenuItem>
+              <MenuItem value="ap">Asia Pacific</MenuItem>
+              <MenuItem value="kr">Korea</MenuItem>
+            </Select>
+          </FormControl>
         </Box>
         {error && (
           <Typography component="p" variant="body2" color="error" sx={{ mt: 2 }}>
@@ -160,6 +181,31 @@ const AuthenticationScreen = ({ onAuthentication }) => {
           </Typography>
         )}
       </Box>
+      
+      {/* Status Indicator - Bottom Left Corner */}
+      <Typography 
+        variant="body2" 
+        sx={{ 
+          position: 'absolute',
+          bottom: '16px',
+          left: '16px',
+          fontSize: '0.75rem'
+        }}
+      >
+        {!connected ? (
+          <span style={{ color: '#f44336' }}>🔴 Backend Disconnected</span>
+        ) : systemStatus.valorant.status === 'running' ? (
+          <span style={{ color: '#4caf50' }}>🟢 Game Connected</span>
+        ) : systemStatus.valorant.status === 'riot_only' ? (
+          <span style={{ color: '#ff9800' }}>🟡 Please Launch Valorant</span>
+        ) : systemStatus.valorant.status === 'not_running' ? (
+          <span style={{ color: '#f44336' }}>🔴 Riot Client Not Running</span>
+        ) : systemStatus.valorant.status === 'error' ? (
+          <span style={{ color: '#f44336' }}>🔴 Status Check Error</span>
+        ) : (
+          <span style={{ color: '#2196f3' }}>🔍 Checking Game Status...</span>
+        )}
+      </Typography>
     </Box>
   );
 };

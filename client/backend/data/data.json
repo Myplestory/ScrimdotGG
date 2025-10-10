@@ -1,6 +1,6 @@
 {
   "checkUpdates": true,
-  "region": null,
+  "region": "na",
   "hoverDelay": 0,
   "lockDelay": 0,
   "mapPreferences": {
@@ -18,7 +18,15 @@
       "yard":"/Game/Maps/HURM/HURM_Yard/HURM_Yard"
   },
   "serverPreferences": {
-    "ashburn": "aresriot.aws-rclusterprod-use1-1.na-gp-ashburn-awsedge-1",
-    "chicago": "aresriot.aws-rclusterprod-use1-1.na-gp-chicago-awsedge-1"
+    "North America": {
+      "Virginia": "aresriot.aws-rclusterprod-use1-1.na-gp-ashburn-awsedge-1",
+      "Illinois": "aresriot.aws-rclusterprod-use1-1.na-gp-chicago-awsedge-1"
+    },
+    "Europe West": {},
+    "Europe East": {},
+    "Asia Pacific": {},
+    "Latin America": {},
+    "Brazil": {},
+    "Korea": {}
   }
 }

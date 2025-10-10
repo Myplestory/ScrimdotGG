@@ -63,17 +63,30 @@ const PugQueue = () => {
   const messagesEndRef = useRef(null);
 
   // Use WebSocket context
-  const { playerData, api, on } = useWebSocket();
+  const { playerData, api, on, reconnect, connected } = useWebSocket();
+
+  // Monitor WebSocket connection and reconnect if needed
+  useEffect(() => {
+    if (!connected) {
+      console.log('WebSocket disconnected, attempting to reconnect...');
+      reconnect();
+    }
+  }, [connected, reconnect]);
+
+  // Set default region and servers (will be overridden by user selection)
+  useEffect(() => {
+    setPlayerRegion('na');
+    setAvailableServers(['Virginia', 'Illinois']);
+  }, []);
 
   // Available maps for Valorant
   const availableMaps = [
     'Ascent', 'Bind', 'Breeze', 'Fracture', 'Haven', 'Icebox', 'Lotus', 'Pearl', 'Split'
   ];
 
-  // Available servers
-  const availableServers = [
-    'US East', 'US West', 'EU West', 'EU East', 'Asia Pacific'
-  ];
+  // Available servers (will be populated based on detected region)
+  const [availableServers, setAvailableServers] = useState([]);
+  const [playerRegion, setPlayerRegion] = useState(null);
 
 
   // Initialize with current player
@@ -152,7 +165,7 @@ const PugQueue = () => {
     api.joinPugQueue({
       queue_type: selectedQueueType,
       preferred_maps: selectedMaps,
-      preferred_servers: selectedServers
+        preferred_servers: selectedServers
     });
   };
 
@@ -182,6 +195,33 @@ const PugQueue = () => {
     const minutes = Math.floor(elapsed / 60);
     const seconds = elapsed % 60;
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  // Format region and queue type for title
+  const getQueueTitle = () => {
+    const queueType = selectedQueueType === 'pug' ? '5v5' : '5v5 Super';
+    
+    console.log('getQueueTitle - playerRegion:', playerRegion);
+    
+    if (playerRegion) {
+      // Map region codes to display names
+      const regionNames = {
+        'na': 'North America',
+        'eu': 'Europe',
+        'latam': 'Latin America',
+        'br': 'Brazil',
+        'ap': 'Asia Pacific',
+        'kr': 'Korea'
+      };
+      
+      const regionName = regionNames[playerRegion] || 'Global';
+      const title = `${regionName} ${queueType}`;
+      console.log('Generated title:', title);
+      return title;
+    }
+    
+    console.log('No playerRegion, using Global');
+    return `Global ${queueType}`;
   };
 
   // Check if current user is party leader
@@ -269,8 +309,8 @@ const PugQueue = () => {
         }}
       >
         {/* Header */}
-        <Typography variant="h4" align="center" gutterBottom sx={{ pt: 1, color: theme.palette.secondary.main }}>
-          Matchmaking
+        <Typography variant="h4" align="center" gutterBottom sx={{ color: theme.palette.secondary.main }}>
+          {getQueueTitle()}
         </Typography>
         
         
@@ -360,32 +400,52 @@ const PugQueue = () => {
                 minHeight: 'auto',
               }}
             >
-              SERVERS {selectedServers.length}/5
+              SERVERS {selectedServers.length}/{availableServers.length}
             </Button>
           </Box>
 
-          {/* Right side - Find Match Button */}
-          <Button
-            variant="contained"
-            size="medium"
-            onClick={handleFindMatch}
-            disabled={selectedMaps.length < 5 || !isPartyLeader()}
-            sx={{
-              fontSize: '1rem',
-              py: 0.75, 
-              px: 4, 
-              backgroundColor: queueStatus.in_queue ? theme.palette.error.main : theme.palette.secondary.main,
-              color: theme.palette.getContrastText(queueStatus.in_queue ? theme.palette.error.main : theme.palette.secondary.main),
-              '&:hover': {
-                backgroundColor: queueStatus.in_queue ? theme.palette.error.dark : theme.palette.secondary.dark,
-              },
-              '&:disabled': {
-                backgroundColor: theme.palette.action.disabled,
-              }
-            }}
-          >
-            {queueStatus.in_queue ? `CANCEL QUEUE (${getQueueTime()})` : 'FIND MATCH'}
-          </Button>
+          {/* Right side - Connection Status and Find Match Button */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {/* Connection Status Indicator */}
+            <Box
+              sx={{
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                backgroundColor: connected ? theme.palette.success.main : theme.palette.error.main,
+                cursor: !connected ? 'pointer' : 'default'
+              }}
+              title={connected ? 'Connected to backend' : 'Disconnected - Click to reconnect'}
+              onClick={() => {
+                if (!connected) {
+                  console.log('Manual reconnect triggered');
+                  reconnect();
+                }
+              }}
+            />
+            
+            <Button
+              variant="contained"
+              size="medium"
+              onClick={handleFindMatch}
+              disabled={selectedMaps.length < 5 || !isPartyLeader() || !connected}
+              sx={{
+                fontSize: '1rem',
+                py: 0.75, 
+                px: 4, 
+                backgroundColor: queueStatus.in_queue ? theme.palette.error.main : theme.palette.secondary.main,
+                color: theme.palette.getContrastText(queueStatus.in_queue ? theme.palette.error.main : theme.palette.secondary.main),
+                '&:hover': {
+                  backgroundColor: queueStatus.in_queue ? theme.palette.error.dark : theme.palette.secondary.dark,
+                },
+                '&:disabled': {
+                  backgroundColor: theme.palette.action.disabled,
+                }
+              }}
+            >
+              {queueStatus.in_queue ? `CANCEL QUEUE (${getQueueTime()})` : 'FIND MATCH'}
+            </Button>
+          </Box>
         </Box>
 
         {/* Tab Content */}
@@ -505,7 +565,7 @@ const PugQueue = () => {
                     >
                       <CardContent sx={{ p: 0.5, '&:last-child': { pb: 0.5 }, textAlign: 'center' }}>
                         <Typography variant="caption" sx={{ fontSize: '0.75rem', textAlign: 'center' }}>
-                          {server}
+                          {server.charAt(0).toUpperCase() + server.slice(1)}
                         </Typography>
                       </CardContent>
                     </Card>

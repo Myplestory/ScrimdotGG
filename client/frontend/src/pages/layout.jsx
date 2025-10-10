@@ -85,6 +85,7 @@ const Layout = ({ children, setActiveComponent }) => {
         overflow: 'hidden', // Prevent overflow
         backgroundColor: theme.palette.primary.dark,
         color: theme.palette.text.primary,
+        paddingTop: '30px', // Account for DragBar height
       }}
     >
       <CssBaseline />

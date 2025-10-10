@@ -9,10 +9,15 @@ import json
 from datetime import datetime
 from typing import Set, Dict
 
-from quart import Quart, websocket
+from quart import Quart, websocket, jsonify
 from quart_cors import cors
 
 from clientapi import ValorantAPI
+
+# File paths
+folder_name = 'data'
+file_name = 'data.json'
+file_path = os.path.join(os.path.dirname(__file__), folder_name, file_name)
 
 # Optional auth import - only needed for certain functions
 try:
@@ -462,7 +467,11 @@ async def handle_authenticate(payload: dict, client_id: int, ws):
                 })
             return
         
-        result = await valorant_api.login("na")
+        # Get region from payload, default to 'na' if not provided
+        region = payload.get('region', 'na')
+        print(f"[AUTH] Using region: {region}")
+        
+        result = await valorant_api.login(region)
         
         if result.get('status') == 'success':
             client_states[client_id]['authenticated'] = True
@@ -481,10 +490,24 @@ async def handle_authenticate(payload: dict, client_id: int, ws):
                 'player_data': player_result.get('data', {})
             })
         else:
-            await send_error(ws, "Valorant authentication failed. Is Valorant running?")
+            # Check if it's a region mismatch error
+            if 'error' in result and 'status_code' in result:
+                await send_message(ws, 'authentication_error', {
+                    'message': f'Region mismatch! You selected {region.upper()}, but your Valorant client is in a different region. Please check your region selection and try again.',
+                    'timeout': 10
+                })
+            else:
+                await send_error(ws, "Valorant authentication failed. Is Valorant running?")
             
     except Exception as e:
-        await send_error(ws, f"Authentication error: {str(e)}")
+        error_msg = str(e).lower()
+        if 'unable to activate' in error_msg or 'valorant running' in error_msg:
+            await send_message(ws, 'authentication_error', {
+                'message': 'Valorant client is not running or not accessible. Please start Valorant and try again.',
+                'timeout': 5
+            })
+        else:
+            await send_error(ws, f"Authentication error: {str(e)}")
 
 
 async def handle_get_initial_state(payload: dict, client_id: int, ws):
@@ -870,6 +893,7 @@ async def broadcast_to_all(event: str, payload: dict):
         except Exception as e:
             print(f"Error broadcasting: {e}")
             active_connections.discard(conn)
+
 
 
 # ============================================================

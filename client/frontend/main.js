@@ -1,4 +1,4 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, ipcMain } = require('electron');
 const { spawn, exec } = require('child_process');
 const path = require('path');
 const process = require('process');
@@ -12,13 +12,30 @@ function createWindow() {
     width: 1200,
     height: 800,
     resizable: false,
-    // frame: false,
+    frame: false,
     webPreferences: {
       nodeIntegration: true,
       // preload: path.join(__dirname, 'preload.js'),
     },
-    // autoHideMenuBar: true,
+    autoHideMenuBar: true,
   });
+  
+  // Expose API to renderer process
+  win.webContents.on('dom-ready', () => {
+    win.webContents.executeJavaScript(`
+      window.electronAPI = {
+        closeApp: () => {
+          require('electron').ipcRenderer.send('close-app');
+        }
+      };
+    `);
+  });
+  
+  // Handle close app IPC
+  ipcMain.on('close-app', () => {
+    win.close();
+  });
+  
   win.loadURL('http://localhost:3000');
   }
 

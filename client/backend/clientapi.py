@@ -30,6 +30,7 @@ class ValorantAPI(object):
                 self.client = Client(region=region)
                 self.client.activate()
                 print("Client activated.")
+                    
             if self.client.puuid:
                 jsonargs = {
                     'puuid': self.client.puuid,
@@ -227,7 +228,7 @@ class ValorantAPI(object):
                     buildargs = {
                         "Map": self.args['mapPreferences'][data["match_map"]],
                         "Mode": "/Game/GameModes/Bomb/BombGameMode.BombGameMode_C",
-                        "GamePod": self.args['serverPreferences'][data["match_server"]],
+                        "GamePod": self._get_server_url(data["match_server"]),
                         "UseBots":False,
                         "GameRules":{
                             "AllowGameModifiers": "true",
@@ -287,7 +288,7 @@ class ValorantAPI(object):
                     buildargs = {
                         "Map": self.args['mapPreferences'][data["match_map"]],
                         "Mode": "/Game/GameModes/Bomb/BombGameMode.BombGameMode_C",
-                        "GamePod": self.args['serverPreferences'][data["match_server"]],
+                        "GamePod": self._get_server_url(data["match_server"]),
                         "UseBots":False,
                         "GameRules":{
                             "AllowGameModifiers": "true",
@@ -323,9 +324,43 @@ class ValorantAPI(object):
                         data = response.json()
                         self.client.party_join(data['pregame_id'])
                         return {"status": "success", "message": f"Matchroom successfully set for : {self.client.puuid}", 'data': data,}           
-                    
+            
             else:
                     return data
         else:
                 return {"error": "Request failed", "status_code": response.status_code}
+    
+    def _get_server_url(self, server_name):
+        """Helper method to get server URL from nested serverPreferences structure"""
+        if not self.args or 'serverPreferences' not in self.args:
+            return None
+        
+        server_prefs = self.args['serverPreferences']
+        
+        # Search through all regions for the server
+        for region, servers in server_prefs.items():
+            if server_name in servers:
+                return servers[server_name]
+        
+        return None
+    
+    
+    
+    def get_region_servers(self, region_code):
+        """Get servers for a specific region code"""
+        region_mapping = {
+            'na': 'North America',
+            'eu': 'Europe West',  # Default EU region
+            'latam': 'Latin America',
+            'br': 'Brazil',
+            'ap': 'Asia Pacific',
+            'kr': 'Korea'
+        }
+        
+        region_name = region_mapping.get(region_code, 'North America')
+        
+        if self.args and 'serverPreferences' in self.args:
+            return self.args['serverPreferences'].get(region_name, {})
+        
+        return {}
               
