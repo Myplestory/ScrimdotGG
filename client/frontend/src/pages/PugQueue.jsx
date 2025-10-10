@@ -63,7 +63,7 @@ const PugQueue = () => {
   const messagesEndRef = useRef(null);
 
   // Use WebSocket context
-  const { playerData, api, on, reconnect, connected } = useWebSocket();
+  const { playerData, api, on, reconnect, connected, systemStatus } = useWebSocket();
 
   // Monitor WebSocket connection and reconnect if needed
   useEffect(() => {
@@ -303,7 +303,7 @@ const PugQueue = () => {
           flexDirection: 'column',
           height: '100%',
           backgroundColor: theme.palette.background.dark,
-          padding: `${theme.spacing(1)} ${theme.spacing(2)} ${theme.spacing(2)} ${theme.spacing(2)}`,
+          padding: `${theme.spacing(1)} 0 ${theme.spacing(2)} 0`,
           overflow: 'hidden',
           position: 'relative',
         }}
@@ -315,7 +315,7 @@ const PugQueue = () => {
         
         
         {/* Player Cards Section */}
-        <Grid container spacing={1.5} justifyContent="center" alignItems="center" sx={{ mt: -2, mb: 1 }}>
+        <Grid container spacing={1.5} justifyContent="center" alignItems="center" sx={{ mt: -2, mb: 0, minHeight: '200px' }}>
           {Array.from({ length: 5 }).map((_, index) => {
             // Center the user's player card (index 2)
             let player = null;
@@ -329,7 +329,7 @@ const PugQueue = () => {
             }
             
             return (
-              <Grid item key={player ? player.puuid : `empty-${index}`} xs>
+              <Grid item key={player ? player.puuid : `empty-${index}`} xs={2.4}>
                 <PlayerSlot 
                   player={player} 
                   handleEmptySlotClick={handleEmptySlotClick} 
@@ -346,9 +346,10 @@ const PugQueue = () => {
           display: 'flex', 
           alignItems: 'center', 
           justifyContent: 'space-between', 
-          mt: 2,
-          mb: 1,
-          p: 1.5,
+          mt: 4,
+          mb: 0,
+          px: 1.5,
+          py: 1,
           backgroundColor: theme.palette.background.paper,
           borderRadius: 1,
         }}>
@@ -404,35 +405,18 @@ const PugQueue = () => {
             </Button>
           </Box>
 
-          {/* Right side - Connection Status and Find Match Button */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            {/* Connection Status Indicator */}
-            <Box
-              sx={{
-                width: 8,
-                height: 8,
-                borderRadius: '50%',
-                backgroundColor: connected ? theme.palette.success.main : theme.palette.error.main,
-                cursor: !connected ? 'pointer' : 'default'
-              }}
-              title={connected ? 'Connected to backend' : 'Disconnected - Click to reconnect'}
-              onClick={() => {
-                if (!connected) {
-                  console.log('Manual reconnect triggered');
-                  reconnect();
-                }
-              }}
-            />
-            
+          {/* Right side - Find Match Button */}
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <Button
               variant="contained"
               size="medium"
               onClick={handleFindMatch}
-              disabled={selectedMaps.length < 5 || !isPartyLeader() || !connected}
+              disabled={selectedMaps.length < 5 || !isPartyLeader() || !connected || systemStatus.valorant.status !== 'running'}
               sx={{
                 fontSize: '1rem',
                 py: 0.75, 
                 px: 4, 
+                minWidth: '140px', // Fixed width to prevent growing
                 backgroundColor: queueStatus.in_queue ? theme.palette.error.main : theme.palette.secondary.main,
                 color: theme.palette.getContrastText(queueStatus.in_queue ? theme.palette.error.main : theme.palette.secondary.main),
                 '&:hover': {
@@ -443,18 +427,15 @@ const PugQueue = () => {
                 }
               }}
             >
-              {queueStatus.in_queue ? `CANCEL QUEUE (${getQueueTime()})` : 'FIND MATCH'}
+              {queueStatus.in_queue ? `CANCEL (${getQueueTime()})` : 'FIND MATCH'}
             </Button>
           </Box>
         </Box>
 
         {/* Tab Content */}
-        <Box sx={{ mb: 0.5, minHeight: 'auto', backgroundColor: theme.palette.background.paper, borderRadius: 1, p: 1.5, pb: 1 }}>
+        <Box sx={{ mb: 3, minHeight: 'auto', backgroundColor: theme.palette.background.paper, borderRadius: 1, px: 1.5, pt: 1, pb: 1, mt: 0 }}>
           {activeTab === 'match_type' && (
             <Box>
-              <Typography variant="h6" sx={{ mb: 1.5 }}>
-                Match Type
-              </Typography>
               <Grid container spacing={1.5}>
                 <Grid item xs={6}>
                   <Card
@@ -516,9 +497,6 @@ const PugQueue = () => {
 
           {activeTab === 'maps' && (
             <Box>
-              <Typography variant="h6" sx={{ mb: 1.5 }}>
-                Map Selection
-              </Typography>
               <Grid container spacing={0.25}>
                 {availableMaps.map((map) => (
                   <Grid item xs={3} sm={2.4} md={1.8} key={map}>
@@ -548,9 +526,6 @@ const PugQueue = () => {
 
           {activeTab === 'servers' && (
             <Box>
-              <Typography variant="h6" sx={{ mb: 1.5 }}>
-                Server Selection
-              </Typography>
               <Grid container spacing={0.25}>
                 {availableServers.map((server) => (
                   <Grid item xs={3} sm={2.4} md={1.8} key={server}>
@@ -586,9 +561,9 @@ const PugQueue = () => {
         <Box sx={{ 
           position: 'absolute',
           bottom: theme.spacing(2),
-          left: theme.spacing(2),
-          right: theme.spacing(2),
-          height: '26vh',
+          left: theme.spacing(0.5),
+          right: theme.spacing(0.5),
+          height: '24vh',
           display: 'flex', 
           flexDirection: 'column', 
           border: '1px solid grey', 

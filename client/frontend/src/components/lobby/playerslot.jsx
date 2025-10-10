@@ -13,7 +13,7 @@ const CustomPaper = styled(Paper)(({ theme, hasPlayer }) => ({
   flexDirection: 'column',
   alignItems: 'center',
   justifyContent: 'center',
-  minHeight: '200px',
+  minHeight: '260px',
   backgroundColor: hasPlayer ? theme.palette.primary.dark : theme.palette.dark, // Use a darker color
   borderRadius: theme.shape.borderRadius,
   padding: theme.spacing(1),
@@ -24,15 +24,15 @@ const CustomPaper = styled(Paper)(({ theme, hasPlayer }) => ({
 }));
 
 const StyledAvatar = styled(Avatar)(({ theme }) => ({
-  width: theme.spacing(8),
-  height: theme.spacing(8),
+  width: theme.spacing(14),
+  height: theme.spacing(14),
   marginBottom: theme.spacing(0.5),
   border: `2px solid ${theme.palette.primary.main}`,
 }));
 
 const LeaderCrown = styled(Box)(({ theme }) => ({
   position: 'absolute',
-  top: theme.spacing(2.5),
+  top: theme.spacing(2.75),
   left: '50%',
   transform: 'translateX(-50%)',
   zIndex: 10,
@@ -49,7 +49,7 @@ const PlayerSlot = ({ player, handleEmptySlotClick, slotIndex }) => {
               <Icon path={mdiCrown} size={0.6} color="gold" />
             </LeaderCrown>
           )}
-          <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <Box sx={{ mt: 0.75, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <StyledAvatar src={player.profile_picture || 'path/to/default/avatar.png'} alt={`${player.alias}'s avatar`} />
             <Typography variant="subtitle2" fontFamily={"Francker W01 Condensed Bold"} fontWeight={'bold'} sx={{ mb: 1.5, fontSize: '0.75rem' }}>
               {player.alias || 'Unknown Player'}

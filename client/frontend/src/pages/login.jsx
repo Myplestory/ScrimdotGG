@@ -5,6 +5,7 @@ import { Box, Button, Container, CssBaseline, Typography, CircularProgress, Form
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import { useNavigate } from 'react-router-dom';
 import { useWebSocket } from '../contexts/WebSocketContext';
+import StatusIndicator from '../components/StatusIndicator';
 
 function onlyLettersAndNumbers(str) {
   return /^[A-Za-z0-9]*$/.test(str);
@@ -183,29 +184,11 @@ const AuthenticationScreen = ({ onAuthentication }) => {
       </Box>
       
       {/* Status Indicator - Bottom Left Corner */}
-      <Typography 
-        variant="body2" 
-        sx={{ 
-          position: 'absolute',
-          bottom: '16px',
-          left: '16px',
-          fontSize: '0.75rem'
-        }}
-      >
-        {!connected ? (
-          <span style={{ color: '#f44336' }}>🔴 Backend Disconnected</span>
-        ) : systemStatus.valorant.status === 'running' ? (
-          <span style={{ color: '#4caf50' }}>🟢 Game Connected</span>
-        ) : systemStatus.valorant.status === 'riot_only' ? (
-          <span style={{ color: '#ff9800' }}>🟡 Please Launch Valorant</span>
-        ) : systemStatus.valorant.status === 'not_running' ? (
-          <span style={{ color: '#f44336' }}>🔴 Riot Client Not Running</span>
-        ) : systemStatus.valorant.status === 'error' ? (
-          <span style={{ color: '#f44336' }}>🔴 Status Check Error</span>
-        ) : (
-          <span style={{ color: '#2196f3' }}>🔍 Checking Game Status...</span>
-        )}
-      </Typography>
+      <StatusIndicator 
+        connected={connected}
+        systemStatus={systemStatus}
+        position="bottom-left"
+      />
     </Box>
   );
 };

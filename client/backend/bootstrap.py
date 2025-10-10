@@ -99,6 +99,8 @@ async def websocket_route():
             'authenticated': False,
             'lobby_id': None,
             'match_id': None,
+            'connected': True,
+            'websocket': ws,
         }
         
         print(f"[OK] Frontend WebSocket connected: {client_id}")
@@ -242,14 +244,16 @@ async def valorant_heartbeat_loop():
     
     try:
         while True:
-            # Check if any clients are still connected and not authenticated
-            unauthenticated_clients = [
+            # Check if any clients are connected (authenticated or not)
+            connected_clients = [
                 client_id for client_id, state in client_states.items()
-                if not state.get('authenticated', False)
+                if state.get('connected', False)
             ]
             
-            # Only run heartbeat if there are unauthenticated clients
-            if unauthenticated_clients:
+            print(f"[HEARTBEAT] Connected clients: {len(connected_clients)}, Total clients: {len(client_states)}")
+            
+            # Run heartbeat if there are any connected clients
+            if connected_clients:
                 try:
                     current_status = await check_valorant_status()
                     
@@ -258,11 +262,11 @@ async def valorant_heartbeat_loop():
                         print(f"[HEARTBEAT] Status changed: {last_known_status} -> {current_status}")
                         last_known_status = current_status
                         
-                        # Broadcast to all connected clients
+                        # Broadcast to all connected clients with per-client authentication status
                         await broadcast_status_update({
                             'backend_connected': True,
                             'valorant': current_status,
-                            'authenticated': False  # This will be updated per client
+                            'authenticated': None  # Will be set per client in broadcast function
                         })
                     
                 except Exception as e:
@@ -285,18 +289,37 @@ async def broadcast_status_update(status_data):
         print("[BROADCAST] No active connections to broadcast to")
         return
     
-    message = json.dumps({
-        'event': 'status_update',
-        'payload': status_data
-    })
-    
     print(f"[BROADCAST] Broadcasting to {len(active_connections)} clients: {status_data}")
     
     disconnected_conns = []
     for ws in list(active_connections):
         try:
+            # Get client-specific status data
+            client_status = status_data.copy()
+            
+            # Set authentication status based on client state
+            if 'authenticated' in status_data and status_data['authenticated'] is None:
+                # Find client ID for this WebSocket connection
+                client_id = None
+                for cid, state in client_states.items():
+                    if state.get('websocket') == ws:
+                        client_id = cid
+                        break
+                
+                if client_id is not None:
+                    client_status['authenticated'] = client_states[client_id].get('authenticated', False)
+                    print(f"[BROADCAST] Found client {client_id}, auth: {client_status['authenticated']}")
+                else:
+                    client_status['authenticated'] = False
+                    print(f"[BROADCAST] No client ID found for WebSocket, defaulting to False")
+            
+            message = json.dumps({
+                'event': 'status_update',
+                'payload': client_status
+            })
+            
             await ws.send(message)
-            print(f"[BROADCAST] Successfully sent to client")
+            print(f"[BROADCAST] Successfully sent to client (auth: {client_status.get('authenticated', False)})")
         except Exception as e:
             print(f"[BROADCAST] Error sending to client: {e}")
             disconnected_conns.append(ws)
@@ -327,19 +350,8 @@ async def check_valorant_status():
                 'details': None
             }
         
-        # Always try to create a fresh client instance to verify Valorant is actually running
-        # This ensures we don't rely on stale/cached client data
-        from valclient import Client
-        temp_client = Client(region='na')
-        
-        # CRITICAL: Call activate() to actually test if Riot Client is running
-        # This is what throws the exception when Riot Client is not running
-        print(f"[Status Check] Attempting to activate Valorant client...")
-        temp_client.activate()
-        print(f"[Status Check] Riot Client connection successful!")
-        
-        # Now check if actual VALORANT.exe game process is running
-        # This is more reliable than API checks since Riot updated their API
+        # PRIORITY 1: Check if actual VALORANT.exe game process is running FIRST
+        # This is the most reliable indicator of whether the game is actually running
         print("[Status Check] Checking for VALORANT.exe process...")
         import psutil
         
@@ -353,27 +365,46 @@ async def check_valorant_status():
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
         
-        if valorant_process_found:
-            print("[Status Check] Valorant game is running and ready")
+        # Check Riot Client connection regardless of game process status
+        print(f"[Status Check] Checking Riot Client connection...")
+        from valclient import Client
+        temp_client = Client(region='na')
+        
+        try:
+            temp_client.activate()
+            print(f"[Status Check] Riot Client connection successful!")
             
-            is_authenticated = (valorant_api.client is not None and 
-                              hasattr(valorant_api.client, 'puuid') and 
-                              valorant_api.client.puuid is not None)
-            
-            return {
-                'status': 'running',
-                'message': 'Valorant game is running and ready',
-                'details': {
-                    'region': temp_client.region,
-                    'is_authenticated': is_authenticated
+            if valorant_process_found:
+                # Both Riot Client and game process are working - game is fully running
+                is_authenticated = (valorant_api.client is not None and 
+                                  hasattr(valorant_api.client, 'puuid') and 
+                                  valorant_api.client.puuid is not None)
+                
+                return {
+                    'status': 'running',
+                    'message': 'Valorant game is running and ready',
+                    'details': {
+                        'region': temp_client.region,
+                        'is_authenticated': is_authenticated
+                    }
                 }
-            }
-        else:
-            # activate() worked but no VALORANT.exe process = only Riot Client running
-            print(f"[Status Check] Game not launched (Riot Client only)")
+            else:
+                # Riot Client is accessible but game process not found - only Riot Client running
+                print("[Status Check] Riot Client running but VALORANT.exe not found - game not launched")
+                return {
+                    'status': 'riot_only',
+                    'message': 'Valorant not launched',
+                    'details': {
+                        'region': temp_client.region
+                    }
+                }
+            
+        except Exception as client_error:
+            # Riot Client connection failed - nothing is running
+            print(f"[Status Check] Riot Client connection failed: {client_error}")
             return {
-                'status': 'riot_only',
-                'message': 'Valorant game not launched (Riot Client only)',
+                'status': 'not_running',
+                'message': 'Riot Client is not running',
                 'details': None
             }
             

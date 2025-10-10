@@ -15,8 +15,10 @@ import MenuIcon from '@mui/icons-material/Menu';
 import { TextField, ButtonBase } from '@mui/material';
 import Autocomplete from '@mui/material/Autocomplete';
 import { ColorModeContext, useMode } from '../theme'; // Use your theme hook
+import { useWebSocket } from '../contexts/WebSocketContext';
 import { MainListItems } from '../components/listitems'; 
 import { PlayerInfoCard } from '../components/home/playerinfo';
+import StatusIndicator from '../components/StatusIndicator';
 
 const drawerWidth = 175;
 
@@ -71,6 +73,7 @@ const Drawer = styled(MuiDrawer, {
 const Layout = ({ children, setActiveComponent }) => {
   const [theme, colorMode] = useMode(); // Use your predefined theme
   const [open, setOpen] = useState(true);
+  const { connected, systemStatus, queueStatus, gameState } = useWebSocket();
 
   const toggleDrawer = () => {
     setOpen(!open);
@@ -219,6 +222,15 @@ const Layout = ({ children, setActiveComponent }) => {
           }}>
           <MainListItems setActiveComponent={setActiveComponent} /> {/* Pass it to MainListItems */}
         </List>
+        
+        {/* Status Indicator - Bottom of Sidebar */}
+        <StatusIndicator 
+          connected={connected}
+          systemStatus={systemStatus}
+          queueStatus={queueStatus}
+          gameState={gameState}
+          position="bottom-left"
+        />
       </Drawer>
 
       {/* Main Content */}

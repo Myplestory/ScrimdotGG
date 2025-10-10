@@ -3,7 +3,7 @@ import { styled } from '@mui/material/styles';
 import { useLocation } from 'react-router-dom';
 import { theme } from '../theme'
 
-const DragBarStyled = styled('div')(({ theme }) => ({
+const DragBarStyled = styled('div')(({ theme, isAuth }) => ({
   WebkitAppRegion: 'drag',
   color: theme.palette.text.primary,
   height: '30px',
@@ -22,10 +22,10 @@ const DragBarStyled = styled('div')(({ theme }) => ({
   border: 'none',
   outline: 'none',
   boxShadow: 'none',
-  backgroundColor: 'transparent', // Fully transparent
+  backgroundColor: isAuth ? theme.palette.background.dark : 'transparent', // Black for auth, transparent for main app
   color: theme.palette.text.primary, // Match AppBar text color
   '&::before': {
-    content: '""',
+    content: isAuth ? 'none' : '""', // No pseudo-element for auth page
     position: 'absolute',
     top: 0,
     left: 0,
@@ -71,6 +71,7 @@ const DragBar = () => {
 
   return (
     <DragBarStyled
+      isAuth={isAuthPage}
       sx={{
         height: isAuthPage ? '30px' : '16px',
         maxHeight: isAuthPage ? '30px' : '16px',

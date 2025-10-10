@@ -59,7 +59,7 @@ const RankCharacter = styled(Typography)(({ theme, rank }) => ({
   transform: 'translate(-50%, -50%)',
   color: getColorForRank(rank),
   fontWeight: 'bold',
-  fontSize: '1rem', 
+  fontSize: '0.9rem', 
   fontFamily: "Enamela W01 Condensed Medium",
   zIndex: 1,
 }));
@@ -67,13 +67,16 @@ const RankCharacter = styled(Typography)(({ theme, rank }) => ({
 // Styled Typography for the ELO number
 const EloTypography = styled(Typography)(({ theme }) => ({
   position: 'relative', 
-  bottom: '0%', 
-  left: '-27%', 
+  bottom: '2px', 
+  left: '-29%', 
   marginLeft: theme.spacing(2),
   color: '',
-  fontSize: '110%',
+  fontSize: '95%',
   fontFamily: "Enamela W01 Condensed Medium",
   fontWeight: 'lighter',
+  display: 'flex',
+  alignItems: 'center',
+  height: '100%',
 }));
 
 
@@ -100,7 +103,7 @@ const RankComponent = ({ elo, style }) => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        transform: 'translateX(3px)'
+        transform: 'translateX(1px)'
         }}>
         <Gauge
           value={progress}
