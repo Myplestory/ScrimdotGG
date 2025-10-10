@@ -43,6 +43,12 @@ client_states: Dict[int, dict] = {}
 def cleanup():
     """Cleanup resources on shutdown."""
     print("Cleaning up resources...")
+    
+    # Stop heartbeat if running
+    global heartbeat_task
+    if heartbeat_task and not heartbeat_task.done():
+        print("[HEARTBEAT] Stopping heartbeat for shutdown...")
+        heartbeat_task.cancel()
 
 atexit.register(cleanup)
 
@@ -62,6 +68,10 @@ try:
 except Exception as e:
     print(f"[WARNING] ValorantAPI initialization failed: {e}")
     valorant_api = None
+
+# Heartbeat system for Valorant status monitoring
+heartbeat_task = None
+last_known_status = None
 
 
 # ============================================================
@@ -111,7 +121,19 @@ async def websocket_route():
         if 'ws' in locals():
             active_connections.discard(ws)
         if 'client_id' in locals() and client_id in client_states:
+            was_in_game = client_states[client_id].get('in_game', False)
             del client_states[client_id]
+            
+            # If this client was in-game, check if we should restart heartbeat
+            # Heartbeat should run if any client is NOT in-game
+            if was_in_game:
+                clients_not_in_game = sum(
+                    1 for state in client_states.values() 
+                    if not state.get('in_game', False)
+                )
+                if clients_not_in_game > 0:
+                    await start_valorant_heartbeat()
+        
         print(f"[DISCONNECT] Frontend WebSocket disconnected")
 
 
@@ -138,6 +160,8 @@ async def route_event(event: str, payload: dict, client_id: int, ws):
         # Match operations
         'accept_match': handle_accept_match,
         'decline_match': handle_decline_match,
+        'match_started': handle_match_started,
+        'match_ended': handle_match_ended,
         
         # Chat
         'lobby_chat': handle_lobby_chat,
@@ -158,13 +182,126 @@ async def route_event(event: str, payload: dict, client_id: int, ws):
 
 
 # ============================================================
+# Heartbeat System
+# ============================================================
+
+async def start_valorant_heartbeat():
+    """
+    Start the Valorant status heartbeat monitor.
+    Runs when users are not in an active game (includes login, lobby, queue).
+    """
+    global heartbeat_task
+    
+    if heartbeat_task is None or heartbeat_task.done():
+        print("[HEARTBEAT] Starting Valorant status monitor...")
+        heartbeat_task = asyncio.create_task(valorant_heartbeat_loop())
+    else:
+        print("[HEARTBEAT] Heartbeat already running")
+
+async def stop_valorant_heartbeat():
+    """
+    Stop the Valorant status heartbeat monitor.
+    Called when user enters an active game match.
+    """
+    global heartbeat_task
+    
+    if heartbeat_task and not heartbeat_task.done():
+        print("[HEARTBEAT] Stopping Valorant status monitor (user in-game)...")
+        heartbeat_task.cancel()
+        try:
+            await heartbeat_task
+        except asyncio.CancelledError:
+            pass
+        heartbeat_task = None
+    else:
+        print("[HEARTBEAT] No heartbeat running to stop")
+
+async def valorant_heartbeat_loop():
+    """
+    Main heartbeat loop - checks Valorant status every 3 seconds.
+    Only broadcasts updates when status actually changes.
+    """
+    global last_known_status
+    
+    print("[HEARTBEAT] Valorant status monitor started")
+    
+    try:
+        while True:
+            # Check if any clients are still connected and not authenticated
+            unauthenticated_clients = [
+                client_id for client_id, state in client_states.items()
+                if not state.get('authenticated', False)
+            ]
+            
+            # Only run heartbeat if there are unauthenticated clients
+            if unauthenticated_clients:
+                try:
+                    current_status = await check_valorant_status()
+                    
+                    # Only broadcast if status actually changed
+                    if current_status != last_known_status:
+                        print(f"[HEARTBEAT] Status changed: {last_known_status} -> {current_status}")
+                        last_known_status = current_status
+                        
+                        # Broadcast to all connected clients
+                        await broadcast_status_update({
+                            'backend_connected': True,
+                            'valorant': current_status,
+                            'authenticated': False  # This will be updated per client
+                        })
+                    
+                except Exception as e:
+                    print(f"[HEARTBEAT] Error checking status: {e}")
+            
+            # Wait 3 seconds before next check
+            await asyncio.sleep(3)
+            
+    except asyncio.CancelledError:
+        print("[HEARTBEAT] Valorant status monitor stopped")
+        raise
+    except Exception as e:
+        print(f"[HEARTBEAT] Unexpected error: {e}")
+
+async def broadcast_status_update(status_data):
+    """
+    Broadcast status update to all connected WebSocket clients.
+    """
+    if not active_connections:
+        print("[BROADCAST] No active connections to broadcast to")
+        return
+    
+    message = json.dumps({
+        'event': 'status_update',
+        'payload': status_data
+    })
+    
+    print(f"[BROADCAST] Broadcasting to {len(active_connections)} clients: {status_data}")
+    
+    disconnected_conns = []
+    for ws in list(active_connections):
+        try:
+            await ws.send(message)
+            print(f"[BROADCAST] Successfully sent to client")
+        except Exception as e:
+            print(f"[BROADCAST] Error sending to client: {e}")
+            disconnected_conns.append(ws)
+    
+    # Clean up disconnected clients
+    for ws in disconnected_conns:
+        active_connections.discard(ws)
+
+# ============================================================
 # Event Handlers
 # ============================================================
 
 async def check_valorant_status():
     """
-    Check if Valorant client is running and accessible.
-    Always performs a fresh check, not relying on cached client.
+    Check if Valorant game is actually running (not just Riot Client)
+    Uses process detection to verify VALORANT.exe is running.
+    Returns:
+        - 'running': Valorant game is launched and ready
+        - 'riot_only': Only Riot Client is running, game not launched
+        - 'not_running': Neither Riot Client nor game is running
     """
     try:
         # Check if valorant_api is initialized
@@ -180,26 +317,53 @@ async def check_valorant_status():
         from valclient import Client
         temp_client = Client(region='na')
         
-        # CRITICAL: Call activate() to actually test if Valorant is running
-        # This is what throws the exception when Valorant is not running
+        # CRITICAL: Call activate() to actually test if Riot Client is running
+        # This is what throws the exception when Riot Client is not running
+        print(f"[Status Check] Attempting to activate Valorant client...")
         temp_client.activate()
+        print(f"[Status Check] Riot Client connection successful!")
         
-        # If we get here, Valorant is running and we can connect to it
-        is_authenticated = (valorant_api.client is not None and 
-                          hasattr(valorant_api.client, 'puuid') and 
-                          valorant_api.client.puuid is not None)
+        # Now check if actual VALORANT.exe game process is running
+        # This is more reliable than API checks since Riot updated their API
+        print("[Status Check] Checking for VALORANT.exe process...")
+        import psutil
         
-        return {
-            'status': 'running',
-            'message': 'Valorant client is running',
-            'details': {
-                'region': temp_client.region,
-                'is_authenticated': is_authenticated
+        valorant_process_found = False
+        for proc in psutil.process_iter(['name']):
+            try:
+                if proc.info['name'] and 'VALORANT' in proc.info['name'].upper():
+                    valorant_process_found = True
+                    print(f"[Status Check] Found process: {proc.info['name']}")
+                    break
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        
+        if valorant_process_found:
+            print("[Status Check] Valorant game is running and ready")
+            
+            is_authenticated = (valorant_api.client is not None and 
+                              hasattr(valorant_api.client, 'puuid') and 
+                              valorant_api.client.puuid is not None)
+            
+            return {
+                'status': 'running',
+                'message': 'Valorant game is running and ready',
+                'details': {
+                    'region': temp_client.region,
+                    'is_authenticated': is_authenticated
+                }
             }
-        }
+        else:
+            # activate() worked but no VALORANT.exe process = only Riot Client running
+            print(f"[Status Check] Game not launched (Riot Client only)")
+            return {
+                'status': 'riot_only',
+                'message': 'Valorant game not launched (Riot Client only)',
+                'details': None
+            }
             
     except Exception as e:
-        # If we can't create a client or activate it, Valorant is probably not running
+        # If we can't create a client or activate it, Riot Client is probably not running
         error_msg = str(e).lower()
         if 'unable to activate' in error_msg or 'valorant running' in error_msg:
             return {
@@ -215,19 +379,25 @@ async def check_valorant_status():
             }
         else:
             return {
-                'status': 'not_running',
-                'message': f'Valorant client error: {str(e)}',
+                'status': 'error',
+                'message': f'Error checking status: {str(e)}',
                 'details': None
             }
 
 async def handle_connected(payload: dict, client_id: int, ws):
     """
-    Handle client connection - send initial status.
+    Handle client connection - send initial status and start heartbeat if needed.
     """
     try:
         print(f"[CONNECT] Client {client_id} connected")
         # Send initial status immediately when client connects
         await handle_get_status(payload, client_id, ws)
+        
+        # Start heartbeat if not already running and client is not in-game
+        # Heartbeat runs during login, lobby, and queue - stops only when in active match
+        if not client_states[client_id].get('in_game', False):
+            await start_valorant_heartbeat()
+            
     except Exception as e:
         print(f"[ERROR] Error handling connection: {str(e)}")
 
@@ -264,10 +434,22 @@ async def handle_authenticate(payload: dict, client_id: int, ws):
         # First check if Valorant is running
         valorant_status = await check_valorant_status()
         if valorant_status['status'] != 'running':
-            await send_message(ws, 'authentication_error', {
-                'message': 'Valorant client is not running. Please launch Valorant first.',
-                'timeout': 5
-            })
+            # More specific error messages based on status
+            if valorant_status['status'] == 'riot_only':
+                await send_message(ws, 'authentication_error', {
+                    'message': 'Please launch Valorant game (Riot Client is running but game is not)',
+                    'timeout': 5
+                })
+            elif valorant_status['status'] == 'not_running':
+                await send_message(ws, 'authentication_error', {
+                    'message': 'Riot Client is not running. Please start Valorant.',
+                    'timeout': 5
+                })
+            else:
+                await send_message(ws, 'authentication_error', {
+                    'message': valorant_status.get('message', 'Unable to authenticate'),
+                    'timeout': 5
+                })
             return
         
         result = await valorant_api.login("na")
@@ -275,9 +457,14 @@ async def handle_authenticate(payload: dict, client_id: int, ws):
         if result.get('status') == 'success':
             client_states[client_id]['authenticated'] = True
             client_states[client_id]['puuid'] = valorant_api.client.puuid
+            client_states[client_id]['in_game'] = False  # Track in-game status
             
             # Get player data from Django server
             player_result = await valorant_api.get_player_model()
+            
+            # NOTE: Heartbeat continues running even after auth
+            # It only stops when user enters an active game
+            print("[AUTH] User authenticated, heartbeat continues until in-game")
             
             await send_event(ws, 'authentication_success', {
                 'puuid': valorant_api.client.puuid,
@@ -359,6 +546,7 @@ async def handle_queue_lobby(payload: dict, client_id: int, ws):
 async def handle_accept_match(payload: dict, client_id: int, ws):
     """
     Accept a found match.
+    When match fully starts (all accept), user enters in-game state.
     """
     match_id = payload.get('match_id')
     if not match_id:
@@ -374,6 +562,10 @@ async def handle_accept_match(payload: dict, client_id: int, ws):
     })
     
     client_states[client_id]['match_id'] = match_id
+    
+    # TODO: Set in_game=True when match actually starts (after all players accept)
+    # For now, we'll keep heartbeat running through the accept phase
+    # The Django server should send a 'match_started' event when ready
     
     await send_event(ws, 'match_accepted', {
         'match_id': match_id
@@ -394,6 +586,43 @@ async def handle_decline_match(payload: dict, client_id: int, ws):
         'match_id': match_id,
         'puuid': client_states[client_id]['puuid']
     })
+
+
+async def handle_match_started(payload: dict, client_id: int, ws):
+    """
+    Handle match start event from Django server.
+    Sets user as in-game and stops heartbeat.
+    """
+    print(f"[MATCH] Match started for client {client_id}")
+    
+    client_states[client_id]['in_game'] = True
+    client_states[client_id]['match_id'] = payload.get('match_id')
+    
+    # Check if all clients are now in-game, stop heartbeat if so
+    all_in_game = all(
+        state.get('in_game', False) 
+        for state in client_states.values()
+    )
+    if all_in_game:
+        await stop_valorant_heartbeat()
+    
+    await send_event(ws, 'match_started', payload)
+
+
+async def handle_match_ended(payload: dict, client_id: int, ws):
+    """
+    Handle match end event from Django server or client.
+    Sets user as not in-game and restarts heartbeat.
+    """
+    print(f"[MATCH] Match ended for client {client_id}")
+    
+    client_states[client_id]['in_game'] = False
+    client_states[client_id]['match_id'] = None
+    
+    # Restart heartbeat since user is back to lobby
+    await start_valorant_heartbeat()
+    
+    await send_event(ws, 'match_ended', payload)
 
 
 async def handle_lobby_chat(payload: dict, client_id: int, ws):

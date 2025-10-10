@@ -146,6 +146,7 @@ export const WebSocketProvider = ({ children }) => {
         break;
         
       case 'status_update':
+        console.log('📥 [FRONTEND] Received status_update:', payload);
         setSystemStatus(payload);
         setAuthenticated(payload.authenticated);
         break;

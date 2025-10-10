@@ -116,8 +116,12 @@ const AuthenticationScreen = ({ onAuthentication }) => {
             <span style={{ color: '#f44336' }}>🔴 Backend Disconnected</span>
           ) : systemStatus.valorant.status === 'running' ? (
             <span style={{ color: '#4caf50' }}>🟢 Game Connected</span>
+          ) : systemStatus.valorant.status === 'riot_only' ? (
+            <span style={{ color: '#ff9800' }}>🟡 Please Launch Valorant</span>
           ) : systemStatus.valorant.status === 'not_running' ? (
-            <span style={{ color: '#ff9800' }}>⚠️ Valorant Not Running</span>
+            <span style={{ color: '#f44336' }}>🔴 Riot Client Not Running</span>
+          ) : systemStatus.valorant.status === 'error' ? (
+            <span style={{ color: '#f44336' }}>🔴 Status Check Error</span>
           ) : (
             <span style={{ color: '#2196f3' }}>🔍 Checking Game Status...</span>
           )}
@@ -133,7 +137,14 @@ const AuthenticationScreen = ({ onAuthentication }) => {
             type="submit"
             fullWidth
             variant="contained"
-            disabled={!connected || loading || systemStatus.valorant.status === 'not_running'}
+            disabled={
+              !connected || 
+              loading || 
+              systemStatus.valorant.status === 'not_running' ||
+              systemStatus.valorant.status === 'riot_only' ||
+              systemStatus.valorant.status === 'checking' ||
+              systemStatus.valorant.status === 'error'
+            }
             sx={{
               backgroundColor: theme.palette.secondary.dark,
               width: '60%',

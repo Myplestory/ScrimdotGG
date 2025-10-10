@@ -101,8 +101,8 @@ function createWindow() {
   app.whenReady().then(() => {
     console.log('🚀 Electron app is ready, cleaning up any existing processes...');
     
-    // Kill any existing Python processes before starting new one
-    forceKillAllPythonProcesses();
+    // Kill any existing backend processes before starting new one
+    forceKillBackendProcesses();
     
     // Wait a moment for cleanup, then start fresh backend
     setTimeout(() => {
@@ -142,31 +142,33 @@ function createWindow() {
     }
   }
 
-  // Enhanced cleanup function that waits for process termination
-  function forceKillAllPythonProcesses() {
-    console.log(`🛑 Force killing ALL Python processes...`);
+  // Enhanced cleanup function that only kills backend processes
+  function forceKillBackendProcesses() {
+    console.log(`🛑 Force killing backend Python processes...`);
     
     if (process.platform === 'win32') {
-      // Kill all python.exe processes (more aggressive)
-      exec(`taskkill /f /im python.exe`, (error, stdout, stderr) => {
+      // Kill only processes running bootstrap.py (more selective)
+      exec(`taskkill /f /fi "WINDOWTITLE eq bootstrap*" /im python.exe`, (error, stdout, stderr) => {
         if (error) {
-          // Ignore "process not found" errors - that means no Python processes were running
-          if (!error.message.includes('not found')) {
-            console.error(`❌ Error killing Python processes: ${error.message}`);
-          } else {
-            console.log(`✅ No Python processes found to kill`);
-          }
+          // Also try killing by command line containing bootstrap.py
+          exec(`wmic process where "commandline like '%bootstrap.py%'" delete`, (error2, stdout2, stderr2) => {
+            if (error2 && !error2.message.includes('No Instance(s) Available')) {
+              console.error(`❌ Error killing backend processes: ${error2.message}`);
+            } else {
+              console.log(`✅ Backend processes cleaned up`);
+            }
+          });
         } else {
-          console.log(`✅ All Python processes killed successfully`);
+          console.log(`✅ Backend processes killed successfully`);
         }
       });
     } else {
-      // Unix-like: Kill all python processes
-      exec(`pkill -f python`, (error, stdout, stderr) => {
+      // Unix-like: Kill processes running bootstrap.py
+      exec(`pkill -f bootstrap.py`, (error, stdout, stderr) => {
         if (error) {
-          console.log(`✅ No Python processes found to kill`);
+          console.log(`✅ No backend processes found to kill`);
         } else {
-          console.log(`✅ All Python processes killed successfully`);
+          console.log(`✅ Backend processes killed successfully`);
         }
       });
     }
@@ -177,7 +179,7 @@ function createWindow() {
       // Try specific process first, then fallback to all Python processes
       killPythonBackend();
       setTimeout(() => {
-        forceKillAllPythonProcesses();
+        forceKillBackendProcesses();
         app.quit();
       }, 1000); // Wait 1 second for initial kill to complete
     }
@@ -191,9 +193,9 @@ function createWindow() {
     // Try specific process first
     killPythonBackend();
     
-    // Force kill all Python processes after a short delay
+    // Force kill backend processes after a short delay
     setTimeout(() => {
-      forceKillAllPythonProcesses();
+      forceKillBackendProcesses();
       // Now allow the app to quit
       setTimeout(() => {
         app.exit(0);

@@ -25,7 +25,7 @@
   },
   "main": "main.js",
   "scripts": {
-    "react-start": "react-scripts start",
+    "react-start": "cross-env BROWSER=none react-scripts start",
     "react-build": "react-scripts build",
     "react-test": "react-scripts test",
     "react-eject": "react-scripts eject",

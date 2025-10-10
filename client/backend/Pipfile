@@ -9,6 +9,7 @@ quart-cors = "*"
 valclient = "*"
 websockets = "*"
 requests = "*"
+psutil = "*"
 
 [dev-packages]
 
