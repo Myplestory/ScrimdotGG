@@ -11,7 +11,7 @@ class Player(models.Model):
     karma = models.IntegerField(default=50)
     rank = models.CharField(max_length=1,default='S')
     team = models.CharField(max_length=100)
-    profile_picture = models.ImageField(upload_to='')
+    profile_picture = models.ImageField(upload_to='avatars/', default='avatars/default/default_avatar.svg')
     friends = models.ManyToManyField('self', symmetrical=True, blank=True, related_name='friend_set')
     incoming_friend_requests = models.ManyToManyField('self', symmetrical=False, blank=True, related_name='incoming_requests')
     outgoing_friend_requests = models.ManyToManyField('self', symmetrical=False, blank=True, related_name='outgoing_requests')

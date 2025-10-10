@@ -50,7 +50,7 @@ const PlayerSlot = ({ player, handleEmptySlotClick, slotIndex }) => {
             </LeaderCrown>
           )}
           <Box sx={{ mt: 0.75, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <StyledAvatar src={player.profile_picture || 'https://www.mn.uio.no/geo/english/services/it/help/using-linux/bilder/bash_logo.jpg'} alt={`${player.alias}'s avatar`} />
+            <StyledAvatar src={player.profile_picture || 'http://localhost:8000/media/avatars/default/default_avatar.svg'} alt={`${player.alias}'s avatar`} />
             <Typography variant="subtitle2" fontFamily={"Francker W01 Condensed Bold"} fontWeight={'bold'} sx={{ mb: 1.5, fontSize: '0.75rem' }}>
               {player.alias || 'Unknown Player'}
             </Typography>

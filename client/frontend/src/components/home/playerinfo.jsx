@@ -32,7 +32,7 @@ const PlayerInfoCard = ({ player }) => {
   const theme = useTheme();
   return (
     <StyledCard>
-      <StyledAvatar src={player.profile_picture || 'path/to/default/avatar.png'} />
+      <StyledAvatar src={player.profile_picture || 'http://localhost:8000/media/avatars/default/default_avatar.svg'} />
         <StyledTypography
           variant="h5" // Increased the variant for larger text
           fontWeight="bold"
