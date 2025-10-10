@@ -32,7 +32,7 @@ const StyledAvatar = styled(Avatar)(({ theme }) => ({
 
 const LeaderCrown = styled(Box)(({ theme }) => ({
   position: 'absolute',
-  top: theme.spacing(1),
+  top: theme.spacing(2.5),
   left: '50%',
   transform: 'translateX(-50%)',
   zIndex: 10,
@@ -46,18 +46,20 @@ const PlayerSlot = ({ player, handleEmptySlotClick, slotIndex }) => {
         <>
           {player.isLeader && (
             <LeaderCrown>
-              <Icon path={mdiCrown} size={0.8} color="gold" />
+              <Icon path={mdiCrown} size={0.6} color="gold" />
             </LeaderCrown>
           )}
-          <StyledAvatar src={player.profile_picture || 'path/to/default/avatar.png'} alt={`${player.alias}'s avatar`} />
-          <Typography variant="subtitle1" fontFamily={"Francker W01 Condensed Bold"} fontWeight={'bold'}>
-            {player.alias || 'Unknown Player'}
-          </Typography>
-          <RankComponent 
-            style={{ marginBottom: '20px', transform: 'translateY(40px)' }} 
-            elo={player.elo || 0} 
-            rank={player.rank || 'Unranked'} 
-          />
+          <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <StyledAvatar src={player.profile_picture || 'path/to/default/avatar.png'} alt={`${player.alias}'s avatar`} />
+            <Typography variant="subtitle1" fontFamily={"Francker W01 Condensed Bold"} fontWeight={'bold'} sx={{ mb: 0.5 }}>
+              {player.alias || 'Unknown Player'}
+            </Typography>
+            <RankComponent 
+              style={{ marginBottom: '20px', transform: 'translateY(0px)' }} 
+              elo={player.elo || 0} 
+              rank={player.rank || 'Unranked'} 
+            />
+          </Box>
         </>
       ) : (
         <>

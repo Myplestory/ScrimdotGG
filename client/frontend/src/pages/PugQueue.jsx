@@ -59,6 +59,7 @@ const PugQueue = () => {
   const [newMessage, setNewMessage] = useState('');
   const [chatMessages, setChatMessages] = useState([]);
   const [activeTab, setActiveTab] = useState('maps'); // 'maps', 'match_type', 'servers'
+  const [queueStartTime, setQueueStartTime] = useState(null);
   const messagesEndRef = useRef(null);
 
   // Use WebSocket context
@@ -113,6 +114,7 @@ const PugQueue = () => {
         estimated_wait: 0,
         players_in_queue: 0
       });
+      setQueueStartTime(null); // Reset timer when leaving queue
     });
 
     const unsubscribeMatchFound = on('pug_match_found', (payload) => {
@@ -156,7 +158,47 @@ const PugQueue = () => {
 
   const handleLeaveQueue = () => {
     api.leavePugQueue();
+    setQueueStartTime(null);
   };
+
+  const handleFindMatch = () => {
+    if (queueStatus.in_queue) {
+      handleLeaveQueue();
+    } else {
+      // Enter queue
+      setQueueStartTime(Date.now());
+      api.joinPugQueue({
+        queue_type: selectedQueueType,
+        preferred_maps: selectedMaps,
+        preferred_servers: selectedServers
+      });
+    }
+  };
+
+  // Calculate queue time
+  const getQueueTime = () => {
+    if (!queueStartTime) return '0:00';
+    const elapsed = Math.floor((Date.now() - queueStartTime) / 1000);
+    const minutes = Math.floor(elapsed / 60);
+    const seconds = elapsed % 60;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  // Check if current user is party leader
+  const isPartyLeader = () => {
+    return players.length > 0 && players[0]?.isLeader;
+  };
+
+  // Update queue timer every second when in queue
+  useEffect(() => {
+    let interval;
+    if (queueStatus.in_queue && queueStartTime) {
+      interval = setInterval(() => {
+        // Force re-render to update timer display
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [queueStatus.in_queue, queueStartTime]);
 
   const sendLobbyMessage = () => {
     if (!newMessage.trim()) return;
@@ -231,17 +273,21 @@ const PugQueue = () => {
           Matchmaking
         </Typography>
         
-        {/* Queue Status Indicator */}
-        {queueStatus.in_queue && (
-          <Typography variant="body2" align="center" color="primary" sx={{ mb: 1 }}>
-            🔍 In Queue... Estimated wait: {formatTime(queueStatus.estimated_wait)}
-          </Typography>
-        )}
         
         {/* Player Cards Section */}
         <Grid container spacing={1.5} justifyContent="center" alignItems="center" sx={{ mt: -2, mb: 1 }}>
           {Array.from({ length: 5 }).map((_, index) => {
-            const player = players[index] || null;
+            // Center the user's player card (index 2)
+            let player = null;
+            if (index === 2 && players.length > 0) {
+              // Put the first player (current user) in the middle slot
+              player = players[0];
+            } else if (index !== 2 && players.length > index + (index > 2 ? 0 : 1)) {
+              // Put other players in remaining slots
+              const playerIndex = index > 2 ? index : index + 1;
+              player = players[playerIndex];
+            }
+            
             return (
               <Grid item key={player ? player.puuid : `empty-${index}`} xs>
                 <PlayerSlot 
@@ -254,20 +300,6 @@ const PugQueue = () => {
           })}
         </Grid>
 
-        {/* Queue Status */}
-        {queueStatus.in_queue && (
-          <Box sx={{ textAlign: 'center', mb: 2 }}>
-            <Button
-              variant="outlined"
-              color="error"
-              startIcon={<Stop />}
-              onClick={handleLeaveQueue}
-              size="small"
-            >
-              Leave Queue
-            </Button>
-          </Box>
-        )}
 
         {/* Horizontal Settings Card */}
         <Box sx={{ 
@@ -336,28 +368,28 @@ const PugQueue = () => {
           <Button
             variant="contained"
             size="medium"
-            onClick={handleJoinQueue}
-            disabled={selectedMaps.length < 5 || queueStatus.in_queue}
+            onClick={handleFindMatch}
+            disabled={selectedMaps.length < 5 || !isPartyLeader()}
             sx={{
               fontSize: '1rem',
               py: 0.75, 
               px: 4, 
-              backgroundColor: theme.palette.secondary.main,
-              color: theme.palette.getContrastText(theme.palette.secondary.main),
+              backgroundColor: queueStatus.in_queue ? theme.palette.error.main : theme.palette.secondary.main,
+              color: theme.palette.getContrastText(queueStatus.in_queue ? theme.palette.error.main : theme.palette.secondary.main),
               '&:hover': {
-                backgroundColor: theme.palette.secondary.dark,
+                backgroundColor: queueStatus.in_queue ? theme.palette.error.dark : theme.palette.secondary.dark,
               },
               '&:disabled': {
                 backgroundColor: theme.palette.action.disabled,
               }
             }}
           >
-            FIND MATCH
+            {queueStatus.in_queue ? `CANCEL QUEUE (${getQueueTime()})` : 'FIND MATCH'}
           </Button>
         </Box>
 
         {/* Tab Content */}
-        <Box sx={{ mb: 2, minHeight: 'auto', backgroundColor: theme.palette.background.paper, borderRadius: 1, p: 1.5, pb: 1 }}>
+        <Box sx={{ mb: 0.5, minHeight: 'auto', backgroundColor: theme.palette.background.paper, borderRadius: 1, p: 1.5, pb: 1 }}>
           {activeTab === 'match_type' && (
             <Box>
               <Typography variant="h6" sx={{ mb: 1.5 }}>
@@ -487,24 +519,30 @@ const PugQueue = () => {
           )}
         </Box>
         
-        {/* Chatbox Section - Fills remaining space */}
+        {/* Minimal spacer to control gap above chatbox */}
+        <Box sx={{ height: '1px' }} />
+        
+        {/* Chatbox Section - Fixed height to prevent expansion */}
         <Box sx={{ 
-          flexGrow: 1,
+          position: 'absolute',
+          bottom: theme.spacing(1),
+          left: theme.spacing(2),
+          right: theme.spacing(2),
+          height: activeTab === 'servers' ? '25vh' : '20vh',
           display: 'flex', 
           flexDirection: 'column', 
-          minHeight: activeTab === 'servers' ? '25vh' : '20vh',
           border: '1px solid grey', 
           borderRadius: '8px', 
           overflow: 'hidden',
           backgroundColor: theme.palette.background.paper
         }}>
           {/* Messages List */}
-          <List sx={{ flexGrow: 1, overflowY: 'auto', p: 2 }}>
+          <List sx={{ flexGrow: 1, overflowY: 'auto', p: 1 }}>
             {chatMessages.map((message, index) => (
-              <ListItem key={index} sx={{ py: 0.5 }}>
+              <ListItem key={index} sx={{ py: 0.1, minHeight: 'auto' }}>
                 <ListItemText
                   primary={
-                    <Typography variant="body2">
+                    <Typography variant="body2" sx={{ lineHeight: 1.2 }}>
                       [{new Date(message.timestamp).toLocaleTimeString()}] <strong>{message.user}</strong>: {message.message}
                     </Typography>
                   }
