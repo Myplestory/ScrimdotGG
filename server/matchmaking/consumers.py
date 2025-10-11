@@ -82,36 +82,95 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
             if not player or not lobby:
                 return
             
-            # Only destroy lobby if user is the lobby leader
+            # Only handle lobby if user is the lobby leader
             if lobby.lobby_leader.puuid == self.puuid:
-                print(f"[DISCONNECT] User {player.alias} is lobby leader, destroying lobby {lobby.id}")
-                
-                # Remove lobby from queue if it's queued
-                from .queue_manager import QueueManager
-                queue_result = await QueueManager.leave_queue(str(lobby.id), self.puuid, 'pug')
-                if queue_result.get('status') == 'success':
-                    print(f"[DISCONNECT] Removed lobby {lobby.id} from queue")
-                
-                # Destroy the lobby
                 lobby_id = lobby.id
-                lobby.delete()
-                print(f"[DISCONNECT] Destroyed lobby {lobby_id}")
+                lobby_size = lobby.size
                 
-                # Broadcast lobby destruction to remaining members
-                await self.channel_layer.group_send(
-                    f"lobby_{lobby_id}",
-                    {
-                        'type': 'lobby_destroyed',
-                        'message': 'Lobby was destroyed because the leader disconnected',
-                        'reason': 'leader_disconnect'
-                    }
-                )
+                # Check if this is a solo lobby or a party
+                if lobby_size == 1:
+                    # Solo lobby - destroy it
+                    print(f"[DISCONNECT] User {player.alias} is solo lobby leader, destroying lobby {lobby.id}")
+                    
+                    # Remove lobby from queue if it's queued
+                    from .queue_manager import QueueManager
+                    queue_result = await QueueManager.leave_queue(str(lobby.id), self.puuid, 'pug')
+                    if queue_result.get('status') == 'success':
+                        print(f"[DISCONNECT] Removed lobby {lobby.id} from queue")
+                    
+                    # Destroy the lobby
+                    await sync_to_async(lobby.delete)()
+                    print(f"[DISCONNECT] Destroyed lobby {lobby_id}")
+                    
+                    # Broadcast lobby destruction
+                    await self.channel_layer.group_send(
+                        f"lobby_{lobby_id}",
+                        {
+                            'type': 'lobby_destroyed',
+                            'message': 'Lobby was destroyed because the leader disconnected',
+                            'reason': 'leader_disconnect'
+                        }
+                    )
+                else:
+                    # Party lobby - transfer leadership
+                    print(f"[DISCONNECT] User {player.alias} is party leader ({lobby_size} players), transferring leadership")
+                    
+                    def transfer_leadership():
+                        # Get all players except the disconnecting leader
+                        remaining_players = list(lobby.players.exclude(puuid=self.puuid))
+                        
+                        if remaining_players:
+                            # Transfer to first remaining player (could be based on other criteria)
+                            new_leader = remaining_players[0]
+                            lobby.lobby_leader = new_leader
+                            lobby.players.remove(player)
+                            lobby.size = lobby.players.count()
+                            lobby.save()
+                            print(f"[DISCONNECT] Leadership transferred to {new_leader.alias}")
+                            return new_leader
+                        else:
+                            # No remaining players, destroy lobby
+                            lobby.delete()
+                            return None
+                    
+                    new_leader = await sync_to_async(transfer_leadership)()
+                    
+                    if new_leader:
+                        # Broadcast leadership change
+                        await self.channel_layer.group_send(
+                            f"lobby_{lobby_id}",
+                            {
+                                'type': 'lobby_leader_changed',
+                                'new_leader': {
+                                    'puuid': new_leader.puuid,
+                                    'alias': new_leader.alias
+                                },
+                                'old_leader': {
+                                    'puuid': player.puuid,
+                                    'alias': player.alias
+                                },
+                                'message': f'{new_leader.alias} is now the lobby leader'
+                            }
+                        )
+                    else:
+                        # Lobby destroyed because no players left
+                        await self.channel_layer.group_send(
+                            f"lobby_{lobby_id}",
+                            {
+                                'type': 'lobby_destroyed',
+                                'message': 'Lobby was destroyed because no players remain',
+                                'reason': 'no_players'
+                            }
+                        )
             else:
                 print(f"[DISCONNECT] User {player.alias} is not lobby leader, leaving lobby {lobby.id}")
                 # Just remove player from lobby (don't destroy it)
-                lobby.players.remove(player)
-                lobby.size = lobby.players.count()
-                lobby.save()
+                def remove_player_from_lobby():
+                    lobby.players.remove(player)
+                    lobby.size = lobby.players.count()
+                    lobby.save()
+                
+                await sync_to_async(remove_player_from_lobby)()
                 
                 # Broadcast player left to lobby members
                 await self.channel_layer.group_send(
@@ -594,12 +653,12 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         Handles match acceptance for a player using MatchConfirmationManager.
         """
         payload = data.get("payload", {})
-        match_confirmation_id = payload.get("match_confirmation_id")
-        player_puuid = payload.get("player_puuid")
+        match_confirmation_id = payload.get("match_id")  # Client sends match_id
+        player_puuid = self.puuid  # Use the player's PUUID from WebSocket connection
         
-        if not match_confirmation_id or not player_puuid:
+        if not match_confirmation_id:
             await self.send(text_data=json.dumps({
-                "error": "match_confirmation_id and player_puuid are required"
+                "error": "match_id is required"
             }))
             return
         
@@ -786,8 +845,11 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         Sends a notification to the client that a match is ready.
         """
         await self.send(text_data=json.dumps({
-            'action': 'match_ready',
-            'message': event['message'],
+            'event': 'match_ready',
+            'data': {
+                'match_id': event.get('match_id'),
+                'message': event['message'],
+            }
         }))
 
     async def player_accepted(self, event):
@@ -795,8 +857,12 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         Sends a notification to the client about the number of players who have accepted the match.
         """
         await self.send(text_data=json.dumps({
-            'action': 'player_accepted',
-            'accepted_count': event["accepted_count"],
+            'event': 'player_accepted',
+            'data': {
+                'accepted_count': event["accepted_count"],
+                'total_players': event.get("total_players", 10),
+                'timeout_seconds': event.get("timeout_seconds", 30)
+            }
         }))
 
     async def lobby_queued(self, event):
@@ -825,10 +891,13 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         """
         await self.send(text_data=json.dumps({
             'event': 'match_found',
-            'match_confirmation_id': event['match_confirmation_id'],
-            'opponent_lobby': event.get('opponent_lobby'),
-            'timeout_seconds': event.get('timeout_seconds'),
-            'message': event.get('message', 'Match found! Please accept to continue.')
+            'data': {
+                'match_id': event['match_confirmation_id'],  # Client expects match_id
+                'match_confirmation_id': event['match_confirmation_id'],
+                'opponent_lobby': event.get('opponent_lobby'),
+                'timeout_seconds': event.get('timeout_seconds'),
+                'message': event.get('message', 'Match found! Please accept to continue.')
+            }
         }))
     
     async def match_declined(self, event):
@@ -1227,6 +1296,17 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
             'event': 'player_left_lobby',
             'data': {
                 'player': event['player'],
+                'message': event['message']
+            }
+        }))
+    
+    async def lobby_leader_changed(self, event):
+        """Send lobby leader changed event to client"""
+        await self.send(text_data=json.dumps({
+            'event': 'lobby_leader_changed',
+            'data': {
+                'new_leader': event['new_leader'],
+                'old_leader': event['old_leader'],
                 'message': event['message']
             }
         }))

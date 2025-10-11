@@ -394,6 +394,35 @@ class Matchmaker:
                     converted_match = Matchmaker._convert_match_format(match)
                     matches_found.append(converted_match)
                     logger.info(f"Found match {len(matches_found)}: {converted_match['lobby1']['id'][:8]}... vs {converted_match['lobby2']['id'][:8]}...")
+                    
+                    # CRITICAL: Remove matched lobbies from queue to prevent duplicate matches
+                    # Get ALL lobby IDs (could be 2-10 lobbies depending on party sizes)
+                    lobby_ids = converted_match.get('lobbies', [])
+                    for lobby_id in lobby_ids:
+                        try:
+                            # Get lobby leader to call leave_queue
+                            from django.apps import apps
+                            from asgiref.sync import sync_to_async
+                            
+                            Lobby = apps.get_model('scrimgg', 'Lobby')
+                            
+                            def get_lobby_leader():
+                                lobby = Lobby.objects.select_related('lobby_leader').get(id=lobby_id)
+                                return lobby.lobby_leader.puuid if lobby.lobby_leader else None
+                            
+                            leader_puuid = await sync_to_async(get_lobby_leader)()
+                            
+                            if leader_puuid:
+                                # Remove from Redis queue using leave_queue
+                                result = await QueueManager.leave_queue(lobby_id, leader_puuid, queue_type)
+                                if result.get('status') == 'success':
+                                    logger.info(f"Removed lobby {lobby_id} from queue after match found")
+                                else:
+                                    logger.warning(f"Failed to remove lobby {lobby_id}: {result.get('message')}")
+                            else:
+                                logger.error(f"Could not find lobby leader for {lobby_id}")
+                        except Exception as e:
+                            logger.error(f"Error removing lobby {lobby_id} from queue: {str(e)}")
                 else:
                     # No more matches possible
                     break
@@ -418,34 +447,38 @@ class Matchmaker:
     def _convert_match_format(match: Dict) -> Dict:
         """
         Convert match format from team-based to lobby-based for Celery compatibility.
+        This format is used by the match confirmation system.
         
         Args:
             match: Original match data with team_a/team_b
             
         Returns:
-            Converted match data with lobby1/lobby2
+            Converted match data with lobby1/lobby2 representing the two teams
         """
         try:
-            # Get lobby IDs from the match
-            lobby_ids = match.get('lobbies', [])
+            # Get ALL lobby IDs from the match
+            all_lobby_ids = match.get('lobbies', [])
             
-            if len(lobby_ids) < 2:
-                raise ValueError("Match must have at least 2 lobbies")
+            if not all_lobby_ids:
+                raise ValueError("Match must have at least one lobby")
             
-            # Create lobby-based format
+            # Create lobby-based format where lobby1 = team_a, lobby2 = team_b
+            # Note: lobby1 and lobby2 are just team identifiers, not actual single lobbies
+            # They contain all players that were matched, regardless of original lobby count
             converted_match = {
                 'lobby1': {
-                    'id': lobby_ids[0],
+                    'id': all_lobby_ids[0] if len(all_lobby_ids) > 0 else 'team_a',
                     'players': match['team_a']['players'],
                     'average_elo': match['team_a']['average_elo'],
                     'captain': match['team_a']['captain']
                 },
                 'lobby2': {
-                    'id': lobby_ids[1],
+                    'id': all_lobby_ids[1] if len(all_lobby_ids) > 1 else 'team_b',
                     'players': match['team_b']['players'],
                     'average_elo': match['team_b']['average_elo'],
                     'captain': match['team_b']['captain']
                 },
+                'lobbies': all_lobby_ids,  # Preserve ALL lobby IDs for removal from queue
                 'match_quality': match.get('match_quality', 0.0),
                 'map_pool': match.get('map_pool', []),
                 'server_pool': match.get('server_pool', []),

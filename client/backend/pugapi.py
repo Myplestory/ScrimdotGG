@@ -83,6 +83,8 @@ class PugSocketClient:
                 await self.on_lobby_message(payload)
             elif event == "direct_message":
                 await self.on_direct_message(payload)
+            elif event == "match_found":
+                await self.on_match_found(payload)
             else:
                 print(f"Unknown event received: {event}")
         except Exception as e:
@@ -168,7 +170,27 @@ class PugSocketClient:
             print("Enqueue:", data.get("message"))
         except Exception as e:
             print(f"Error processing 'enqueue' event: {e}")
+
+    async def on_match_found(self, data):
+        """Handle match found event."""
+        try:
+            match_id = data.get("match_id")
+            match_confirmation_id = data.get("match_confirmation_id")
+            timeout_seconds = data.get("timeout_seconds", 30)
+            message = data.get("message", "Match found! Please accept to continue.")
             
+            print(f"[MATCH FOUND] Match ID: {match_id}, Timeout: {timeout_seconds}s")
+            print(f"[MATCH FOUND] Message: {message}")
+            
+            # Store the match data for the main WebSocket to pick up
+            self.match_found_data = data
+            print(f"[MATCH FOUND] Stored match data for main WebSocket")
+            
+            # Emit event to notify main WebSocket connection
+            if hasattr(self, 'match_found_callback'):
+                await self.match_found_callback(data)
+        except Exception as e:
+            print(f"Error processing 'match_found' event: {e}")
 
     ### COMMANDS ###
 

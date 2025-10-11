@@ -62,9 +62,23 @@ def periodic_matchmaking(self):
                             confirmations_created += 1
                             logger.info(f"Created match confirmation: {confirmation_id}")
                             
-                            # Send match found notifications to lobbies
-                            _notify_match_found(match['lobby1']['id'], confirmation_id)
-                            _notify_match_found(match['lobby2']['id'], confirmation_id)
+                            # Send match found notifications to ALL lobbies in the match
+                            # (could be 2-10 lobbies depending on party sizes)
+                            all_lobby_ids = match.get('lobbies', [])
+                            
+                            logger.debug(f"Match data keys: {match.keys()}")
+                            logger.debug(f"Lobbies field: {all_lobby_ids}")
+                            
+                            if not all_lobby_ids:
+                                # Fallback to lobby1/lobby2 if 'lobbies' field not present
+                                all_lobby_ids = [match['lobby1']['id'], match['lobby2']['id']]
+                                logger.warning(f"'lobbies' field missing or empty, using fallback: {all_lobby_ids}")
+                            
+                            logger.info(f"Notifying {len(all_lobby_ids)} lobbies about match {confirmation_id}")
+                            
+                            for i, lobby_id in enumerate(all_lobby_ids):
+                                logger.info(f"Notifying lobby {i+1}/{len(all_lobby_ids)}: {lobby_id}")
+                                _notify_match_found(lobby_id, confirmation_id)
                             
                     except Exception as e:
                         logger.error(f"Error creating match confirmation: {str(e)}")
@@ -233,13 +247,21 @@ def _notify_match_found(lobby_id, match_confirmation_id):
     Send match found notification to lobby via WebSocket.
     """
     try:
+        logger.info(f"Attempting to notify lobby {lobby_id} about match {match_confirmation_id}")
         channel_layer = get_channel_layer()
+        
+        if not channel_layer:
+            logger.error("Channel layer is None!")
+            return
+        
+        logger.info(f"Channel layer obtained, sending to group lobby_{lobby_id}")
         
         # Send match found notification
         async_to_sync(channel_layer.group_send)(
             f"lobby_{lobby_id}",
             {
                 'type': 'match_found',
+                'match_id': match_confirmation_id,  # Add match_id field
                 'match_confirmation_id': match_confirmation_id,
                 'timeout_seconds': 30,  # 30 second timeout
                 'message': 'Match found! Please accept to continue.'
@@ -249,7 +271,9 @@ def _notify_match_found(lobby_id, match_confirmation_id):
         logger.info(f"Sent match found notification to lobby {lobby_id}")
         
     except Exception as e:
-        logger.error(f"Error sending match found notification: {str(e)}")
+        logger.error(f"Error sending match found notification to lobby {lobby_id}: {str(e)}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
 
 def _notify_match_timeout(lobby_id, reason):
     """

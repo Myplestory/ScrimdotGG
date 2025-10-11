@@ -82,6 +82,21 @@ class ValorantAPI(object):
             connection_status = await self.pugsocket.start_connection(self.pugsocket_url)
             if connection_status["status"] == "success":
                 print("WebSocket connection established.")
+                
+                # Set up the match_found callback to forward to main WebSocket
+                async def match_found_callback(data):
+                    """Forward match_found event to main WebSocket connection"""
+                    try:
+                        # Import here to avoid circular imports
+                        from . import bootstrap
+                        # Find the active WebSocket connection and forward the event
+                        for ws in bootstrap.active_connections:
+                            await bootstrap.handle_pug_match_found(data, 0, ws)
+                    except Exception as e:
+                        print(f"Error forwarding match_found: {e}")
+                
+                self.pugsocket.match_found_callback = match_found_callback
+                
                 await asyncio.sleep(1)
                 return connection_status
             print(f"Connection failed: {connection_status.get('message', 'No message provided')}")

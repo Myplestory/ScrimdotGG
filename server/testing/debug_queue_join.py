@@ -2,7 +2,11 @@
 Debug the queue joining process for your lobby
 """
 import os
+import sys
 import django
+
+# Add server directory to Python path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'scrimgg.settings')
 django.setup()

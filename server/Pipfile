@@ -19,6 +19,7 @@ daphne = "*"
 django-celery-beat = "*"
 celery = "*"
 websockets = "*"
+gevent = "*"
 
 [dev-packages]
 

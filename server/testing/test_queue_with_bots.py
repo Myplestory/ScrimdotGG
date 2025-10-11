@@ -11,8 +11,12 @@ This tests the complete matchmaking flow:
 5. Accept match → Match starts
 """
 import os
+import sys
 import asyncio
 import django
+
+# Add server directory to Python path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'scrimgg.settings')
 django.setup()
@@ -46,11 +50,11 @@ async def create_bot_with_lobby(bot_num: int, base_elo: int, region: str):
         
         # Update ELO if existed
         if not created:
-            bot.elo = base_elo + random.randint(-100, 100)
+            bot.elo = base_elo + random.randint(-50, 50)
             bot.save()
         else:
             # Set ELO for new bot
-            bot.elo = base_elo + random.randint(-100, 100)
+            bot.elo = base_elo + random.randint(-50, 50)
             bot.save()
         
         return bot

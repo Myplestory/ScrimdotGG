@@ -182,7 +182,8 @@ async def route_event(event: str, payload: dict, client_id: int, ws):
         'match_completed': handle_match_completed,
         
         # PUG Match flow events (from Django)
-        'pug_match_found': handle_pug_match_found,
+        'match_found': handle_pug_match_found,  # Django sends 'match_found'
+        'pug_match_found': handle_pug_match_found,  # Keep for backward compatibility
         'teams_assigned': handle_teams_assigned,
         'veto_update': handle_veto_update,
         'map_selected': handle_map_selected,
@@ -1034,29 +1035,31 @@ async def handle_direct_message(payload: dict, client_id: int, ws): pass
 async def handle_pug_match_found(payload: dict, client_id: int, ws):
     """
     Django found a PUG match - 10 players of similar ELO
+    Receives: {match_id, match_confirmation_id, timeout_seconds, message}
     """
-    match_data = payload['match_data']
-    # {
-    #   'match_id': 'abc123',
-    #   'players': [10 players with ELO],
-    #   'average_elo': 1500,
-    #   'elo_range': [1450, 1550],
-    #   'accept_timeout': 30
-    # }
+    # Django sends the data directly in payload, not nested in 'match_data'
+    match_id = payload.get('match_id')
+    match_confirmation_id = payload.get('match_confirmation_id')
+    timeout_seconds = payload.get('timeout_seconds', 30)
+    message = payload.get('message', 'Match found! Please accept to continue.')
+    
+    if not match_id:
+        print(f"[ERROR] Match found event missing match_id: {payload}")
+        return
     
     # Update state
-    client_states[client_id]['pending_match'] = match_data['match_id']
+    client_states[client_id]['pending_match'] = match_id
     client_states[client_id]['in_queue'] = False
     
-    print(f"[PUG MATCH] Match found for {len(match_data['players'])} players, avg ELO: {match_data['average_elo']}")
+    print(f"[PUG MATCH] Match found! ID: {match_id}, Timeout: {timeout_seconds}s")
     
-    # Notify frontend
-    await send_event(ws, 'pug_match_found', {
-        'match_id': match_data['match_id'],
-        'players': match_data['players'],
-        'average_elo': match_data['average_elo'],
-        'elo_range': match_data['elo_range'],
-        'accept_deadline': match_data.get('accept_deadline', 30)
+    # Notify frontend with the actual data format
+    await send_event(ws, 'match_found', {
+        'match_id': match_id,
+        'match_confirmation_id': match_confirmation_id,
+        'timeout_seconds': timeout_seconds,
+        'message': message,
+        'accept_deadline': timeout_seconds
     })
 
 async def handle_teams_assigned(payload: dict, client_id: int, ws):
