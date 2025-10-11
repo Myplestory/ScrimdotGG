@@ -363,4 +363,141 @@ class ValorantAPI(object):
             return self.args['serverPreferences'].get(region_name, {})
         
         return {}
+    
+    
+    # ============================================================
+    # Match Monitoring (Phase 3)
+    # ============================================================
+    
+    async def monitor_match(self, match_id: str, coregame_id: str):
+        """
+        Monitor live match and send updates to Django server.
+        
+        Performance Strategy:
+        - Only constructor client monitors the match
+        - Poll ValClient every 30 seconds (not 3 seconds)
+        - Send only delta updates (score changes)
+        - Stop monitoring when match completes
+        
+        This runs in background without blocking main thread.
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        logger.info(f"Starting match monitoring for {match_id}")
+        
+        last_score = {'team_a': 0, 'team_b': 0, 'round': 0}
+        
+        while True:
+            try:
+                # Fetch current match state from ValClient
+                match_data = self.client.coregame_fetch_match(coregame_id)
+                
+                if not match_data:
+                    logger.warning("No match data returned - match may have ended")
+                    break
+                
+                # Parse score data
+                current_score = self._parse_match_score(match_data)
+                
+                # Only send update if score changed
+                if current_score != last_score:
+                    await self._send_score_update(match_id, current_score)
+                    last_score = current_score
+                
+                # Check if match completed
+                if self._is_match_complete(match_data):
+                    logger.info(f"Match {match_id} completed")
+                    await self._send_match_complete(match_id, match_data)
+                    break
+                
+                # Wait 30 seconds before next poll (performance optimization)
+                await asyncio.sleep(30)
+                
+            except Exception as e:
+                logger.error(f"Error monitoring match: {str(e)}")
+                await asyncio.sleep(30)  # Continue monitoring despite errors
+        
+        logger.info(f"Match monitoring ended for {match_id}")
+    
+    
+    def _parse_match_score(self, match_data: dict) -> dict:
+        """
+        Extract current score from ValClient match data.
+        
+        Performance: O(1) - direct field access
+        """
+        # Parse Valorant API response format
+        teams = match_data.get('Teams', [])
+        
+        team_a_score = 0
+        team_b_score = 0
+        
+        if len(teams) >= 2:
+            team_a_score = teams[0].get('RoundsWon', 0)
+            team_b_score = teams[1].get('RoundsWon', 0)
+        
+        current_round = match_data.get('RoundNumber', 0)
+        
+        return {
+            'team_a': team_a_score,
+            'team_b': team_b_score,
+            'round': current_round
+        }
+    
+    
+    async def _send_score_update(self, match_id: str, score: dict):
+        """
+        Send score update to Django server via WebSocket.
+        
+        Performance: Single WebSocket message
+        """
+        if not self.pugsocket or not self.pugsocket.is_connected():
+            return
+        
+        await self.pugsocket.send_message('match_score_update', {
+            'match_id': match_id,
+            'team_a_score': score['team_a'],
+            'team_b_score': score['team_b'],
+            'current_round': score['round']
+        })
+    
+    
+    def _is_match_complete(self, match_data: dict) -> bool:
+        """
+        Check if match is complete (team reached 13 rounds).
+        
+        Performance: O(1)
+        """
+        teams = match_data.get('Teams', [])
+        if len(teams) < 2:
+            return False
+        
+        team_a_score = teams[0].get('RoundsWon', 0)
+        team_b_score = teams[1].get('RoundsWon', 0)
+        
+        # Standard match: first to 13
+        # Overtime: win by 2 (if enabled in game rules)
+        return team_a_score >= 13 or team_b_score >= 13
+    
+    
+    async def _send_match_complete(self, match_id: str, match_data: dict):
+        """
+        Send match completion event to Django server.
+        """
+        if not self.pugsocket or not self.pugsocket.is_connected():
+            return
+        
+        # Parse final scores
+        final_score = self._parse_match_score(match_data)
+        
+        # Send completion event
+        await self.pugsocket.send_message('match_completed', {
+            'match_id': match_id,
+            'final_data': {
+                'team_a_score': final_score['team_a'],
+                'team_b_score': final_score['team_b'],
+                'total_rounds': final_score['round']
+            }
+        })
               

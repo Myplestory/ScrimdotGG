@@ -80,6 +80,22 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
             elif action == 'decline_match':
                 await self.decline_match(text_data_json)
             
+            # Match execution events
+            elif action == 'custom_game_created':
+                await self.handle_custom_game_created(text_data_json)
+            elif action == 'player_joined_game':
+                await self.handle_player_joined_game(text_data_json)
+            elif action == 'match_started':
+                await self.handle_match_started(text_data_json)
+            elif action == 'match_score_update':
+                await self.handle_match_score_update(text_data_json)
+            elif action == 'match_completed':
+                await self.handle_match_completed(text_data_json)
+            elif action == 'request_rejoin':
+                await self.handle_request_rejoin(text_data_json)
+            elif action == 'get_match_statistics':
+                await self.handle_get_match_statistics(text_data_json)
+            
             # Queue status events
             elif action == 'get_queue_status':
                 await self.get_queue_status(text_data_json)
@@ -826,6 +842,293 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
             }
         )
 
+    # -------------------- Match Execution Event Handlers --------------------
+    
+    async def handle_custom_game_created(self, data):
+        """
+        Constructor client reports custom game creation.
+        Notifies other players to join.
+        """
+        payload = data.get('payload', {})
+        match_id = payload.get('match_id')
+        pregame_id = payload.get('pregame_id')
+        constructor_puuid = payload.get('constructor_puuid')
+        
+        if not all([match_id, pregame_id, constructor_puuid]):
+            await self.send(text_data=json.dumps({
+                'error': 'match_id, pregame_id, and constructor_puuid are required'
+            }))
+            return
+        
+        try:
+            from .match_execution import MatchExecutionManager
+            
+            result = await MatchExecutionManager.handle_custom_game_created(
+                match_id, pregame_id, constructor_puuid
+            )
+            
+            if result['status'] == 'success':
+                await self.send(text_data=json.dumps({
+                    'event': 'custom_game_created_ack',
+                    'data': result
+                }))
+                logger.info(f"Custom game created: {pregame_id} for match {match_id}")
+            else:
+                await self.send(text_data=json.dumps({
+                    'event': 'error',
+                    'data': {'message': result.get('message')}
+                }))
+                
+        except Exception as e:
+            await self.send(text_data=json.dumps({
+                'error': f'Failed to handle custom game creation: {str(e)}'
+            }))
+            logger.error(f"Error handling custom_game_created: {str(e)}")
+    
+    
+    async def handle_player_joined_game(self, data):
+        """
+        Player client reports successful join to custom game.
+        Track which players have joined.
+        """
+        payload = data.get('payload', {})
+        match_id = payload.get('match_id')
+        player_puuid = payload.get('player_puuid')
+        team = payload.get('team')
+        
+        if not all([match_id, player_puuid]):
+            return
+        
+        logger.info(f"Player {player_puuid} joined match {match_id} (Team: {team})")
+        
+        # TODO: Track join status, start match when all 10 players joined
+        # For now, just acknowledge
+        await self.send(text_data=json.dumps({
+            'event': 'player_joined_ack',
+            'data': {'match_id': match_id, 'player_puuid': player_puuid}
+        }))
+    
+    
+    async def handle_match_started(self, data):
+        """
+        Match has started - all players loaded in.
+        Transition match to in_progress state.
+        """
+        payload = data.get('payload', {})
+        match_id = payload.get('match_id')
+        coregame_id = payload.get('coregame_id')
+        
+        if not all([match_id, coregame_id]):
+            await self.send(text_data=json.dumps({
+                'error': 'match_id and coregame_id are required'
+            }))
+            return
+        
+        try:
+            from .match_execution import MatchExecutionManager
+            
+            result = await MatchExecutionManager.handle_match_started(
+                match_id, coregame_id
+            )
+            
+            if result['status'] == 'success':
+                logger.info(f"Match {match_id} started: {coregame_id}")
+            else:
+                logger.error(f"Failed to start match {match_id}: {result.get('message')}")
+                
+        except Exception as e:
+            logger.error(f"Error handling match_started: {str(e)}")
+    
+    
+    async def handle_match_score_update(self, data):
+        """
+        Receive score updates from constructor client.
+        Broadcast to spectators.
+        """
+        payload = data.get('payload', {})
+        match_id = payload.get('match_id')
+        team_a_score = payload.get('team_a_score')
+        team_b_score = payload.get('team_b_score')
+        current_round = payload.get('current_round')
+        
+        if not all([match_id is not None, team_a_score is not None, 
+                    team_b_score is not None, current_round is not None]):
+            return
+        
+        try:
+            from .match_monitor import MatchMonitor
+            
+            await MatchMonitor.update_match_score(
+                match_id, team_a_score, team_b_score, current_round
+            )
+            
+        except Exception as e:
+            logger.error(f"Error handling match_score_update: {str(e)}")
+    
+    
+    async def handle_match_completed(self, data):
+        """
+        Match has completed - process final results.
+        """
+        payload = data.get('payload', {})
+        match_id = payload.get('match_id')
+        final_data = payload.get('final_data', {})
+        
+        if not match_id:
+            return
+        
+        try:
+            from .match_execution import MatchExecutionManager
+            
+            await MatchExecutionManager.handle_match_completion(
+                match_id, final_data
+            )
+            
+            logger.info(f"Match {match_id} completed")
+            
+        except Exception as e:
+            logger.error(f"Error handling match_completed: {str(e)}")
+    
+    
+    async def handle_request_rejoin(self, data):
+        """
+        Player requests to rejoin match after disconnect.
+        """
+        payload = data.get('payload', {})
+        match_id = payload.get('match_id')
+        player_puuid = payload.get('player_puuid')
+        
+        if not all([match_id, player_puuid]):
+            await self.send(text_data=json.dumps({
+                'error': 'match_id and player_puuid are required'
+            }))
+            return
+        
+        try:
+            from .match_execution import MatchExecutionManager
+            
+            token = await MatchExecutionManager.generate_rejoin_token(
+                match_id, player_puuid
+            )
+            
+            await self.send(text_data=json.dumps({
+                'event': 'rejoin_token',
+                'data': {'token': token, 'match_id': match_id}
+            }))
+            
+            logger.info(f"Generated rejoin token for {player_puuid} in match {match_id}")
+            
+        except Exception as e:
+            await self.send(text_data=json.dumps({
+                'error': f'Failed to generate rejoin token: {str(e)}'
+            }))
+            logger.error(f"Error generating rejoin token: {str(e)}")
+    
+    
+    async def handle_get_match_statistics(self, data):
+        """
+        Get current match statistics for spectators.
+        """
+        payload = data.get('payload', {})
+        match_id = payload.get('match_id')
+        
+        if not match_id:
+            await self.send(text_data=json.dumps({
+                'error': 'match_id is required'
+            }))
+            return
+        
+        try:
+            from .match_monitor import MatchMonitor
+            
+            result = await MatchMonitor.get_match_statistics(match_id)
+            
+            if result['status'] == 'success':
+                await self.send(text_data=json.dumps({
+                    'event': 'match_statistics',
+                    'data': result['data']
+                }))
+            else:
+                await self.send(text_data=json.dumps({
+                    'error': result.get('message', 'Failed to get match statistics')
+                }))
+                
+        except Exception as e:
+            await self.send(text_data=json.dumps({
+                'error': f'Failed to get match statistics: {str(e)}'
+            }))
+            logger.error(f"Error getting match statistics: {str(e)}")
+    
+    
+    # -------------------- Outgoing WebSocket Handlers (called by channel layer) --------------------
+    
+    async def match_starting(self, event):
+        """Send match_starting event to client"""
+        await self.send(text_data=json.dumps({
+            'event': 'match_starting',
+            'data': {
+                'match_id': event['match_id'],
+                'constructor_puuid': event['constructor_puuid'],
+                'is_constructor': event['is_constructor'],
+                'map': event['map'],
+                'server': event['server'],
+                'team': event['team']
+            }
+        }))
+    
+    
+    async def join_custom_game(self, event):
+        """Send join_custom_game event to client"""
+        await self.send(text_data=json.dumps({
+            'event': 'join_custom_game',
+            'data': {
+                'match_id': event['match_id'],
+                'pregame_id': event['pregame_id'],
+                'team': event['team']
+            }
+        }))
+    
+    
+    async def match_in_progress(self, event):
+        """Send match_in_progress event to client"""
+        await self.send(text_data=json.dumps({
+            'event': 'match_in_progress',
+            'data': {
+                'match_id': event['match_id'],
+                'coregame_id': event['coregame_id'],
+                'map': event['map'],
+                'server': event['server']
+            }
+        }))
+    
+    
+    async def match_score_update(self, event):
+        """Send score update to spectators"""
+        await self.send(text_data=json.dumps({
+            'event': 'match_score_update',
+            'data': {
+                'match_id': event['match_id'],
+                'team_a_score': event['team_a_score'],
+                'team_b_score': event['team_b_score'],
+                'current_round': event['current_round']
+            }
+        }))
+    
+    
+    async def match_completed(self, event):
+        """Send match completion event"""
+        await self.send(text_data=json.dumps({
+            'event': 'match_completed',
+            'data': {
+                'match_id': event['match_id'],
+                'team_a_score': event['team_a_score'],
+                'team_b_score': event['team_b_score'],
+                'winner': event.get('winner'),
+                'final_data': event.get('final_data', {})
+            }
+        }))
+    
+    
     ### Validate ###
     
     def get_lobby_group_name(self, lobby_id):

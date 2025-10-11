@@ -75,17 +75,119 @@ class Lobby(models.Model):
         return f"Lobby {self.id} - {self.size}/{self.max_size} players - Leader: {self.lobby_leader.alias if self.lobby_leader else 'None'}"
 
 class Match(models.Model):
+    # Legacy fields (keeping for backward compatibility)
     parties = models.JSONField(default=dict)
-    pregame_id = models.CharField(max_length=100, null=True, blank=True)
-    played_map = models.CharField(max_length=100,null=True, blank=True)
     banned_maps = models.JSONField(default=list)
     maps = models.JSONField(default=list)
-    played_server = models.CharField(max_length=100, null=True, blank=True)
     banned_servers = models.JSONField(default=list)
     servers = models.JSONField(default=list)
-    start_time = models.DateTimeField(auto_now_add=True)
-    finish_time = models.DateTimeField(auto_now_add=True)
     match_info = models.JSONField(default=dict)
+    
+    # Match execution fields
+    STATUS_CHOICES = [
+        ('confirmed', 'All Players Accepted'),
+        ('starting', 'Creating Custom Game'),
+        ('in_progress', 'Match Live'),
+        ('paused', 'Match Paused'),
+        ('completed', 'Match Finished'),
+        ('cancelled', 'Match Cancelled')
+    ]
+    status = models.CharField(max_length=20, default='confirmed', choices=STATUS_CHOICES)
+    
+    # Game server details
+    constructor_puuid = models.CharField(max_length=100, null=True, blank=True)  # Party leader who creates custom game
+    pregame_id = models.CharField(max_length=100, null=True, blank=True)  # Valorant pregame ID
+    coregame_id = models.CharField(max_length=100, null=True, blank=True)  # Valorant in-game match ID
+    game_server = models.CharField(max_length=100, null=True, blank=True)  # Server pod
+    selected_map = models.CharField(max_length=50, null=True, blank=True)  # Final map after veto
+    
+    # Legacy naming (for backward compatibility)
+    played_map = models.CharField(max_length=100, null=True, blank=True)
+    played_server = models.CharField(max_length=100, null=True, blank=True)
+    
+    # Match timing
+    start_time = models.DateTimeField(auto_now_add=True)
+    confirmation_completed_at = models.DateTimeField(null=True, blank=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    finish_time = models.DateTimeField(null=True, blank=True)  # Legacy
+    
+    # Live match data (cached for performance)
+    current_round = models.IntegerField(default=0)
+    team_a_score = models.IntegerField(default=0)
+    team_b_score = models.IntegerField(default=0)
+    team_a_data = models.JSONField(default=dict)  # Team A player data
+    team_b_data = models.JSONField(default=dict)  # Team B player data
+    last_updated = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"Match {self.id} - {self.status} - {self.team_a_score}:{self.team_b_score}"
+
+
+class MatchStatistics(models.Model):
+    """
+    Player statistics for a match - collected at round/match end.
+    Optimized for performance with minimal writes during gameplay.
+    """
+    match = models.ForeignKey(Match, on_delete=models.CASCADE, related_name='statistics')
+    player = models.ForeignKey(Player, on_delete=models.CASCADE)
+    team = models.CharField(max_length=10)  # 'team_a' or 'team_b'
+    
+    # Core stats
+    kills = models.IntegerField(default=0)
+    deaths = models.IntegerField(default=0)
+    assists = models.IntegerField(default=0)
+    
+    # Advanced stats
+    headshots = models.IntegerField(default=0)
+    bodyshots = models.IntegerField(default=0)
+    legshots = models.IntegerField(default=0)
+    damage_dealt = models.IntegerField(default=0)
+    damage_received = models.IntegerField(default=0)
+    
+    # Calculated metrics (updated post-match)
+    adr = models.FloatField(default=0.0)  # Average Damage per Round
+    rws = models.FloatField(default=0.0)  # Round Win Shares
+    headshot_percentage = models.FloatField(default=0.0)
+    kd_ratio = models.FloatField(default=0.0)
+    
+    # Round-specific data (JSON for performance)
+    round_stats = models.JSONField(default=dict)  # Detailed per-round breakdown
+    
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ['match', 'player']
+        indexes = [
+            models.Index(fields=['match', 'team']),
+        ]
+    
+    def __str__(self):
+        return f"{self.player.alias} - {self.kills}/{self.deaths}/{self.assists} (Match {self.match.id})"
+
+
+class MatchRejoinToken(models.Model):
+    """
+    Allow players to rejoin matches after disconnect.
+    Tokens expire after 5 minutes for security.
+    """
+    match = models.ForeignKey(Match, on_delete=models.CASCADE, related_name='rejoin_tokens')
+    player = models.ForeignKey(Player, on_delete=models.CASCADE)
+    token = models.UUIDField(default=uuid.uuid4, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    used = models.BooleanField(default=False)
+    used_at = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        unique_together = ['match', 'player']
+        indexes = [
+            models.Index(fields=['token']),
+            models.Index(fields=['match', 'player']),
+        ]
+    
+    def __str__(self):
+        return f"Rejoin token for {self.player.alias} in match {self.match.id}"
     
 class Team(models.Model):
     players = models.ManyToManyField(Player, related_name='teams')
