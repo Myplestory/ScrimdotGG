@@ -97,22 +97,22 @@ CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 CELERY_WORKER_MAX_TASKS_PER_CHILD = 1000
 
 
-# # Set up the channel layer to use Redis as the backing store
-# CHANNEL_LAYERS = {
-#     'default': {
-#         'BACKEND': 'channels_redis.core.RedisChannelLayer',
-#         'CONFIG': {
-#             "hosts": [('127.0.0.1', 6379)],  # Adjust this to your Redis server address/port
-#         },
-#     },
-# }
-
-# WebSocket configuration (optional)
+# Set up the channel layer to use Redis as the backing store
 CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels.layers.InMemoryChannelLayer",
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            "hosts": [('127.0.0.1', 6379)],  # Adjust this to your Redis server address/port
+        },
     },
 }
+
+# WebSocket configuration (optional) - DISABLED for production
+# CHANNEL_LAYERS = {
+#     "default": {
+#         "BACKEND": "channels.layers.InMemoryChannelLayer",
+#     },
+# }
 
 ASGI_APPLICATION = 'scrimgg.asgi.application'
 

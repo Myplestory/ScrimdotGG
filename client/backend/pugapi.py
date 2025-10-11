@@ -27,13 +27,29 @@ class PugSocketClient:
         try:
             self.websocket = await websockets.connect(websocket_url)
             self.connected = True
-            print("WebSocket connection established")
+            print("[PUGAPI] WebSocket connection established")
             asyncio.create_task(self.listen_for_messages())
+            asyncio.create_task(self.connection_monitor())
             return {"status": "success", "message": "WebSocket connection established"}
         except Exception as e:
             self.connected = False
-            print(f"Failed to connect to WebSocket: {e}")
+            print(f"[PUGAPI] Failed to connect to WebSocket: {e}")
             return {"status": "failure", "message": f"Failed to connect to WebSocket: {str(e)}"}
+
+    async def connection_monitor(self):
+        """Monitor WebSocket connection status."""
+        while self.connected:
+            try:
+                await asyncio.sleep(30)  # Check every 30 seconds
+                if self.websocket and not self.websocket.closed:
+                    print("[PUGAPI] WebSocket connection is alive")
+                else:
+                    print("[PUGAPI] WebSocket connection is dead!")
+                    self.connected = False
+                    break
+            except Exception as e:
+                print(f"[PUGAPI] Connection monitor error: {e}")
+                break
 
     async def stop_connection(self):
         """Stop the WebSocket connection."""
@@ -54,18 +70,20 @@ class PugSocketClient:
             async for message in self.websocket:
                 await self.handle_message(message)
         except websockets.ConnectionClosed:
-            print("WebSocket connection closed by the server")
+            print("[PUGAPI] WebSocket connection closed by the server")
             self.connected = False
         except Exception as e:
-            print(f"Error while listening to WebSocket messages: {e}")
+            print(f"[PUGAPI] Error while listening to WebSocket messages: {e}")
+            self.connected = False
 
     async def handle_message(self, message):
         """Handle incoming WebSocket messages."""
         try:
             data = json.loads(message)
-            print(data)
+            print(f"[PUGAPI] Received message: {data}")
             event = data.get("event")
             payload = data.get("data")
+            print(f"[PUGAPI] Event: {event}, Payload: {payload}")
             # Route the message to the correct handler
             if event == "lobby_info":
                 await self.on_lobby_info(payload)

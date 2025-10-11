@@ -92,6 +92,7 @@ async def websocket_route():
     try:
         ws = websocket
         active_connections.add(ws)
+        print(f"[WEBSOCKET] Added connection {ws} to active_connections. Total: {len(active_connections)}")
         client_id = id(ws)
         
         client_states[client_id] = {
@@ -127,6 +128,7 @@ async def websocket_route():
     finally:
         if 'ws' in locals():
             active_connections.discard(ws)
+            print(f"[WEBSOCKET] Removed connection {ws} from active_connections. Total: {len(active_connections)}")
         if 'client_id' in locals() and client_id in client_states:
             was_in_game = client_states[client_id].get('in_game', False)
             del client_states[client_id]
@@ -279,6 +281,16 @@ async def valorant_heartbeat_loop():
                     
                 except Exception as e:
                     print(f"[HEARTBEAT] Error checking status: {e}")
+                
+                # Check for pending match notifications
+                if valorant_api and hasattr(valorant_api, '_pending_match_data') and valorant_api._pending_match_data:
+                    print(f"[HEARTBEAT] Found pending match data, broadcasting...")
+                    match_data = valorant_api._pending_match_data
+                    valorant_api._pending_match_data = None  # Clear it
+                    
+                    # Broadcast to all connected clients
+                    await broadcast_to_all('pug_match_found', match_data)
+                    print(f"[HEARTBEAT] Broadcasted pug_match_found to {len(active_connections)} clients")
             
             # Wait 3 seconds before next check
             await asyncio.sleep(3)
