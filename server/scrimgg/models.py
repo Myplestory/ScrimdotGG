@@ -50,11 +50,29 @@ class Player(models.Model):
 class Lobby(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     players = models.ManyToManyField(Player, related_name='lobbies')
+    lobby_leader = models.ForeignKey('Player', on_delete=models.SET_NULL, null=True, related_name='led_lobbies')
+    
+    # Lobby state
     is_active = models.BooleanField(default=True)
     in_queue = models.BooleanField(default=False)
-    lobby_leader = models.ForeignKey('Player', on_delete=models.SET_NULL, null=True, related_name='led_lobbies')
+    queue_type = models.CharField(max_length=20, default='pug')  # 'pug', 'scrim', 'custom'
+    
+    # Matchmaking preferences
+    map_preferences = models.JSONField(default=list)  # List of preferred maps
+    server_preferences = models.JSONField(default=list)  # List of preferred servers
+    
+    # Lobby stats for matchmaking
     average_elo = models.FloatField(default=0.0)
+    elo_range = models.JSONField(default=dict)  # {'min': 1400, 'max': 1600}
     size = models.IntegerField(default=0)
+    max_size = models.IntegerField(default=5)  # Maximum lobby size
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    queued_at = models.DateTimeField(null=True, blank=True)  # When lobby joined queue
+    
+    def __str__(self):
+        return f"Lobby {self.id} - {self.size}/{self.max_size} players - Leader: {self.lobby_leader.alias if self.lobby_leader else 'None'}"
 
 class Match(models.Model):
     parties = models.JSONField(default=dict)

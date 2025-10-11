@@ -5,11 +5,16 @@ from asgiref.sync import sync_to_async
 from django.db.models import Avg
 from django.apps import apps
 from datetime import datetime
+import logging
 
 # UTILITY
-from .matchconfirm import mark_acceptance, check_all_accepted, finalize_match
-from .matchmaking import add_lobby_to_queue, remove_lobby_from_queue
+from .queue_manager import QueueManager
+from .matchmaker import Matchmaker
+from .match_confirmation import MatchConfirmationManager
+from .lobby_manager import LobbyManager
 from scrimgg.serializers import LobbySerializer, PlayerSerializer
+
+logger = logging.getLogger(__name__)
 
 
 class PugSocketConsumer(AsyncWebsocketConsumer):
@@ -50,22 +55,48 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         try:
             text_data_json = json.loads(text_data)
             action = text_data_json.get('event')
-            if action == 'add_lobby_to_queue':
+            
+            # Lobby management events
+            if action == 'create_lobby':
+                await self.create_lobby(text_data_json)
+            elif action == 'invite_to_lobby':
+                await self.invite_to_lobby(text_data_json)
+            elif action == 'kick_from_lobby':
+                await self.kick_from_lobby(text_data_json)
+            elif action == 'leave_lobby':
+                await self.leave_lobby(text_data_json)
+            elif action == 'update_lobby_preferences':
+                await self.update_lobby_preferences(text_data_json)
+            
+            # Queue management events
+            elif action == 'add_lobby_to_queue':
                 await self.add_lobby_to_queue(text_data_json)
             elif action == 'remove_lobby_from_queue':
                 await self.remove_lobby_from_queue(text_data_json)
+            
+            # Match events
             elif action == 'accept_match':
                 await self.accept_match(text_data_json)
-            elif action == 'create_lobby':
-                await self.create_lobby(text_data_json)
+            elif action == 'decline_match':
+                await self.decline_match(text_data_json)
+            
+            # Queue status events
+            elif action == 'get_queue_status':
+                await self.get_queue_status(text_data_json)
+            
+            # Player and chat events
             elif action == 'get_player_model':
                 await self.get_player_model(text_data_json)
             elif action == 'lobby_message':
                 await self.handle_lobby_message(text_data_json)
+            
             else:
                 await self.send(text_data=json.dumps({"error": "Invalid action"}))
+                logger.warning(f"Unknown action received: {action}")
+                
         except Exception as e:
             await self.send(text_data=json.dumps({"error": str(e)}))
+            logger.error(f"Error handling WebSocket message: {str(e)}")
 
     # -------------------- WebSocket Event Handlers --------------------
     
@@ -99,125 +130,557 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
             print(f"Unexpected error while fetching player: {str(e)}")
 
     async def create_lobby(self, data):
-        Player = apps.get_model('scrimgg', 'Player')
-        Lobby = apps.get_model('scrimgg', 'Lobby')
+        """
+        Handle lobby creation using LobbyManager.
+        """
         payload = data.get("payload")
         player_id = payload.get('puuid')
+        
         if not player_id:
             await self.send(text_data=json.dumps({"error": "Player ID is required."}))
-            print("Error: Player ID is required.")
+            logger.error("Create lobby failed: Player ID is required")
             return
+        
         try:
-            player = await sync_to_async(Player.objects.get)(puuid=player_id)
-            print(f"Fetched Player: PK={player.pk}, PUUID={player.puuid}")
-            lobby = await sync_to_async(
-                Lobby.objects.filter(lobby_leader=player, is_active=True).first
-            )()
-            if lobby:
-                player_in_lobby = await sync_to_async(lambda: lobby.players.filter(pk=player.pk).exists())()
-                if not player_in_lobby:
-                    await sync_to_async(lobby.players.add)(player)
-                    print(f"Added Player PK={player.pk} to Lobby ID={lobby.pk}")
-                    lobby.size += 1
-                    lobby.average_elo = await sync_to_async(
-                        lambda: lobby.players.aggregate(Avg('elo'))['elo__avg'] or 0
-                    )()
-                    await sync_to_async(lobby.save)()
-                    print(f"Updated Lobby ID={lobby.pk}: size={lobby.size}, average_elo={lobby.average_elo}")
-                else:
-                    print("Player already in the lobby")
+            # Use LobbyManager to create lobby
+            result = await LobbyManager.create_lobby(player_id)
+            
+            if result['status'] == 'success':
+                lobby_data = result['lobby']
+                lobby_id = lobby_data['id']
+                
+                # Add WebSocket to lobby group
+                self.lobby_group_name = f"lobby_{lobby_id}"
+                await self.channel_layer.group_add(self.lobby_group_name, self.channel_name)
+                logger.info(f"WebSocket added to lobby group: {self.lobby_group_name}")
+                
+                # Send lobby data to client
+                await self.send(text_data=json.dumps({
+                    "event": "lobby_created",
+                    "data": lobby_data
+                }))
+                
+                # Broadcast lobby creation to lobby group
+                await self.channel_layer.group_send(
+                    self.lobby_group_name,
+                    {
+                        'type': 'lobby_updated',
+                        'lobby': lobby_data
+                    }
+                )
             else:
-                lobby = await sync_to_async(Lobby.objects.create)(lobby_leader=player)
-                print(f"Created new Lobby: ID={lobby.pk}, Leader PK={player.pk}")
-                await sync_to_async(lobby.players.add)(player)
-                lobby.size = 1
-                lobby.average_elo = player.elo
-                await sync_to_async(lobby.save)()
-                print(f"Updated new Lobby ID={lobby.pk}: size={lobby.size}, average_elo={lobby.average_elo}")
-            self.lobby_group_name = f"lobby_{lobby.id}"
-            await self.channel_layer.group_add(self.lobby_group_name, self.channel_name)
-            print(f"WebSocket added to group: {self.lobby_group_name}")
-            serializer_data = await sync_to_async(lambda: LobbySerializer(lobby).data)()
-            await self.send(text_data=json.dumps({
-                "event": "lobby_created",
-                "data": serializer_data
-            }))
+                await self.send(text_data=json.dumps({
+                    "error": result.get('message', 'Failed to create lobby')
+                }))
+                logger.error(f"Create lobby failed: {result.get('message')}")
+                
         except Exception as e:
             await self.send(text_data=json.dumps({"error": f"Unexpected error: {str(e)}"}))
-            print(f"Unexpected error in create_lobby: {str(e)}")
+            logger.error(f"Unexpected error in create_lobby: {str(e)}")
+    
+    async def invite_to_lobby(self, data):
+        """
+        Handle inviting a player to lobby.
+        """
+        payload = data.get("payload")
+        lobby_id = payload.get('lobby_id')
+        player_puuid = payload.get('player_puuid')
+        inviter_puuid = payload.get('inviter_puuid')
+        
+        if not all([lobby_id, player_puuid, inviter_puuid]):
+            await self.send(text_data=json.dumps({
+                "error": "lobby_id, player_puuid, and inviter_puuid are required"
+            }))
+            return
+        
+        try:
+            result = await LobbyManager.add_player_to_lobby(lobby_id, player_puuid, inviter_puuid)
+            
+            if result['status'] == 'success':
+                lobby_data = result['lobby']
+                
+                # Broadcast lobby update to all lobby members
+                await self.channel_layer.group_send(
+                    f"lobby_{lobby_id}",
+                    {
+                        'type': 'player_joined_lobby',
+                        'lobby': lobby_data,
+                        'player_puuid': player_puuid
+                    }
+                )
+                
+                # Send confirmation to inviter
+                await self.send(text_data=json.dumps({
+                    "event": "player_invited",
+                    "data": lobby_data
+                }))
+                
+                logger.info(f"Player {player_puuid} invited to lobby {lobby_id}")
+            else:
+                await self.send(text_data=json.dumps({
+                    "error": result.get('message', 'Failed to invite player')
+                }))
+                
+        except Exception as e:
+            await self.send(text_data=json.dumps({"error": f"Unexpected error: {str(e)}"}))
+            logger.error(f"Error inviting to lobby: {str(e)}")
+    
+    async def kick_from_lobby(self, data):
+        """
+        Handle kicking a player from lobby.
+        """
+        payload = data.get("payload")
+        lobby_id = payload.get('lobby_id')
+        player_puuid = payload.get('player_puuid')
+        kicker_puuid = payload.get('kicker_puuid')
+        
+        if not all([lobby_id, player_puuid, kicker_puuid]):
+            await self.send(text_data=json.dumps({
+                "error": "lobby_id, player_puuid, and kicker_puuid are required"
+            }))
+            return
+        
+        try:
+            result = await LobbyManager.remove_player_from_lobby(lobby_id, player_puuid, kicker_puuid)
+            
+            if result['status'] == 'success':
+                # Check if lobby was disbanded
+                if result.get('lobby_disbanded'):
+                    await self.channel_layer.group_send(
+                        f"lobby_{lobby_id}",
+                        {
+                            'type': 'lobby_disbanded',
+                            'reason': 'No players remaining'
+                        }
+                    )
+                else:
+                    lobby_data = result['lobby']
+                    
+                    # Notify kicked player
+                    await self.channel_layer.group_send(
+                        f"player_{player_puuid}",
+                        {
+                            'type': 'kicked_from_lobby',
+                            'lobby_id': lobby_id,
+                            'message': 'You were kicked from the lobby'
+                        }
+                    )
+                    
+                    # Broadcast lobby update to remaining members
+                    await self.channel_layer.group_send(
+                        f"lobby_{lobby_id}",
+                        {
+                            'type': 'player_left_lobby',
+                            'lobby': lobby_data,
+                            'player_puuid': player_puuid,
+                            'reason': 'kicked'
+                        }
+                    )
+                
+                await self.send(text_data=json.dumps({
+                    "event": "player_kicked",
+                    "data": result
+                }))
+                
+                logger.info(f"Player {player_puuid} kicked from lobby {lobby_id}")
+            else:
+                await self.send(text_data=json.dumps({
+                    "error": result.get('message', 'Failed to kick player')
+                }))
+                
+        except Exception as e:
+            await self.send(text_data=json.dumps({"error": f"Unexpected error: {str(e)}"}))
+            logger.error(f"Error kicking from lobby: {str(e)}")
+    
+    async def leave_lobby(self, data):
+        """
+        Handle player leaving lobby.
+        """
+        payload = data.get("payload")
+        lobby_id = payload.get('lobby_id')
+        player_puuid = payload.get('player_puuid')
+        
+        if not all([lobby_id, player_puuid]):
+            await self.send(text_data=json.dumps({
+                "error": "lobby_id and player_puuid are required"
+            }))
+            return
+        
+        try:
+            result = await LobbyManager.remove_player_from_lobby(lobby_id, player_puuid)
+            
+            if result['status'] == 'success':
+                # Remove from lobby WebSocket group
+                await self.channel_layer.group_discard(f"lobby_{lobby_id}", self.channel_name)
+                
+                # Check if lobby was disbanded
+                if result.get('lobby_disbanded'):
+                    await self.channel_layer.group_send(
+                        f"lobby_{lobby_id}",
+                        {
+                            'type': 'lobby_disbanded',
+                            'reason': 'No players remaining'
+                        }
+                    )
+                else:
+                    lobby_data = result['lobby']
+                    
+                    # Broadcast to remaining lobby members
+                    await self.channel_layer.group_send(
+                        f"lobby_{lobby_id}",
+                        {
+                            'type': 'player_left_lobby',
+                            'lobby': lobby_data,
+                            'player_puuid': player_puuid,
+                            'reason': 'left'
+                        }
+                    )
+                
+                # Confirm to leaving player
+                await self.send(text_data=json.dumps({
+                    "event": "left_lobby",
+                    "data": result
+                }))
+                
+                logger.info(f"Player {player_puuid} left lobby {lobby_id}")
+            else:
+                await self.send(text_data=json.dumps({
+                    "error": result.get('message', 'Failed to leave lobby')
+                }))
+                
+        except Exception as e:
+            await self.send(text_data=json.dumps({"error": f"Unexpected error: {str(e)}"}))
+            logger.error(f"Error leaving lobby: {str(e)}")
+    
+    async def update_lobby_preferences(self, data):
+        """
+        Handle updating lobby matchmaking preferences.
+        """
+        payload = data.get("payload")
+        lobby_id = payload.get('lobby_id')
+        requester_puuid = payload.get('requester_puuid')
+        map_preferences = payload.get('map_preferences')
+        server_preferences = payload.get('server_preferences')
+        
+        if not lobby_id or not requester_puuid:
+            await self.send(text_data=json.dumps({
+                "error": "lobby_id and requester_puuid are required"
+            }))
+            return
+        
+        try:
+            result = await LobbyManager.update_lobby_preferences(
+                lobby_id, 
+                map_preferences, 
+                server_preferences, 
+                requester_puuid
+            )
+            
+            if result['status'] == 'success':
+                lobby_data = result['lobby']
+                
+                # Broadcast preferences update to lobby members
+                await self.channel_layer.group_send(
+                    f"lobby_{lobby_id}",
+                    {
+                        'type': 'lobby_preferences_updated',
+                        'lobby': lobby_data
+                    }
+                )
+                
+                await self.send(text_data=json.dumps({
+                    "event": "preferences_updated",
+                    "data": lobby_data
+                }))
+                
+                logger.info(f"Lobby {lobby_id} preferences updated")
+            else:
+                await self.send(text_data=json.dumps({
+                    "error": result.get('message', 'Failed to update preferences')
+                }))
+                
+        except Exception as e:
+            await self.send(text_data=json.dumps({"error": f"Unexpected error: {str(e)}"}))
+            logger.error(f"Error updating lobby preferences: {str(e)}")
 
     async def add_lobby_to_queue(self, data):
         """
-        Adds a lobby to the matchmaking queue.
+        Adds a lobby to the matchmaking queue using QueueManager.
         """
-        lobby_id = data.get("lobby_id")
-        lobby_rating = data.get("lobby_rating")
-        if not lobby_id or not lobby_rating:
-            await self.send(text_data=json.dumps({"error": "Invalid lobby data."}))
+        payload = data.get("payload", {})
+        lobby_id = payload.get("lobby_id")
+        requester_puuid = payload.get("requester_puuid")
+        
+        if not lobby_id or not requester_puuid:
+            await self.send(text_data=json.dumps({
+                "error": "lobby_id and requester_puuid are required"
+            }))
             return
-
-        await add_lobby_to_queue(lobby_id, lobby_rating)
-        await self.channel_layer.group_send(
-            self.lobby_group_name,
-            {
-                'type': 'lobby_queued',
-                'message': 'Lobby has been added to the matchmaking queue',
-            }
-        )
+        
+        try:
+            result = await QueueManager.join_queue(lobby_id, requester_puuid)
+            
+            if result['status'] == 'success':
+                # Broadcast to lobby members
+                await self.channel_layer.group_send(
+                    f"lobby_{lobby_id}",
+                    {
+                        'type': 'lobby_queued',
+                        'message': 'Lobby has been added to the matchmaking queue',
+                        'queue_position': result.get('queue_position'),
+                        'estimated_wait': result.get('estimated_wait')
+                    }
+                )
+                
+                await self.send(text_data=json.dumps({
+                    "event": "joined_queue",
+                    "data": result
+                }))
+                
+                logger.info(f"Lobby {lobby_id} joined matchmaking queue")
+            else:
+                await self.send(text_data=json.dumps({
+                    "error": result.get('message', 'Failed to join queue')
+                }))
+                
+        except Exception as e:
+            await self.send(text_data=json.dumps({"error": f"Unexpected error: {str(e)}"}))
+            logger.error(f"Error joining queue: {str(e)}")
         
 
     async def remove_lobby_from_queue(self, data):
         """
-        Removes a lobby from the matchmaking queue.
+        Removes a lobby from the matchmaking queue using QueueManager.
         """
-        lobby_id = data.get("lobby_id")
-        if not lobby_id:
-            await self.send(text_data=json.dumps({"error": "Lobby ID is required."}))
+        payload = data.get("payload", {})
+        lobby_id = payload.get("lobby_id")
+        requester_puuid = payload.get("requester_puuid")
+        
+        if not lobby_id or not requester_puuid:
+            await self.send(text_data=json.dumps({
+                "error": "lobby_id and requester_puuid are required"
+            }))
             return
-
-        await remove_lobby_from_queue(lobby_id)
-        await self.channel_layer.group_send(
-            self.lobby_group_name,
-            {
-                'type': 'lobby_removed_from_queue',
-                'message': 'Lobby has been removed from the matchmaking queue',
-            }
-        )
+        
+        try:
+            result = await QueueManager.leave_queue(lobby_id, requester_puuid)
+            
+            if result['status'] == 'success':
+                # Broadcast to lobby members
+                await self.channel_layer.group_send(
+                    f"lobby_{lobby_id}",
+                    {
+                        'type': 'lobby_removed_from_queue',
+                        'message': 'Lobby has been removed from the matchmaking queue'
+                    }
+                )
+                
+                await self.send(text_data=json.dumps({
+                    "event": "left_queue",
+                    "data": result
+                }))
+                
+                logger.info(f"Lobby {lobby_id} left matchmaking queue")
+            else:
+                await self.send(text_data=json.dumps({
+                    "error": result.get('message', 'Failed to leave queue')
+                }))
+                
+        except Exception as e:
+            await self.send(text_data=json.dumps({"error": f"Unexpected error: {str(e)}"}))
+            logger.error(f"Error leaving queue: {str(e)}")
 
     async def accept_match(self, data):
         """
-        Handles match acceptance for a player. Finalizes match when all players accept.
+        Handles match acceptance for a player using MatchConfirmationManager.
         """
-        match_confirmation_id = data.get("match_confirmation_id")
-        if not match_confirmation_id:
-            await self.send(text_data=json.dumps({"error": "Match confirmation ID is required."}))
+        payload = data.get("payload", {})
+        match_confirmation_id = payload.get("match_confirmation_id")
+        player_puuid = payload.get("player_puuid")
+        
+        if not match_confirmation_id or not player_puuid:
+            await self.send(text_data=json.dumps({
+                "error": "match_confirmation_id and player_puuid are required"
+            }))
             return
-
-        Player = apps.get_model('scrimgg', 'Player')
-        player_id = self.player_id  # Use the player_id from scope
-        mark_acceptance(player_id, match_confirmation_id)
-
-        if check_all_accepted(match_confirmation_id):
-            finalize_match(match_confirmation_id)
-            await self.channel_layer.group_send(
-                self.lobby_group_name,
-                {
-                    'type': 'match_ready',
-                    'message': 'Match is ready!',
-                }
-            )
-        else:
-            accepted_count = cache.scard(f"match:{match_confirmation_id}:accepted")
-            await self.channel_layer.group_send(
-                self.lobby_group_name,
-                {
-                    'type': 'player_accepted',
-                    'accepted_count': accepted_count,
-                }
-            )
+        
+        try:
+            result = await MatchConfirmationManager.accept_match(match_confirmation_id, player_puuid)
+            
+            if result['status'] == 'success':
+                if result.get('match_confirmed'):
+                    # All players accepted - match is ready
+                    await self.channel_layer.group_send(
+                        f"lobby_{result.get('lobby_id')}",
+                        {
+                            'type': 'match_ready',
+                            'message': 'Match is ready!',
+                            'match_id': result.get('match_id')
+                        }
+                    )
+                else:
+                    # Some players still need to accept
+                    await self.channel_layer.group_send(
+                        f"lobby_{result.get('lobby_id')}",
+                        {
+                            'type': 'player_accepted',
+                            'accepted_count': result.get('accepted_count'),
+                            'total_players': result.get('total_players'),
+                            'timeout_seconds': result.get('timeout_seconds')
+                        }
+                    )
+                
+                await self.send(text_data=json.dumps({
+                    "event": "match_accepted",
+                    "data": result
+                }))
+                
+                logger.info(f"Player {player_puuid} accepted match {match_confirmation_id}")
+            else:
+                await self.send(text_data=json.dumps({
+                    "error": result.get('message', 'Failed to accept match')
+                }))
+                
+        except Exception as e:
+            await self.send(text_data=json.dumps({"error": f"Unexpected error: {str(e)}"}))
+            logger.error(f"Error accepting match: {str(e)}")
     
+    async def decline_match(self, data):
+        """
+        Handles match decline for a player using MatchConfirmationManager.
+        """
+        payload = data.get("payload", {})
+        match_confirmation_id = payload.get("match_confirmation_id")
+        player_puuid = payload.get("player_puuid")
+        
+        if not match_confirmation_id or not player_puuid:
+            await self.send(text_data=json.dumps({
+                "error": "match_confirmation_id and player_puuid are required"
+            }))
+            return
+        
+        try:
+            result = await MatchConfirmationManager.decline_match(match_confirmation_id, player_puuid)
+            
+            if result['status'] == 'success':
+                # Broadcast match declined to all affected lobbies
+                for lobby_id in result.get('affected_lobbies', []):
+                    await self.channel_layer.group_send(
+                        f"lobby_{lobby_id}",
+                        {
+                            'type': 'match_declined',
+                            'message': 'Match was declined by a player',
+                            'reason': 'Player declined'
+                        }
+                    )
+                
+                await self.send(text_data=json.dumps({
+                    "event": "match_declined",
+                    "data": result
+                }))
+                
+                logger.info(f"Player {player_puuid} declined match {match_confirmation_id}")
+            else:
+                await self.send(text_data=json.dumps({
+                    "error": result.get('message', 'Failed to decline match')
+                }))
+                
+        except Exception as e:
+            await self.send(text_data=json.dumps({"error": f"Unexpected error: {str(e)}"}))
+            logger.error(f"Error declining match: {str(e)}")
+    
+    async def get_queue_status(self, data):
+        """
+        Get current queue status and lobby position.
+        """
+        payload = data.get("payload", {})
+        lobby_id = payload.get("lobby_id")
+        
+        if not lobby_id:
+            await self.send(text_data=json.dumps({
+                "error": "lobby_id is required"
+            }))
+            return
+        
+        try:
+            result = await QueueManager.get_queue_status(lobby_id)
+            
+            await self.send(text_data=json.dumps({
+                "event": "queue_status",
+                "data": result
+            }))
+            
+        except Exception as e:
+            await self.send(text_data=json.dumps({"error": f"Unexpected error: {str(e)}"}))
+            logger.error(f"Error getting queue status: {str(e)}")
 
     # -------------------- Outgoing WebSocket Messages --------------------
+    
+    async def lobby_updated(self, event):
+        """
+        Broadcast lobby updates to clients.
+        """
+        await self.send(text_data=json.dumps({
+            'event': 'lobby_updated',
+            'data': event['lobby']
+        }))
+    
+    async def player_joined_lobby(self, event):
+        """
+        Notify clients when a player joins the lobby.
+        """
+        await self.send(text_data=json.dumps({
+            'event': 'player_joined_lobby',
+            'data': {
+                'lobby': event['lobby'],
+                'player_puuid': event['player_puuid']
+            }
+        }))
+    
+    async def player_left_lobby(self, event):
+        """
+        Notify clients when a player leaves the lobby.
+        """
+        await self.send(text_data=json.dumps({
+            'event': 'player_left_lobby',
+            'data': {
+                'lobby': event['lobby'],
+                'player_puuid': event['player_puuid'],
+                'reason': event.get('reason', 'left')
+            }
+        }))
+    
+    async def kicked_from_lobby(self, event):
+        """
+        Notify a player they were kicked from a lobby.
+        """
+        await self.send(text_data=json.dumps({
+            'event': 'kicked_from_lobby',
+            'data': {
+                'lobby_id': event['lobby_id'],
+                'message': event['message']
+            }
+        }))
+    
+    async def lobby_disbanded(self, event):
+        """
+        Notify clients when lobby is disbanded.
+        """
+        await self.send(text_data=json.dumps({
+            'event': 'lobby_disbanded',
+            'data': {
+                'reason': event['reason']
+            }
+        }))
+    
+    async def lobby_preferences_updated(self, event):
+        """
+        Notify clients when lobby preferences are updated.
+        """
+        await self.send(text_data=json.dumps({
+            'event': 'lobby_preferences_updated',
+            'data': event['lobby']
+        }))
 
     async def match_ready(self, event):
         """
@@ -242,8 +705,51 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         Sends a notification to the client that a lobby has been queued.
         """
         await self.send(text_data=json.dumps({
-            'action': 'lobby_queued',
+            'event': 'lobby_queued',
             'message': event['message'],
+            'queue_position': event.get('queue_position'),
+            'estimated_wait': event.get('estimated_wait')
+        }))
+    
+    async def lobby_removed_from_queue(self, event):
+        """
+        Sends a notification that lobby was removed from queue.
+        """
+        await self.send(text_data=json.dumps({
+            'event': 'lobby_removed_from_queue',
+            'message': event['message']
+        }))
+    
+    async def match_found(self, event):
+        """
+        Sends a notification that a match has been found.
+        """
+        await self.send(text_data=json.dumps({
+            'event': 'match_found',
+            'match_confirmation_id': event['match_confirmation_id'],
+            'opponent_lobby': event.get('opponent_lobby'),
+            'timeout_seconds': event.get('timeout_seconds'),
+            'message': event.get('message', 'Match found! Please accept to continue.')
+        }))
+    
+    async def match_declined(self, event):
+        """
+        Sends a notification that a match was declined.
+        """
+        await self.send(text_data=json.dumps({
+            'event': 'match_declined',
+            'message': event['message'],
+            'reason': event.get('reason', 'Unknown')
+        }))
+    
+    async def match_timeout(self, event):
+        """
+        Sends a notification that a match confirmation timed out.
+        """
+        await self.send(text_data=json.dumps({
+            'event': 'match_timeout',
+            'message': event.get('message', 'Match confirmation timed out'),
+            'reason': event.get('reason', 'timeout')
         }))
         
     # -------------------- Lobby Chat WebSocket Messages --------------------        

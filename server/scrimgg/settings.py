@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'corsheaders',
+    'django_celery_beat',
     'scrimgg',
     'riotlogin',
     'users',
@@ -68,11 +69,32 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-# Celery background worker 
+# Celery Configuration
 CELERY_BROKER_URL = 'redis://localhost:6379/0'
 CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'UTC'
+CELERY_ENABLE_UTC = True
+
+# Celery Beat (Periodic Tasks) Configuration
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+
+# Task routing and execution
+CELERY_TASK_ROUTES = {
+    'matchmaking.tasks.*': {'queue': 'matchmaking'},
+    'matchmaking.tasks.periodic_matchmaking': {'queue': 'matchmaking'},
+    'matchmaking.tasks.cleanup_expired_matches': {'queue': 'cleanup'},
+}
+
+# Task time limits
+CELERY_TASK_TIME_LIMIT = 300  # 5 minutes
+CELERY_TASK_SOFT_TIME_LIMIT = 240  # 4 minutes
+
+# Worker configuration
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+CELERY_WORKER_MAX_TASKS_PER_CHILD = 1000
 
 
 # # Set up the channel layer to use Redis as the backing store

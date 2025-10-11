@@ -17,6 +17,7 @@ channels-redis = "*"
 django = "*"
 daphne = "*"
 celery = {extras = ["redis"], version = "*"}
+django-celery-beat = "*"
 
 [dev-packages]
 
