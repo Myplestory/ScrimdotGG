@@ -497,11 +497,13 @@ class LobbyManager:
                 'puuid': p.puuid,
                 'alias': p.alias,
                 'elo': p.elo,
+                'mmr': p.mmr,  # Add MMR
                 'rank': p.rank,
             } for p in players],
             'size': lobby.size,
             'max_size': lobby.max_size,
             'average_elo': lobby.average_elo,
+            'average_mmr': sum(p.mmr for p in players) / len(players) if players else 0,  # Add average MMR
             'elo_range': lobby.elo_range,
             'is_active': lobby.is_active,
             'in_queue': lobby.in_queue,

@@ -7,7 +7,25 @@ class Player(models.Model):
     alias = models.CharField(max_length=100)
     puuid = models.CharField(max_length=100)
     region = models.CharField(max_length=5)
-    elo = models.IntegerField(default=6493)
+    
+    # DISPLAY ELO (visible, based on current ladder)
+    # Used for: Display rank only
+    elo = models.IntegerField(default=2750)  # C+ rank 
+    
+    # HIDDEN MMR (matchmaking rating, based on approved distribution)
+    # Used for: Matchmaking, tolerance calculations, priority bias
+    mmr = models.FloatField(default=4350.0)  # ~48th percentile (B-/C+ border)
+    
+    # TRUESKILL COMPONENTS (skill rating system)
+    trueskill_mu = models.FloatField(default=25.0)      # Skill estimate
+    trueskill_sigma = models.FloatField(default=9.0)    # Uncertainty (45-60 game convergence)
+    
+    # ACTIVITY TRACKING
+    last_game_timestamp = models.FloatField(default=0.0)  # Unix timestamp
+    games_played = models.IntegerField(default=0)
+    is_in_placement = models.BooleanField(default=True)  # First 10 games
+    is_settled = models.BooleanField(default=False)      # σ < 3.0
+    
     karma = models.IntegerField(default=50)
     rank = models.CharField(max_length=1,default='S')
     team = models.CharField(max_length=100)

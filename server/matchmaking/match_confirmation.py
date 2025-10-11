@@ -108,6 +108,62 @@ class MatchConfirmationManager:
             raise
     
     @staticmethod
+    async def accept_match(match_id: str, player_puuid: str) -> Dict:
+        """
+        Accept match for a player (main method called by consumer).
+        
+        Args:
+            match_id: Match confirmation ID
+            player_puuid: Player's PUUID
+            
+        Returns:
+            Dict with acceptance status and all required fields for consumer
+        """
+        try:
+            # Mark the acceptance
+            acceptance_result = await MatchConfirmationManager.mark_acceptance(match_id, player_puuid)
+            
+            if acceptance_result['status'] != 'success':
+                return acceptance_result
+            
+            # Get additional data needed for consumer
+            accepted_count = acceptance_result['accepted_count']
+            total_players = acceptance_result['total_count']
+            all_accepted = acceptance_result['all_accepted']
+            
+            # Get player's lobby ID
+            lobby_id = await MatchConfirmationManager._get_player_lobby_id(player_puuid)
+            
+            # Calculate timeout seconds remaining
+            timeout_seconds = await MatchConfirmationManager._get_timeout_remaining(match_id)
+            
+            # Get all lobbies involved in this match
+            match_lobbies = await MatchConfirmationManager.get_match_lobbies(match_id)
+            
+            result = {
+                'status': 'success',
+                'message': 'Match accepted',
+                'match_confirmed': all_accepted,
+                'accepted_count': accepted_count,
+                'total_players': total_players,
+                'timeout_seconds': timeout_seconds,
+                'match_id': match_id,
+                'lobby_id': lobby_id,
+                'match_lobbies': match_lobbies
+            }
+            
+            logger.info(f"Player {player_puuid} accepted match {match_id}: {accepted_count}/{total_players} accepted, {timeout_seconds}s remaining")
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error in accept_match: {str(e)}")
+            return {
+                'status': 'error',
+                'message': f'Failed to accept match: {str(e)}'
+            }
+
+    @staticmethod
     async def mark_acceptance(match_id: str, player_puuid: str) -> Dict:
         """
         Mark player as having accepted the match.
@@ -296,6 +352,132 @@ class MatchConfirmationManager:
         except Exception as e:
             logger.error(f"Error getting match data: {str(e)}")
             return None
+    
+    @staticmethod
+    async def _get_player_lobby_id(player_puuid: str) -> Optional[str]:
+        """
+        Get the lobby ID for a player.
+        
+        Args:
+            player_puuid: Player's PUUID
+            
+        Returns:
+            Lobby ID or None if not found
+        """
+        try:
+            from django.apps import apps
+            from asgiref.sync import sync_to_async
+            
+            Lobby = apps.get_model('scrimgg', 'Lobby')
+            Player = apps.get_model('scrimgg', 'Player')
+            
+            def get_lobby_id():
+                try:
+                    player = Player.objects.get(puuid=player_puuid)
+                    lobby = Lobby.objects.filter(players=player, is_active=True).first()
+                    return lobby.id if lobby else None
+                except Player.DoesNotExist:
+                    return None
+            
+            return await sync_to_async(get_lobby_id)()
+            
+        except Exception as e:
+            logger.error(f"Error getting player lobby ID: {str(e)}")
+            return None
+    
+    @staticmethod
+    async def _get_timeout_remaining(match_id: str) -> int:
+        """
+        Calculate remaining timeout seconds for a match.
+        
+        Args:
+            match_id: Match confirmation ID
+            
+        Returns:
+            Seconds remaining (0 if expired)
+        """
+        try:
+            redis_conn = MatchConfirmationManager.get_redis()
+            base_key = MatchConfirmationManager.MATCH_KEY_TEMPLATE.format(match_id=match_id)
+            
+            # Check if match data exists
+            data_key = MatchConfirmationManager.MATCH_DATA_KEY.format(base=base_key)
+            match_data = redis_conn.get(data_key)
+            
+            if not match_data:
+                return 0  # Match doesn't exist or expired
+            
+            try:
+                match_info = json.loads(match_data)
+                initiated_at = match_info.get('initiated_at')
+                
+                if initiated_at:
+                    from datetime import datetime
+                    initiated_time = datetime.fromisoformat(initiated_at.replace('Z', '+00:00'))
+                    now = timezone.now()
+                    
+                    # Calculate seconds elapsed
+                    time_diff = (now - initiated_time).total_seconds()
+                    remaining = max(0, MatchConfirmationManager.ACCEPTANCE_TIMEOUT - time_diff)
+                    return int(remaining)
+                
+                return MatchConfirmationManager.ACCEPTANCE_TIMEOUT  # Default if no timestamp
+                
+            except (json.JSONDecodeError, ValueError) as e:
+                logger.warning(f"Error parsing match data for timeout calculation: {e}")
+                return MatchConfirmationManager.ACCEPTANCE_TIMEOUT
+            
+        except Exception as e:
+            logger.error(f"Error calculating timeout remaining: {str(e)}")
+            return MatchConfirmationManager.ACCEPTANCE_TIMEOUT
+    
+    @staticmethod
+    async def decline_match(match_id: str, player_puuid: str) -> Dict:
+        """
+        Decline match for a player.
+        
+        Args:
+            match_id: Match confirmation ID
+            player_puuid: Player's PUUID
+            
+        Returns:
+            Dict with decline status and affected lobbies
+        """
+        try:
+            # Get match data before cancellation
+            match_data = await MatchConfirmationManager.get_match_data(match_id)
+            if not match_data:
+                return {
+                    'status': 'error',
+                    'message': 'Match not found'
+                }
+            
+            # Get affected lobbies
+            match_lobbies = await MatchConfirmationManager.get_match_lobbies(match_id)
+            
+            # Cancel the match
+            cancel_result = await MatchConfirmationManager.cancel_match(match_id, 'Player declined match')
+            
+            if cancel_result['status'] == 'cancelled':
+                logger.info(f"Player {player_puuid} declined match {match_id}")
+                return {
+                    'status': 'success',
+                    'message': 'Match declined successfully',
+                    'affected_lobbies': match_lobbies,
+                    'match_id': match_id
+                }
+            else:
+                return {
+                    'status': 'error',
+                    'message': f'Failed to cancel match: {cancel_result.get("message")}'
+                }
+                
+        except Exception as e:
+            logger.error(f"Error declining match: {str(e)}")
+            return {
+                'status': 'error',
+                'message': f'Failed to decline match: {str(e)}'
+            }
     
     @staticmethod
     async def cancel_match(match_id: str, reason: str = 'timeout') -> Dict:

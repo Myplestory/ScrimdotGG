@@ -668,25 +668,34 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
             if result['status'] == 'success':
                 if result.get('match_confirmed'):
                     # All players accepted - match is ready
-                    await self.channel_layer.group_send(
-                        f"lobby_{result.get('lobby_id')}",
-                        {
-                            'type': 'match_ready',
-                            'message': 'Match is ready!',
-                            'match_id': result.get('match_id')
-                        }
-                    )
+                    # Send to ALL lobbies involved in the match
+                    match_lobbies = result.get('match_lobbies', [])
+                    for lobby_id in match_lobbies:
+                        await self.channel_layer.group_send(
+                            f"lobby_{lobby_id}",
+                            {
+                                'type': 'match_ready',
+                                'message': 'Match is ready!',
+                                'match_id': result.get('match_id')
+                            }
+                        )
+                    logger.info(f"Match {result.get('match_id')} confirmed - notified {len(match_lobbies)} lobbies")
                 else:
-                    # Some players still need to accept
-                    await self.channel_layer.group_send(
-                        f"lobby_{result.get('lobby_id')}",
-                        {
-                            'type': 'player_accepted',
-                            'accepted_count': result.get('accepted_count'),
-                            'total_players': result.get('total_players'),
-                            'timeout_seconds': result.get('timeout_seconds')
-                        }
-                    )
+                    # Some players still need to accept - send to player's lobby only
+                    lobby_id = result.get('lobby_id')
+                    if lobby_id:
+                        await self.channel_layer.group_send(
+                            f"lobby_{lobby_id}",
+                            {
+                                'type': 'player_accepted',
+                                'accepted_count': result.get('accepted_count'),
+                                'total_players': result.get('total_players'),
+                                'timeout_seconds': result.get('timeout_seconds')
+                            }
+                        )
+                        logger.info(f"Player acceptance update sent to lobby {lobby_id}: {result.get('accepted_count')}/{result.get('total_players')} accepted")
+                    else:
+                        logger.warning(f"Could not determine lobby_id for player {player_puuid}")
                 
                 await self.send(text_data=json.dumps({
                     "event": "match_accepted",
@@ -918,6 +927,31 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
             'event': 'match_timeout',
             'message': event.get('message', 'Match confirmation timed out'),
             'reason': event.get('reason', 'timeout')
+        }))
+    
+    async def player_accepted(self, event):
+        """
+        Sends a notification about player acceptance progress.
+        """
+        await self.send(text_data=json.dumps({
+            'event': 'player_accepted',
+            'data': {
+                'accepted_count': event.get('accepted_count', 0),
+                'total_players': event.get('total_players', 10),
+                'timeout_seconds': event.get('timeout_seconds', 30)
+            }
+        }))
+    
+    async def match_ready(self, event):
+        """
+        Sends a notification that the match is ready (all players accepted).
+        """
+        await self.send(text_data=json.dumps({
+            'event': 'match_ready',
+            'data': {
+                'match_id': event.get('match_id'),
+                'message': event.get('message', 'Match is ready!')
+            }
         }))
         
     # -------------------- Lobby Chat WebSocket Messages --------------------        

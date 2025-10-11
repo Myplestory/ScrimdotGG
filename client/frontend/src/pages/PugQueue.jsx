@@ -52,6 +52,25 @@ const PugQueue = () => {
   const [matchFound, setMatchFound] = useState(false);
   const [matchData, setMatchData] = useState(null);
   const [timeLeft, setTimeLeft] = useState(30);
+  const [acceptedCount, setAcceptedCount] = useState(0);
+  const [totalPlayers, setTotalPlayers] = useState(10);
+  const [userAccepted, setUserAccepted] = useState(false);
+  
+  // Preview mode for testing modal design
+  useEffect(() => {
+    const handlePreview = () => {
+      setMatchFound(true);
+      setTimeLeft(30);
+      setMatchData({
+        match_id: 'preview-123',
+        timeout_seconds: 30,
+        message: 'Preview match found!'
+      });
+    };
+    
+    window.addEventListener('preview-match-modal', handlePreview);
+    return () => window.removeEventListener('preview-match-modal', handlePreview);
+  }, []);
   const [selectedQueueType, setSelectedQueueType] = useState('pug');
   const [selectedMaps, setSelectedMaps] = useState([]);
   const [selectedServers, setSelectedServers] = useState([]);
@@ -134,6 +153,38 @@ const PugQueue = () => {
       setMatchFound(true);
       setMatchData(payload);
       setTimeLeft(payload.accept_deadline || 30);
+      setAcceptedCount(0);
+      setTotalPlayers(10);
+      setUserAccepted(false);
+    });
+
+    const unsubscribePlayerAccepted = on('player_accepted', (payload) => {
+      setAcceptedCount(payload.accepted_count || 0);
+      setTotalPlayers(payload.total_players || 10);
+      setTimeLeft(payload.timeout_seconds || 30);
+    });
+
+    const unsubscribeMatchReady = on('match_ready', (payload) => {
+      // All players accepted - redirect to matchroom
+      setMatchFound(false);
+      // TODO: Navigate to matchroom page
+      console.log('Match ready! Redirecting to matchroom...', payload);
+    });
+
+    const unsubscribeMatchTimeout = on('match_timeout', (payload) => {
+      // Match acceptance timed out - close modal and remove from queue
+      console.log('Match acceptance timed out:', payload);
+      setMatchFound(false);
+      setMatchData(null);
+      setAcceptedCount(0);
+      setTotalPlayers(10);
+      setUserAccepted(false);
+      
+      // Remove user from queue since match timed out
+      if (queueStatus.in_queue) {
+        api.leavePugQueue();
+        setQueueStartTime(null);
+      }
     });
 
     const unsubscribeLobbyMessage = on('lobby_message', (payload) => {
@@ -144,6 +195,9 @@ const PugQueue = () => {
       unsubscribeQueueJoined();
       unsubscribeQueueLeft();
       unsubscribeMatchFound();
+      unsubscribePlayerAccepted();
+      unsubscribeMatchReady();
+      unsubscribeMatchTimeout();
       unsubscribeLobbyMessage();
     };
   }, [on]);
@@ -155,6 +209,23 @@ const PugQueue = () => {
         setTimeLeft(prev => prev - 1);
       }, 1000);
       return () => clearTimeout(timer);
+    } else if (matchFound && timeLeft === 0) {
+      // Timer expired - auto close modal and remove from queue
+      console.log('Match acceptance timer expired, closing modal and leaving queue');
+      setMatchFound(false);
+      setMatchData(null);
+      setAcceptedCount(0);
+      setTotalPlayers(10);
+      setUserAccepted(false);
+      
+      // Remove user from queue since they didn't accept in time
+      if (queueStatus.in_queue) {
+        api.leavePugQueue();
+        setQueueStartTime(null);
+      }
+      
+      // Optional: Show a brief message that the match expired
+      // You could add a toast notification here if desired
     }
   }, [matchFound, timeLeft]);
 
@@ -262,8 +333,9 @@ const PugQueue = () => {
   const handleAcceptMatch = () => {
     if (matchData?.match_id) {
       api.acceptMatch(matchData.match_id);
+      setUserAccepted(true); // Mark that user has accepted
     }
-    setMatchFound(false);
+    // Don't close modal yet - wait for server response
   };
 
   const handleDeclineMatch = () => {
@@ -271,6 +343,16 @@ const PugQueue = () => {
       api.declineMatch(matchData.match_id);
     }
     setMatchFound(false);
+    setMatchData(null);
+    setAcceptedCount(0);
+    setTotalPlayers(10);
+    setUserAccepted(false);
+    
+    // Remove user from queue since they declined the match
+    if (queueStatus.in_queue) {
+      api.leavePugQueue();
+      setQueueStartTime(null);
+    }
   };
 
   const toggleMap = (mapName) => {
@@ -295,6 +377,40 @@ const PugQueue = () => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Component for showing acceptance progress
+  const AcceptanceProgress = () => {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', gap: 0.5, mb: 2 }}>
+        {Array.from({ length: totalPlayers }).map((_, index) => (
+          <Box
+            key={index}
+            sx={{
+              width: '20px',
+              height: '20px',
+              borderRadius: '50%',
+              backgroundColor: index < acceptedCount ? theme.palette.secondary.main : '#333',
+              border: `2px solid ${index < acceptedCount ? theme.palette.secondary.main : '#555'}`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.3s ease'
+            }}
+          >
+            <Typography
+              sx={{
+                fontSize: '10px',
+                color: index < acceptedCount ? '#000' : '#999',
+                fontWeight: 'bold'
+              }}
+            >
+              {index < acceptedCount ? '✓' : '○'}
+            </Typography>
+          </Box>
+        ))}
+      </Box>
+    );
+  };
+
   return (
     <Container maxWidth="md" sx={{ height: '100%', overflow: 'hidden' }}>
       <Box
@@ -312,6 +428,86 @@ const PugQueue = () => {
         <Typography variant="h4" align="center" gutterBottom sx={{ color: theme.palette.secondary.main }}>
           {getQueueTitle()}
         </Typography>
+        
+        {/* Temporary Preview Button - Remove in production */}
+        <Box sx={{ textAlign: 'center', mb: 2 }}>
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={() => {
+              setMatchFound(true);
+              setTimeLeft(30);
+              setAcceptedCount(0);
+              setTotalPlayers(10);
+              setUserAccepted(false);
+              setMatchData({
+                match_id: 'preview-123',
+                timeout_seconds: 30,
+                message: 'Preview match found!'
+              });
+            }}
+            sx={{ opacity: 0.7, mr: 1 }}
+          >
+            🎨 Preview Modal
+          </Button>
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={() => {
+              setMatchFound(true);
+              setTimeLeft(15);
+              setAcceptedCount(7);
+              setTotalPlayers(10);
+              setUserAccepted(true);
+              setMatchData({
+                match_id: 'preview-456',
+                timeout_seconds: 15,
+                message: 'Preview acceptance progress!'
+              });
+            }}
+            sx={{ opacity: 0.7, mr: 1 }}
+          >
+            📊 Preview Progress
+          </Button>
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={() => {
+              setMatchFound(true);
+              setTimeLeft(3);
+              setAcceptedCount(3);
+              setTotalPlayers(10);
+              setUserAccepted(false);
+              setMatchData({
+                match_id: 'preview-timeout',
+                timeout_seconds: 3,
+                message: 'Preview timeout in 3 seconds!'
+              });
+            }}
+            sx={{ opacity: 0.7, mr: 1 }}
+          >
+            ⏰ Preview Timeout
+          </Button>
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={() => {
+              setMatchFound(true);
+              setTimeLeft(30);
+              setAcceptedCount(0);
+              setTotalPlayers(10);
+              setUserAccepted(false);
+              setMatchData({
+                match_id: 'preview-decline',
+                timeout_seconds: 30,
+                message: 'Preview decline functionality!'
+              });
+            }}
+            sx={{ opacity: 0.7 }}
+          >
+            ❌ Preview Decline
+          </Button>
+        </Box>
         
         
         {/* Player Cards Section */}
@@ -609,78 +805,197 @@ const PugQueue = () => {
           </Box>
         </Box>
 
-        {/* Match Found Dialog */}
+        {/* Match Found Dialog - ESEA Style */}
         <Dialog 
           open={matchFound} 
-          maxWidth="md" 
-          fullWidth
+          maxWidth="sm"
           PaperProps={{
-            sx: { backgroundColor: theme.palette.background.paper }
+            sx: { 
+              backgroundColor: '#1a1a1a',
+              border: '2px solid #333',
+              borderRadius: '8px',
+              minWidth: '400px',
+              maxWidth: '450px',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.8)'
+            }
           }}
         >
-          <DialogTitle>
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <Star sx={{ mr: 1, color: theme.palette.secondary.main }} />
-              Match Found!
-            </Box>
-          </DialogTitle>
-          <DialogContent>
-            <Box sx={{ textAlign: 'center', mb: 3 }}>
-              <Typography variant="h4" sx={{ mb: 1 }}>
-                {formatTime(timeLeft)}
-              </Typography>
-              <Typography variant="body1" color="text.secondary">
-                Accept the match to continue
-              </Typography>
-            </Box>
-
-            <Grid container spacing={2}>
-              <Grid item xs={6}>
-                <Paper sx={{ p: 2, backgroundColor: theme.palette.action.hover }}>
-                  <Typography variant="h6" color="primary" gutterBottom>
-                    Team A
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Average ELO: {matchData?.average_elo || 'Unknown'}
-                  </Typography>
-                </Paper>
-              </Grid>
-              <Grid item xs={6}>
-                <Paper sx={{ p: 2, backgroundColor: theme.palette.action.hover }}>
-                  <Typography variant="h6" color="error" gutterBottom>
-                    Team B
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Average ELO: {matchData?.average_elo || 'Unknown'}
-                  </Typography>
-                </Paper>
-              </Grid>
-            </Grid>
-
-            <Box sx={{ mt: 2 }}>
-              <Typography variant="body2" color="text.secondary">
-                Players in match: {matchData?.players?.length || 10}
-              </Typography>
-            </Box>
-          </DialogContent>
-          <DialogActions sx={{ p: 3 }}>
-            <Button
-              variant="outlined"
-              color="error"
+          <DialogContent sx={{ p: 2, textAlign: 'center', position: 'relative' }}>
+            {/* Close button */}
+            <IconButton
               onClick={handleDeclineMatch}
-              sx={{ mr: 1 }}
+              sx={{
+                position: 'absolute',
+                top: 8,
+                right: 8,
+                color: '#888',
+                '&:hover': {
+                  color: '#fff',
+                  backgroundColor: 'rgba(255,255,255,0.1)'
+                }
+              }}
             >
-              Decline
-            </Button>
-            <Button
-              variant="contained"
-              color="success"
-              onClick={handleAcceptMatch}
-              autoFocus
-            >
-              Accept Match
-            </Button>
-          </DialogActions>
+              ✕
+            </IconButton>
+            {/* Header */}
+            <Box sx={{ mb: 2 }}>
+              <Typography 
+                variant="h5" 
+                sx={{ 
+                  color: '#fff',
+                  fontWeight: 'bold',
+                  fontFamily: '"Source Sans Pro", sans-serif',
+                  textTransform: 'uppercase',
+                  letterSpacing: '1px',
+                  mb: 0.5,
+                  fontSize: '20px'
+                }}
+              >
+                Match Ready
+              </Typography>
+              <Typography 
+                variant="body2" 
+                sx={{ 
+                  color: '#ccc',
+                  fontFamily: '"Source Sans Pro", sans-serif',
+                  fontSize: '13px'
+                }}
+              >
+                Confirm your match
+              </Typography>
+              <Typography 
+                variant="body2" 
+                sx={{ 
+                  color: '#ccc',
+                  fontFamily: '"Source Sans Pro", sans-serif',
+                  mb: 0.5,
+                  fontSize: '13px'
+                }}
+              >
+                for the <span style={{ color: theme.palette.secondary.main, fontWeight: 'bold' }}>COMPETITIVE 5v5</span>
+              </Typography>
+            </Box>
+
+            {/* Show different content based on user acceptance state */}
+            {!userAccepted ? (
+              <>
+                {/* Countdown Timer with Gauge - Only show if user hasn't accepted */}
+                <Box sx={{ mb: 1.5 }}>
+                  <Box
+                    sx={{
+                      width: '52px',
+                      height: '52px',
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      margin: '0 auto',
+                      position: 'relative',
+                      background: 'linear-gradient(135deg, rgba(212, 160, 255, 0.1) 0%, rgba(212, 160, 255, 0.05) 100%)'
+                    }}
+                  >
+                    {/* Gauge Background Circle */}
+                    <svg
+                      width="52"
+                      height="52"
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        transform: 'rotate(-90deg)'
+                      }}
+                    >
+                      {/* Background circle */}
+                      <circle
+                        cx="26"
+                        cy="26"
+                        r="19"
+                        fill="none"
+                        stroke="rgba(212, 160, 255, 0.2)"
+                        strokeWidth="3"
+                      />
+                      {/* Progress circle */}
+                      <circle
+                        cx="26"
+                        cy="26"
+                        r="19"
+                        fill="none"
+                        stroke={theme.palette.secondary.main}
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                        strokeDasharray={`${2 * Math.PI * 19}`}
+                        strokeDashoffset={`${2 * Math.PI * 19 * (1 - (timeLeft / 30))}`}
+                        style={{
+                          transition: 'stroke-dashoffset 0.5s ease-in-out'
+                        }}
+                      />
+                    </svg>
+                    <Typography 
+                      variant="body1" 
+                      sx={{ 
+                        color: theme.palette.secondary.main,
+                        fontWeight: 'bold',
+                        fontFamily: '"Source Sans Pro", sans-serif',
+                        fontSize: '19px',
+                        zIndex: 1
+                      }}
+                    >
+                      {timeLeft}
+                    </Typography>
+                  </Box>
+                </Box>
+
+                {/* Action Button - Only show if user hasn't accepted */}
+                <Button
+                  variant="contained"
+                  onClick={handleAcceptMatch}
+                  autoFocus
+                  sx={{
+                    backgroundColor: theme.palette.secondary.main,
+                    color: '#000',
+                    fontWeight: 'bold',
+                    textTransform: 'uppercase',
+                    letterSpacing: '1px',
+                    fontFamily: '"Source Sans Pro", sans-serif',
+                    fontSize: '12px',
+                    px: 3,
+                    py: 1,
+                    borderRadius: '4px',
+                    border: 'none',
+                    boxShadow: '0 3px 8px rgba(212, 160, 255, 0.3)',
+                    '&:hover': {
+                      backgroundColor: '#c490ff',
+                      boxShadow: '0 4px 12px rgba(212, 160, 255, 0.4)',
+                    },
+                    '&:active': {
+                      transform: 'translateY(1px)',
+                    }
+                  }}
+                >
+                  Accept
+                </Button>
+              </>
+            ) : (
+              <>
+                {/* Show acceptance progress when user has accepted */}
+                <AcceptanceProgress />
+                
+                {/* Time remaining */}
+                <Typography 
+                  variant="body2" 
+                  sx={{ 
+                    color: theme.palette.secondary.main,
+                    fontFamily: '"Source Sans Pro", sans-serif',
+                    fontSize: '11px',
+                    fontWeight: 'bold',
+                    mt: 1
+                  }}
+                >
+                  {timeLeft}s remaining
+                </Typography>
+              </>
+            )}
+          </DialogContent>
         </Dialog>
       </Box>
     </Container>

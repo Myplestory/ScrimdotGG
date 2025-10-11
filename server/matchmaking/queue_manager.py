@@ -349,6 +349,7 @@ class QueueManager:
     async def join_queue(lobby_id: str, requester_puuid: str, queue_type: str = DEFAULT_QUEUE_TYPE) -> Dict:
         """
         Join a lobby to the matchmaking queue (high-level method).
+        Applies uncertainty decay for returning players.
         
         Args:
             lobby_id: UUID of the lobby
@@ -361,11 +362,17 @@ class QueueManager:
         try:
             # Get lobby data from database
             Lobby = apps.get_model('scrimgg', 'Lobby')
+            Player = apps.get_model('scrimgg', 'Player')
             
-            def get_lobby():
-                return Lobby.objects.select_related('lobby_leader').get(id=lobby_id)
+            def get_lobby_and_leader():
+                lobby = Lobby.objects.select_related('lobby_leader').get(id=lobby_id)
+                leader = Player.objects.get(puuid=requester_puuid)
+                return lobby, leader
             
-            lobby = await sync_to_async(get_lobby)()
+            lobby, leader = await sync_to_async(get_lobby_and_leader)()
+            
+            # Apply uncertainty decay for returning player
+            await sync_to_async(QueueManager._apply_player_uncertainty_decay)(leader)
             
             # Validate requester is lobby leader
             if lobby.lobby_leader.puuid != requester_puuid:
@@ -592,4 +599,40 @@ class QueueManager:
         except Exception as e:
             logger.error(f"Error clearing queue: {str(e)}")
             return 0
+    
+    @staticmethod
+    def _apply_player_uncertainty_decay(player):
+        """
+        Apply uncertainty decay for returning players.
+        Called when player joins queue after absence.
+        
+        Args:
+            player: Player object (Django model)
+        """
+        import time
+        from .trueskill_manager import apply_uncertainty_decay
+        
+        if player.last_game_timestamp == 0:
+            # First time playing, set timestamp
+            player.last_game_timestamp = time.time()
+            player.save()
+            return
+        
+        # Calculate days since last game
+        current_time = time.time()
+        seconds_since_last = current_time - player.last_game_timestamp
+        days_since_last = seconds_since_last / 86400
+        
+        # Apply decay if needed (>= 14 days)
+        if days_since_last >= 14:
+            old_sigma = player.trueskill_sigma
+            new_sigma, multiplier = apply_uncertainty_decay(player.trueskill_sigma, days_since_last)
+            
+            player.trueskill_sigma = new_sigma
+            player.is_settled = new_sigma < 3.0
+            
+            logger.info(f"[DECAY] Player {player.alias} returned after {days_since_last:.1f} days")
+            logger.info(f"[DECAY] Sigma: {old_sigma:.2f} → {new_sigma:.2f} (×{multiplier:.2f})")
+            
+            player.save()
 

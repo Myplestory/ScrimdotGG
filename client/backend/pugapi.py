@@ -123,6 +123,10 @@ class PugSocketClient:
         """Handle match ready event."""
         try:
             print("Match ready:", data.get("message"))
+            
+            # Forward to main WebSocket connection via callback
+            if hasattr(self, 'match_ready_callback'):
+                await self.match_ready_callback(data)
         except Exception as e:
             print(f"Error processing 'match_ready' event: {e}")
 
@@ -130,7 +134,13 @@ class PugSocketClient:
         """Handle player accepted event."""
         try:
             accepted_count = data.get("accepted_count", 0)
-            print("Players accepted:", accepted_count)
+            total_players = data.get("total_players", 10)
+            timeout_seconds = data.get("timeout_seconds", 30)
+            print(f"Players accepted: {accepted_count}/{total_players}, timeout: {timeout_seconds}s")
+            
+            # Forward to main WebSocket connection via callback
+            if hasattr(self, 'player_accepted_callback'):
+                await self.player_accepted_callback(data)
         except Exception as e:
             print(f"Error processing 'player_accepted' event: {e}")
 

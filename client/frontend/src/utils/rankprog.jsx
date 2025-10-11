@@ -1,4 +1,6 @@
 const getRankAndProgress = (elo) => {
+  // Display ELO Ladder (unchanged - for visual rank display)
+  // Starting ELO: 2750 (C+ rank)
   const ranks = [
     { min: 7500, max: Infinity, rank: 'S' },
     { min: 6250, max: 7499, rank: 'G' },
@@ -8,7 +10,7 @@ const getRankAndProgress = (elo) => {
     { min: 4000, max: 4499, rank: 'B+' },
     { min: 3500, max: 3999, rank: 'B' },
     { min: 3000, max: 3499, rank: 'B-' },
-    { min: 2500, max: 2999, rank: 'C+' },
+    { min: 2500, max: 2999, rank: 'C+' },  // Starting: 2750
     { min: 2000, max: 2499, rank: 'C' },
     { min: 1500, max: 1999, rank: 'C-' },
     { min: 1000, max: 1499, rank: 'D+' },

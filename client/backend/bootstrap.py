@@ -291,6 +291,26 @@ async def valorant_heartbeat_loop():
                     # Broadcast to all connected clients
                     await broadcast_to_all('pug_match_found', match_data)
                     print(f"[HEARTBEAT] Broadcasted pug_match_found to {len(active_connections)} clients")
+                
+                # Check for pending player accepted notifications
+                if valorant_api and hasattr(valorant_api, '_pending_player_accepted_data') and valorant_api._pending_player_accepted_data:
+                    print(f"[HEARTBEAT] Found pending player accepted data, broadcasting...")
+                    player_accepted_data = valorant_api._pending_player_accepted_data
+                    valorant_api._pending_player_accepted_data = None  # Clear it
+                    
+                    # Broadcast to all connected clients
+                    await broadcast_to_all('player_accepted', player_accepted_data)
+                    print(f"[HEARTBEAT] Broadcasted player_accepted to {len(active_connections)} clients")
+                
+                # Check for pending match ready notifications
+                if valorant_api and hasattr(valorant_api, '_pending_match_ready_data') and valorant_api._pending_match_ready_data:
+                    print(f"[HEARTBEAT] Found pending match ready data, broadcasting...")
+                    match_ready_data = valorant_api._pending_match_ready_data
+                    valorant_api._pending_match_ready_data = None  # Clear it
+                    
+                    # Broadcast to all connected clients
+                    await broadcast_to_all('match_ready', match_ready_data)
+                    print(f"[HEARTBEAT] Broadcasted match_ready to {len(active_connections)} clients")
             
             # Wait 3 seconds before next check
             await asyncio.sleep(3)

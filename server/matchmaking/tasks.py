@@ -10,6 +10,7 @@ import logging
 
 from .queue_manager import QueueManager
 from .matchmaker import Matchmaker
+from .matchmaker_v2 import MatchmakerV2  # New MMR-based matchmaker
 from .match_confirmation import MatchConfirmationManager
 
 logger = get_task_logger(__name__)
@@ -39,8 +40,8 @@ def periodic_matchmaking(self):
                 'matches_found': 0
             }
         
-        # Run matchmaking algorithm
-        matchmaking_result = async_to_sync(Matchmaker.find_matches)()
+        # Run matchmaking algorithm (using MMR-based matchmaker)
+        matchmaking_result = async_to_sync(MatchmakerV2.find_matches)()
         
         if matchmaking_result['status'] == 'success':
             matches_found = matchmaking_result.get('matches_found', 0)
