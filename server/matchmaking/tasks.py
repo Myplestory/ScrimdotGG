@@ -55,11 +55,8 @@ def periodic_matchmaking(self):
                     try:
                         # Create match confirmation
                         confirmation_id = async_to_sync(
-                            MatchConfirmationManager.create_match_confirmation
-                        )(
-                            match['lobby1']['id'],
-                            match['lobby2']['id']
-                        )
+                            MatchConfirmationManager.initiate_confirmation
+                        )(match)
                         
                         if confirmation_id:
                             confirmations_created += 1

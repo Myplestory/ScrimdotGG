@@ -210,6 +210,7 @@ class ValorantAPI(object):
           
     # def queueup():
         
+    # DEPRECATED - Use WebSocket events instead
     def queueupbypass(self,lobbyid,mapchoices,serverchoices):
         url = 'http://127.0.0.1:8000/matchmaking/queueup/'
         jsonargs = {
@@ -270,6 +271,7 @@ class ValorantAPI(object):
                 return {"error": "Request failed", "status_code": response.status_code}
               
               
+    # DEPRECATED - Use WebSocket events instead
     def matchfound(self,lobbyid,mapchoices,serverchoices):
         url = 'http://127.0.0.1:8000/matchmaking/queueup/'
         jsonargs = {

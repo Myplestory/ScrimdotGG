@@ -931,23 +931,58 @@ async def handle_join_pug_queue(payload: dict, client_id: int, ws):
         return
     
     try:
+        puuid = client_states[client_id]['puuid']
+        
+        # Create a lobby for this player (Django will handle if one already exists)
+        print(f"[PUG QUEUE] Creating lobby for player {puuid}")
+        create_result = await valorant_api.createlobby()
+        
+        print(f"[DEBUG] create_lobby response: {create_result}")
+        
+        if create_result and create_result.get('status') == 'success':
+            lobby_id = create_result['data']['id']
+            print(f"[PUG QUEUE] Got lobby {lobby_id}")
+        else:
+            print(f"[ERROR] Invalid lobby response: {create_result}")
+            await send_error(ws, "Failed to create/get lobby")
+            return
+        
         # Get player data for queue
         player_data = {
-            'puuid': client_states[client_id]['puuid'],
+            'puuid': puuid,
+            'lobby_id': lobby_id,
             'queue_type': payload.get('queue_type', 'pug'),  # 'pug' or 'scrim'
             'party_id': payload.get('party_id', None),  # If queuing with friends
             'preferred_maps': payload.get('preferred_maps', []),
             'elo_range': payload.get('elo_range', None),  # For scrims
         }
         
-        print(f"[PUG QUEUE] Player {client_states[client_id]['puuid']} joining {player_data['queue_type']} queue")
+        print(f"[PUG QUEUE] Player {puuid} joining {player_data['queue_type']} queue")
+        
+        # Update lobby preferences before sending to queue
+        if player_data['preferred_maps']:
+            print(f"[PUG QUEUE] Updating lobby map preferences: {player_data['preferred_maps']}")
+            update_result = await valorant_api.pugsocket.send_message('update_lobby_preferences', {
+                'lobby_id': lobby_id,
+                'requester_puuid': puuid,
+                'map_preferences': player_data['preferred_maps'],
+                'server_preferences': payload.get('preferred_servers', [])
+            })
+            print(f"[PUG QUEUE] Lobby preferences update result: {update_result}")
         
         # Send to Django matchmaking service
-        await valorant_api.pugsocket.send_message('join_pug_queue', player_data)
+        # Convert to the format Django expects
+        django_data = {
+            'lobby_id': player_data['lobby_id'],
+            'requester_puuid': player_data['puuid'],
+            'queue_type': player_data['queue_type']
+        }
+        await valorant_api.pugsocket.send_message('add_lobby_to_queue', django_data)
         
         # Update local state
         client_states[client_id]['in_queue'] = True
         client_states[client_id]['queue_type'] = player_data['queue_type']
+        client_states[client_id]['lobby_id'] = player_data['lobby_id']
         
         await send_event(ws, 'queue_joined', {
             'queue_type': player_data['queue_type'],
@@ -966,9 +1001,19 @@ async def handle_leave_pug_queue(payload: dict, client_id: int, ws):
         return
     
     try:
-        await valorant_api.pugsocket.send_message('leave_pug_queue', {
-            'puuid': client_states[client_id]['puuid']
-        })
+        # Get stored lobby_id from client state
+        lobby_id = client_states[client_id].get('lobby_id')
+        
+        if not lobby_id:
+            await send_error(ws, "No lobby found to leave")
+            return
+        
+        # Send to Django matchmaking service
+        django_data = {
+            'lobby_id': lobby_id,
+            'requester_puuid': client_states[client_id]['puuid']
+        }
+        await valorant_api.pugsocket.send_message('remove_lobby_from_queue', django_data)
         
         client_states[client_id]['in_queue'] = False
         client_states[client_id]['queue_type'] = None

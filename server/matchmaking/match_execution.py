@@ -340,8 +340,9 @@ class MatchExecutionManager:
             await MatchExecutionManager._broadcast_match_completed(match, final_data)
             
             # Schedule background task for statistics processing
-            from .tasks import process_match_completion
-            process_match_completion.apply_async((match_id,), countdown=5)
+            # TODO: Implement process_match_completion task in tasks.py
+            # from .tasks import process_match_completion
+            # process_match_completion.apply_async((match_id,), countdown=5)
             
             logger.info(f"Match {match_id} completed: {match.team_a_score}-{match.team_b_score}")
             

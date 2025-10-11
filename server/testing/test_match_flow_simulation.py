@@ -371,30 +371,25 @@ async def main():
         await simulate_player_statistics(match, players)
         await asyncio.sleep(0.5)
         
-        await simulate_match_completion(match)
+        # Test rejoin before match completes (when match is still in_progress)
+        await test_rejoin_token(match, players)
         await asyncio.sleep(0.5)
         
-        # Bonus tests
-        await test_rejoin_token(match, players)
+        await simulate_match_completion(match)
         
         print("\n" + "=" * 70)
         print("[SUCCESS] All tests completed successfully!")
         print("=" * 70)
         
-        # Ask user if they want to keep test data
+        # Clean up test data automatically
         print("\nTest data created:")
         print(f"  - Match ID: {match.id}")
         print(f"  - 10 test players")
         print(f"  - 10 player statistics records")
         print(f"  - 1 rejoin token")
         
-        response = input("\nKeep test data for inspection? (y/n): ").strip().lower()
-        
-        if response != 'y':
-            await cleanup_test_data(match, players)
-        else:
-            print("\n[INFO] Test data preserved. You can inspect it in Django admin or shell.")
-            print(f"[INFO] Match ID: {match.id}")
+        print("\n[INFO] Cleaning up test data...")
+        await cleanup_test_data(match, players)
         
     except Exception as e:
         print(f"\n[ERROR] Test failed: {str(e)}")

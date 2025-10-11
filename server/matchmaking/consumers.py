@@ -41,12 +41,95 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
 
     async def disconnect(self, close_code):
         """
-        Handles WebSocket disconnection. Removes the connection from the assigned groups.
+        Handles WebSocket disconnection. Removes the connection from the assigned groups
+        and cleans up the user's lobby if they are the lobby leader.
         """
-        await self.channel_layer.group_discard(self.player_group_name, self.channel_name)
-        if hasattr(self, 'lobby_group_name') and self.lobby_group_name:
-            await self.channel_layer.group_discard(self.lobby_group_name, self.channel_name)
-        print(f"WebSocket disconnected: PUUID = {self.puuid}")
+        try:
+            # Clean up lobby if user is lobby leader
+            if hasattr(self, 'puuid') and self.puuid:
+                await self._cleanup_user_lobby()
+        except Exception as e:
+            print(f"Error during lobby cleanup on disconnect: {e}")
+        finally:
+            # Always remove from WebSocket groups
+            await self.channel_layer.group_discard(self.player_group_name, self.channel_name)
+            if hasattr(self, 'lobby_group_name') and self.lobby_group_name:
+                await self.channel_layer.group_discard(self.lobby_group_name, self.channel_name)
+            print(f"WebSocket disconnected: PUUID = {self.puuid}")
+    
+    async def _cleanup_user_lobby(self):
+        """
+        Clean up user's lobby when they disconnect.
+        Only destroys lobby if user is the lobby leader.
+        """
+        try:
+            Player = apps.get_model('scrimgg', 'Player')
+            Lobby = apps.get_model('scrimgg', 'Lobby')
+            
+            def get_player_and_lobby():
+                try:
+                    player = Player.objects.get(puuid=self.puuid)
+                    lobby = Lobby.objects.select_related('lobby_leader').filter(
+                        players=player, 
+                        is_active=True
+                    ).first()
+                    return player, lobby
+                except Player.DoesNotExist:
+                    return None, None
+            
+            player, lobby = await sync_to_async(get_player_and_lobby)()
+            
+            if not player or not lobby:
+                return
+            
+            # Only destroy lobby if user is the lobby leader
+            if lobby.lobby_leader.puuid == self.puuid:
+                print(f"[DISCONNECT] User {player.alias} is lobby leader, destroying lobby {lobby.id}")
+                
+                # Remove lobby from queue if it's queued
+                from .queue_manager import QueueManager
+                queue_result = await QueueManager.leave_queue(str(lobby.id), self.puuid, 'pug')
+                if queue_result.get('status') == 'success':
+                    print(f"[DISCONNECT] Removed lobby {lobby.id} from queue")
+                
+                # Destroy the lobby
+                lobby_id = lobby.id
+                lobby.delete()
+                print(f"[DISCONNECT] Destroyed lobby {lobby_id}")
+                
+                # Broadcast lobby destruction to remaining members
+                await self.channel_layer.group_send(
+                    f"lobby_{lobby_id}",
+                    {
+                        'type': 'lobby_destroyed',
+                        'message': 'Lobby was destroyed because the leader disconnected',
+                        'reason': 'leader_disconnect'
+                    }
+                )
+            else:
+                print(f"[DISCONNECT] User {player.alias} is not lobby leader, leaving lobby {lobby.id}")
+                # Just remove player from lobby (don't destroy it)
+                lobby.players.remove(player)
+                lobby.size = lobby.players.count()
+                lobby.save()
+                
+                # Broadcast player left to lobby members
+                await self.channel_layer.group_send(
+                    f"lobby_{lobby.id}",
+                    {
+                        'type': 'player_left_lobby',
+                        'player': {
+                            'puuid': player.puuid,
+                            'alias': player.alias
+                        },
+                        'message': f'{player.alias} left the lobby'
+                    }
+                )
+                
+        except Exception as e:
+            print(f"Error in _cleanup_user_lobby: {e}")
+            import traceback
+            traceback.print_exc()
 
     async def receive(self, text_data):
         """
@@ -1125,6 +1208,26 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
                 'team_b_score': event['team_b_score'],
                 'winner': event.get('winner'),
                 'final_data': event.get('final_data', {})
+            }
+        }))
+    
+    async def lobby_destroyed(self, event):
+        """Send lobby destroyed event to client"""
+        await self.send(text_data=json.dumps({
+            'event': 'lobby_destroyed',
+            'data': {
+                'message': event['message'],
+                'reason': event['reason']
+            }
+        }))
+    
+    async def player_left_lobby(self, event):
+        """Send player left lobby event to client"""
+        await self.send(text_data=json.dumps({
+            'event': 'player_left_lobby',
+            'data': {
+                'player': event['player'],
+                'message': event['message']
             }
         }))
     
