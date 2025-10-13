@@ -60,10 +60,10 @@ function createWindow() {
   }
 
   function startPythonBackend() {
-    const backendPath = path.join(__dirname, '..', 'backend', 'bootstrap.py');
+    const backendPath = path.join(__dirname, '..', 'backend', 'run.py');
     const backendDir = path.join(__dirname, '..', 'backend');
     
-    console.log('🚀 Starting Python backend...');
+    console.log('🚀 Starting Python backend (REFACTORED)...');
     console.log('📁 Backend directory:', backendDir);
     console.log('🐍 Backend script:', backendPath);
     
@@ -79,16 +79,16 @@ function createWindow() {
             try {
                 require('fs').accessSync(pipenvVenvPath);
                 pythonCommand = pipenvVenvPath;
-                pythonArgs = ['bootstrap.py'];
+                pythonArgs = ['run.py'];
                 console.log(`✅ [DEV] Using pipenv virtual environment Python: ${pythonCommand}`);
             } catch (e) {
                 console.log(`❌ [DEV] Pipenv virtual environment not found, falling back to pipenv command`);
                 pythonCommand = 'pipenv';
-                pythonArgs = ['run', 'python', 'bootstrap.py'];
+                pythonArgs = ['run', 'python', 'run.py'];
             }
         } else {
             // Production: use system Python or compiled executable
-            const compiledExe = path.join(backendDir, 'bootstrap.exe');
+            const compiledExe = path.join(backendDir, 'backend.exe');
             try {
                 require('fs').accessSync(compiledExe);
                 pythonCommand = compiledExe;
@@ -96,7 +96,7 @@ function createWindow() {
                 console.log(`✅ [PROD] Using compiled executable: ${pythonCommand}`);
             } catch (e) {
                 pythonCommand = 'python';
-                pythonArgs = ['bootstrap.py'];
+                pythonArgs = ['run.py'];
                 console.log(`✅ [PROD] Using system Python: ${pythonCommand}`);
             }
         }
@@ -185,11 +185,11 @@ function createWindow() {
     console.log(`🛑 Force killing backend Python processes...`);
     
     if (process.platform === 'win32') {
-      // Kill only processes running bootstrap.py (more selective)
-      exec(`taskkill /f /fi "WINDOWTITLE eq bootstrap*" /im python.exe`, (error, stdout, stderr) => {
+      // Kill only processes running run.py (more selective)
+      exec(`taskkill /f /fi "WINDOWTITLE eq run*" /im python.exe`, (error, stdout, stderr) => {
         if (error) {
-          // Also try killing by command line containing bootstrap.py
-          exec(`wmic process where "commandline like '%bootstrap.py%'" delete`, (error2, stdout2, stderr2) => {
+          // Also try killing by command line containing run.py
+          exec(`wmic process where "commandline like '%run.py%'" delete`, (error2, stdout2, stderr2) => {
             if (error2 && !error2.message.includes('No Instance(s) Available')) {
               console.error(`❌ Error killing backend processes: ${error2.message}`);
             } else {
@@ -201,8 +201,8 @@ function createWindow() {
         }
       });
     } else {
-      // Unix-like: Kill processes running bootstrap.py
-      exec(`pkill -f bootstrap.py`, (error, stdout, stderr) => {
+      // Unix-like: Kill processes running run.py
+      exec(`pkill -f run.py`, (error, stdout, stderr) => {
         if (error) {
           console.log(`✅ No backend processes found to kill`);
         } else {

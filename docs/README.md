@@ -1,162 +1,171 @@
-# Scrim.GG Documentation
+# 📚 Scrim.GG Documentation
 
-Comprehensive documentation for the Scrim.GG matchmaking platform.
-
----
-
-## Documentation Structure
-
-### [Matchmaking](./matchmaking/)
-Core matchmaking system documentation including algorithms, requeueing, and MMR/ELO systems.
-
-**Key Documents:**
-- **[MMR_ELO_SYSTEM.md](./matchmaking/MMR_ELO_SYSTEM.md)** - Hybrid MMR/ELO rating system
-- **[TRUESKILL_INTEGRATION.md](./matchmaking/TRUESKILL_INTEGRATION.md)** - TrueSkill integration for skill estimation
-- **[MATCHMAKING_SCHEDULE_ANALYSIS.md](./matchmaking/MATCHMAKING_SCHEDULE_ANALYSIS.md)** - Optimal scheduling for matchmaker and cleanup tasks
-- **[PRIORITY_BIAS_STATUS.md](./matchmaking/PRIORITY_BIAS_STATUS.md)** - Adaptive weighting and time tolerance
-
-**Requeue System:**
-- [ALL_REQUEUE_FIXES_FINAL_SUMMARY.md](./matchmaking/ALL_REQUEUE_FIXES_FINAL_SUMMARY.md) - Complete requeue fix summary
-- [FINAL_REQUEUE_FIXES_COMPLETE.md](./matchmaking/FINAL_REQUEUE_FIXES_COMPLETE.md) - Final implementation details
-- [COMPREHENSIVE_REQUEUE_ANALYSIS.md](./matchmaking/COMPREHENSIVE_REQUEUE_ANALYSIS.md) - In-depth analysis
-- [CRITICAL_BUG_FOUND_MATCH_LOBBIES.md](./matchmaking/CRITICAL_BUG_FOUND_MATCH_LOBBIES.md) - Critical bug fix for lobby data preservation
+Welcome to the Scrim.GG documentation hub. This directory contains comprehensive guides for understanding and improving the codebase.
 
 ---
 
-### [Testing](./testing/)
-Testing infrastructure, bot systems, and test scripts documentation.
+## 🎯 Backend Refactoring Guide (NEW!)
 
-**Key Documents:**
-- **[README.md](./testing/README.md)** - Testing overview and quick start
-- **[BOT_TEST_V2_UPDATED.md](./testing/BOT_TEST_V2_UPDATED.md)** - Bot testing framework v2
-- **[BOT_WEBSOCKET_IMPLEMENTATION_COMPLETE.md](./testing/BOT_WEBSOCKET_IMPLEMENTATION_COMPLETE.md)** - WebSocket-based bot testing
-- **[TESTING_COMMANDS.md](./testing/TESTING_COMMANDS.md)** - Quick reference for test commands
-- [PHASE2_REMATCH_TEST_ADDED.md](./testing/PHASE2_REMATCH_TEST_ADDED.md) - Rematch testing functionality
+**Complete suite for refactoring the client backend to a modular architecture.**
 
----
+### 📖 Available Documents
 
-### [Client UI](./client-ui/)
-Frontend user interface documentation and fixes.
+| Document | Purpose | When to Use |
+|----------|---------|-------------|
+| **[REFACTOR_INDEX.md](REFACTOR_INDEX.md)** | Overview & navigation | Start here - choose your path |
+| **[REFACTOR_QUICKSTART.md](REFACTOR_QUICKSTART.md)** | Step-by-step implementation | When you're ready to code |
+| **[BACKEND_REFACTOR_PLAN.md](BACKEND_REFACTOR_PLAN.md)** | Complete technical spec | Reference during implementation |
+| **[ARCHITECTURE_COMPARISON.md](ARCHITECTURE_COMPARISON.md)** | Before/after diagrams | Understanding the changes |
+| **[REFACTOR_CHECKLIST.md](REFACTOR_CHECKLIST.md)** | Detailed task list | Tracking progress |
 
-**Key Documents:**
-- **[MODAL_AND_TIMING_FIXES.md](./client-ui/MODAL_AND_TIMING_FIXES.md)** - Match acceptance modal and timer fixes
+### 🚀 Quick Start
 
----
+```bash
+# 1. Read the index to understand the scope
+open docs/REFACTOR_INDEX.md
 
-### [Setup](./setup/)
-Installation, setup, and migration guides.
+# 2. Choose your starting point:
 
-**Key Documents:**
-- **[SETUP_INSTRUCTIONS.md](./setup/SETUP_INSTRUCTIONS.md)** - Complete setup guide
-- **[MIGRATION_STEPS.md](./setup/MIGRATION_STEPS.md)** - Database and system migration steps
-- [REDIS_SETUP_WINDOWS.md](./REDIS_SETUP_WINDOWS.md) - Redis installation for Windows
-- [DEVELOPMENT_SETUP.md](./DEVELOPMENT_SETUP.md) - Development environment setup
+# Option A: I want to implement NOW
+open docs/REFACTOR_QUICKSTART.md
 
----
+# Option B: I want to understand first  
+open docs/ARCHITECTURE_COMPARISON.md
 
-### [Troubleshooting](./troubleshooting/)
-Common issues, debugging guides, and quick fixes.
+# Option C: I need all the details
+open docs/BACKEND_REFACTOR_PLAN.md
+```
 
-**Key Documents:**
-- **[QUICK_FIX_REFERENCE.md](./troubleshooting/QUICK_FIX_REFERENCE.md)** ⭐ Quick reference for common fixes
-- **[WEBSOCKET_PORT_REFERENCE.md](./troubleshooting/WEBSOCKET_PORT_REFERENCE.md)** - WebSocket port configuration
-- **[DEADLOCK_ANALYSIS.md](./troubleshooting/DEADLOCK_ANALYSIS.md)** - Deadlock debugging and resolution
-- [WEBSOCKET_CLEANUP_GUIDE.md](./troubleshooting/WEBSOCKET_CLEANUP_GUIDE.md) - WebSocket connection cleanup
-- [DEBUG_EXPIRATION_ADDED.md](./troubleshooting/DEBUG_EXPIRATION_ADDED.md) - Match expiration debugging
-- [LOGGING_ADDED.md](./troubleshooting/LOGGING_ADDED.md) - Logging system enhancements
-- [FINAL_FIXES_SUMMARY.md](./troubleshooting/FINAL_FIXES_SUMMARY.md) - Summary of all fixes applied
+### 📊 What's Being Refactored?
 
----
+**Current State:**
+- `bootstrap.py` (1360 lines) - monolithic, hard to maintain
+- Global state management
+- No message validation
+- Brittle Electron integration
 
-## Quick Start Guides
+**Target State:**
+- Modular architecture (multiple focused files)
+- ConnectionManager for state
+- Pydantic message validation
+- Health check endpoint
+- Improved Electron integration
 
-### For Developers
-1. **[DEVELOPMENT_SETUP.md](./DEVELOPMENT_SETUP.md)** - Set up your dev environment
-2. **[QUICK_START.md](./QUICK_START.md)** - Get the system running
-3. **[TESTING_GUIDE.md](./TESTING_GUIDE.md)** - Run tests and validate changes
+**Estimated Time:** 6-8 hours  
+**Breaking Changes:** None  
+**Risk:** Low (fully reversible)
 
-### For System Architecture
-1. **[ARCHITECTURE_IMPROVEMENTS.md](./ARCHITECTURE_IMPROVEMENTS.md)** - System architecture overview
-2. **[IMPLEMENTATION_ROADMAP.md](./IMPLEMENTATION_ROADMAP.md)** - Feature roadmap
-3. **[MATCH_ROOM_SPECIFICATION.md](./MATCH_ROOM_SPECIFICATION.md)** - Match room design
+### ✅ Benefits
 
-### For Operations
-1. **[PRODUCTION_DEPLOYMENT.md](./PRODUCTION_DEPLOYMENT.md)** - Deploy to production
-2. **[PROCESS_CLEANUP_FIX.md](./PROCESS_CLEANUP_FIX.md)** - Process management
-
----
-
-## Project Status
-
-- **[CURRENT_STATUS.md](./CURRENT_STATUS.md)** - Current project status and active features
-- **[NEXT_STEPS.md](./NEXT_STEPS.md)** - Planned features and improvements
+- ✅ **Maintainability:** 93% reduction in main file size
+- ✅ **Testability:** Isolated, testable handlers
+- ✅ **Type Safety:** Pydantic validation
+- ✅ **Reliability:** Health checks, clean shutdown
+- ✅ **Security:** Improved Electron security
+- ✅ **Extensibility:** Easy to add new features
 
 ---
 
-## Phase Documentation
+## 📁 Other Documentation
 
-Historical phase-based development documentation:
+### Architecture
+- **[ARCHITECTURE_IMPROVEMENTS.md](ARCHITECTURE_IMPROVEMENTS.md)** - General architecture improvements and recommendations
 
-- [PHASE_1_LOBBY_SYSTEM_IMPLEMENTATION.md](./PHASE_1_LOBBY_SYSTEM_IMPLEMENTATION.md) - Lobby system foundation
-- [PHASE_2_IMPLEMENTATION_SUMMARY.md](./PHASE_2_IMPLEMENTATION_SUMMARY.md) - Matchmaking implementation
-- [PHASE_2_QUICKSTART.md](./PHASE_2_QUICKSTART.md) - Phase 2 quick start
-- [PHASE_3_1_COMPLETION_SUMMARY.md](./PHASE_3_1_COMPLETION_SUMMARY.md) - Match flow completion
-- [PHASE_3_IMPLEMENTATION_PLAN.md](./PHASE_3_IMPLEMENTATION_PLAN.md) - Advanced features plan
+### Server
+- **Server documentation** - Located in `server/` directory
 
----
-
-## Finding Documentation
-
-### By Topic
-
-- **Matchmaking Algorithm**: See [Matchmaking](./matchmaking/) folder
-- **Testing & Bots**: See [Testing](./testing/) folder  
-- **UI Issues**: See [Client UI](./client-ui/) folder
-- **Setup Problems**: See [Setup](./setup/) and [Troubleshooting](./troubleshooting/) folders
-- **WebSocket Issues**: See [Troubleshooting](./troubleshooting/) folder
-- **Requeue Problems**: See [Matchmaking](./matchmaking/) folder (requeue documents)
-
-### By File Type
-
-- **System Design**: `ARCHITECTURE_*`, `IMPLEMENTATION_*`, `SPECIFICATION_*`
-- **Bug Fixes**: `*_FIX*`, `*_FIXES_*`
-- **Analysis**: `*_ANALYSIS*`, `*_REVIEW*`
-- **Guides**: `*_GUIDE*`, `*_INSTRUCTIONS*`, `SETUP_*`, `QUICK_START*`
-- **Status**: `*_STATUS*`, `*_SUMMARY*`, `*_COMPLETE*`
+### Client
+- **Client documentation** - Located in `client/` directory
 
 ---
 
-## System Components
+## 🎯 Recommended Reading Order
 
-### Backend (Django + Celery)
-- **Matchmaking Service**: MMR-based matchmaking with time tolerance
-- **Queue Manager**: Redis-based queue management
-- **Match Confirmation**: 30-second acceptance flow with requeueing
-- **Lobby Manager**: Party and solo lobby management
-- **WebSocket Layer**: Real-time communication via Django Channels
+### For New Developers
+1. Start with project README (root)
+2. Read ARCHITECTURE_IMPROVEMENTS.md
+3. Review REFACTOR_INDEX.md (to understand planned changes)
 
-### Frontend (Electron + React)
-- **Queue UI**: Match finding and acceptance interface
-- **Lobby UI**: Party management and preferences
-- **Match UI**: In-game match tracking
+### For Backend Refactoring
+1. **[REFACTOR_INDEX.md](REFACTOR_INDEX.md)** - Start here
+2. **[ARCHITECTURE_COMPARISON.md](ARCHITECTURE_COMPARISON.md)** - Understand changes
+3. **[REFACTOR_QUICKSTART.md](REFACTOR_QUICKSTART.md)** - Implementation guide
+4. **[BACKEND_REFACTOR_PLAN.md](BACKEND_REFACTOR_PLAN.md)** - Complete reference
+5. **[REFACTOR_CHECKLIST.md](REFACTOR_CHECKLIST.md)** - Track progress
 
-### Infrastructure
-- **Redis**: Caching, sessions, queues, and match state
-- **PostgreSQL**: Persistent data storage
-- **Celery**: Background task processing (matchmaking, cleanup)
-- **Daphne**: ASGI server for WebSocket support
-
----
-
-## Support
-
-For issues or questions:
-1. Check [TROUBLESHOOTING](./troubleshooting/) folder
-2. Review [QUICK_FIX_REFERENCE.md](./troubleshooting/QUICK_FIX_REFERENCE.md)
-3. See [CURRENT_STATUS.md](./CURRENT_STATUS.md) for known issues
+### For Code Review
+1. **[ARCHITECTURE_COMPARISON.md](ARCHITECTURE_COMPARISON.md)** - Big picture
+2. **[BACKEND_REFACTOR_PLAN.md](BACKEND_REFACTOR_PLAN.md)** - Technical details
+3. **[REFACTOR_CHECKLIST.md](REFACTOR_CHECKLIST.md)** - Verify completeness
 
 ---
 
-**Last Updated**: October 2025  
-**Version**: v2.0  
-**Maintainers**: Scrim.GG Development Team
+## 🔗 Quick Links
+
+### Backend Refactor
+- [📋 Start Here (Index)](REFACTOR_INDEX.md)
+- [🚀 Quick Start Guide](REFACTOR_QUICKSTART.md)
+- [📖 Complete Plan](BACKEND_REFACTOR_PLAN.md)
+- [🔄 Before/After Comparison](ARCHITECTURE_COMPARISON.md)
+- [✓ Task Checklist](REFACTOR_CHECKLIST.md)
+
+### General
+- [🏗️ Architecture Improvements](ARCHITECTURE_IMPROVEMENTS.md)
+
+---
+
+## 📝 Document Summary
+
+### Refactoring Suite (5 documents)
+- **Total Lines:** ~3,500
+- **Estimated Read Time:** 2-3 hours
+- **Implementation Time:** 6-8 hours
+
+| Document | Lines | Read Time |
+|----------|-------|-----------|
+| REFACTOR_INDEX.md | ~400 | 15 min |
+| REFACTOR_QUICKSTART.md | ~600 | 20 min |
+| BACKEND_REFACTOR_PLAN.md | ~1000 | 45 min |
+| ARCHITECTURE_COMPARISON.md | ~800 | 30 min |
+| REFACTOR_CHECKLIST.md | ~400 | 15 min |
+
+---
+
+## 🎯 Next Steps
+
+### If you haven't started the refactor yet:
+1. Read [REFACTOR_INDEX.md](REFACTOR_INDEX.md)
+2. Review [ARCHITECTURE_COMPARISON.md](ARCHITECTURE_COMPARISON.md)
+3. When ready, follow [REFACTOR_QUICKSTART.md](REFACTOR_QUICKSTART.md)
+
+### If you're currently refactoring:
+1. Use [REFACTOR_CHECKLIST.md](REFACTOR_CHECKLIST.md) to track progress
+2. Reference [BACKEND_REFACTOR_PLAN.md](BACKEND_REFACTOR_PLAN.md) for code
+3. Check [REFACTOR_QUICKSTART.md](REFACTOR_QUICKSTART.md) for troubleshooting
+
+### If you've completed the refactor:
+1. Verify all items in [REFACTOR_CHECKLIST.md](REFACTOR_CHECKLIST.md)
+2. Update this README with results
+3. Share learnings with the team
+
+---
+
+## 📞 Support
+
+- **Questions about the refactor?** See the troubleshooting section in [REFACTOR_QUICKSTART.md](REFACTOR_QUICKSTART.md)
+- **Want to understand the architecture?** Read [ARCHITECTURE_COMPARISON.md](ARCHITECTURE_COMPARISON.md)
+- **Need implementation details?** Check [BACKEND_REFACTOR_PLAN.md](BACKEND_REFACTOR_PLAN.md)
+- **Lost or confused?** Start with [REFACTOR_INDEX.md](REFACTOR_INDEX.md)
+
+---
+
+## 🎉 Ready to Begin?
+
+**Everything you need is here. Choose your path and start improving the codebase!**
+
+👉 **[Start with the Refactor Index →](REFACTOR_INDEX.md)**
+
+---
+
+*Last updated: October 13, 2025*  
+*Contributors: Architecture Team*
