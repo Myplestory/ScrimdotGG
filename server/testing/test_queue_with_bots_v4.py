@@ -95,8 +95,18 @@ class BotWebSocketClient:
         """Handle incoming WebSocket messages"""
         event = data.get('event')
         payload = data.get('data', {})
+        error = data.get('error')
         
-        if event == 'joined_queue':
+        # Log all messages for debugging
+        logger.debug(f"🤖 Bot {self.bot_alias} received: {data}")
+        
+        if error:
+            logger.error(f"❌ Bot {self.bot_alias} WebSocket error: {error}")
+            
+        elif event == 'lobby_created':
+            logger.info(f"🏠 Bot {self.bot_alias} lobby created successfully")
+            
+        elif event == 'joined_queue':
             self.in_queue = True
             logger.info(f"✅ Bot {self.bot_alias} joined queue successfully")
             
@@ -105,11 +115,12 @@ class BotWebSocketClient:
             
         elif event == 'match_found' or event == 'pug_match_found':
             self.match_found = True
-            logger.info(f"🎮 Bot {self.bot_alias} found match, auto-accepting...")
+            match_id = payload.get('match_id')
+            logger.info(f"🎮 Bot {self.bot_alias} found match {match_id[:8] if match_id else 'Unknown'}, auto-accepting...")
             
-            # Auto-accept the match
+            # Auto-accept the match (consumer expects match_id in payload)
             await self._send_message('accept_match', {
-                'match_confirmation_id': payload.get('match_confirmation_id'),
+                'match_id': match_id,
                 'player_puuid': self.bot_puuid
             })
             
@@ -118,6 +129,10 @@ class BotWebSocketClient:
             
         elif event == 'error':
             logger.error(f"❌ Bot {self.bot_alias} error: {payload}")
+            
+        else:
+            # Log unhandled events for debugging
+            logger.debug(f"🤖 Bot {self.bot_alias} unhandled event '{event}': {payload}")
     
     async def _send_message(self, event: str, payload: dict):
         """Send a message to the WebSocket"""
@@ -141,7 +156,7 @@ class BotWebSocketClient:
         try:
             # Step 1: Create lobby via WebSocket (like real users)
             await self._send_message('create_lobby', {
-                'requester_puuid': self.bot_puuid
+                'puuid': self.bot_puuid
             })
             
             # Wait a moment for lobby creation
