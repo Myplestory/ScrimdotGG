@@ -196,6 +196,9 @@ async def route_event(event: str, payload: dict, client_id: int, ws):
         
         # Player
         'get_player_data': handle_get_player_data,
+        
+        # Match data
+        'get_match_data': handle_get_match_data,
     }
     
     handler = handlers.get(event)
@@ -331,6 +334,16 @@ async def valorant_heartbeat_loop():
                     # Broadcast to all connected clients
                     await broadcast_to_all('veto_started', veto_started_data)
                     print(f"[HEARTBEAT] Broadcasted veto_started to {len(active_connections)} clients")
+                
+                # Check for pending match data responses
+                if valorant_api and hasattr(valorant_api, '_pending_match_data_response') and valorant_api._pending_match_data_response:
+                    print(f"[HEARTBEAT] Found pending match data response, broadcasting...")
+                    match_data_response = valorant_api._pending_match_data_response
+                    valorant_api._pending_match_data_response = None  # Clear it
+                    
+                    # Broadcast to all connected clients
+                    await broadcast_to_all('match_data', match_data_response)
+                    print(f"[HEARTBEAT] Broadcasted match_data to {len(active_connections)} clients")
             
             # Wait 3 seconds before next check
             await asyncio.sleep(3)
@@ -787,6 +800,30 @@ async def handle_get_player_data(payload: dict, client_id: int, ws):
     result = await valorant_api.get_player_model()
     
     await send_event(ws, 'player_data', result.get('data', {}))
+
+
+async def handle_get_match_data(payload: dict, client_id: int, ws):
+    """
+    Fetch match data from Django server and forward to frontend.
+    """
+    match_id = payload.get('match_id')
+    
+    if not match_id:
+        await send_error(ws, 'match_id is required')
+        return
+    
+    try:
+        # Forward request to Django PugAPI WebSocket
+        await valorant_api.pugsocket.send_message('get_match_data', {
+            'match_id': match_id
+        })
+        
+        # Response will be received via PugAPI message handler and forwarded to frontend
+        print(f"[GET_MATCH_DATA] Forwarded request for match {match_id} to Django")
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to get match data: {str(e)}")
+        await send_error(ws, f'Failed to get match data: {str(e)}')
 
 
 # ============================================================

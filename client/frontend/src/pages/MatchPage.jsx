@@ -22,7 +22,7 @@ import TimerIcon from '@mui/icons-material/Timer';
 export default function MatchPage() {
   const { matchId } = useParams();
   const navigate = useNavigate();
-  const { connected, sendEvent, on, off } = useContext(WebSocketContext);
+  const { connected, sendEvent, on } = useContext(WebSocketContext);
   
   // Match state
   const [matchData, setMatchData] = useState(null);
@@ -81,9 +81,11 @@ export default function MatchPage() {
       }
     };
     
-    on('match_data', handleMatchData);
-    return () => off('match_data', handleMatchData);
-  }, [on, off]);
+    const unsubscribe = on('match_data', handleMatchData);
+    return () => {
+      if (typeof unsubscribe === 'function') unsubscribe();
+    };
+  }, [on]);
   
   // Handle veto events
   useEffect(() => {
@@ -152,18 +154,18 @@ export default function MatchPage() {
       }
     };
     
-    on('veto_started', handleVetoStarted);
-    on('map_vetoed', handleMapVetoed);
-    on('veto_timeout', handleVetoTimeout);
-    on('veto_complete', handleVetoComplete);
+    const unsubVetoStarted = on('veto_started', handleVetoStarted);
+    const unsubMapVetoed = on('map_vetoed', handleMapVetoed);
+    const unsubVetoTimeout = on('veto_timeout', handleVetoTimeout);
+    const unsubVetoComplete = on('veto_complete', handleVetoComplete);
     
     return () => {
-      off('veto_started', handleVetoStarted);
-      off('map_vetoed', handleMapVetoed);
-      off('veto_timeout', handleVetoTimeout);
-      off('veto_complete', handleVetoComplete);
+      if (typeof unsubVetoStarted === 'function') unsubVetoStarted();
+      if (typeof unsubMapVetoed === 'function') unsubMapVetoed();
+      if (typeof unsubVetoTimeout === 'function') unsubVetoTimeout();
+      if (typeof unsubVetoComplete === 'function') unsubVetoComplete();
     };
-  }, [on, off, matchData, currentTurn]);
+  }, [on, matchData, currentTurn]);
   
   // Countdown timer
   useEffect(() => {

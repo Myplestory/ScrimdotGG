@@ -161,16 +161,33 @@ class ValorantAPI(object):
                             import traceback
                             traceback.print_exc()
                     
+                    # Set up the match_data callback to forward to main WebSocket
+                    async def match_data_callback(data):
+                        """Forward match_data event to main WebSocket connection"""
+                        try:
+                            print(f"[MATCH_DATA_CALLBACK] Received match_data event: {data}")
+                            
+                            # Store the match data response temporarily
+                            api_instance._pending_match_data_response = data
+                            
+                            print(f"[MATCH_DATA_CALLBACK] Stored pending match data response, will be picked up by main loop")
+                        except Exception as e:
+                            print(f"[MATCH_DATA_CALLBACK] Error storing match_data: {e}")
+                            import traceback
+                            traceback.print_exc()
+                    
                     self.pugsocket.match_found_callback = match_found_callback
                     self.pugsocket.player_accepted_callback = player_accepted_callback
                     self.pugsocket.match_ready_callback = match_ready_callback
                     self.pugsocket.match_confirmed_callback = match_confirmed_callback
                     self.pugsocket.veto_started_callback = veto_started_callback
+                    self.pugsocket.match_data_callback = match_data_callback
                     self._pending_match_data = None
                     self._pending_player_accepted_data = None
                     self._pending_match_ready_data = None
                     self._pending_match_confirmed_data = None
                     self._pending_veto_started_data = None
+                    self._pending_match_data_response = None
                     
                     await asyncio.sleep(1)
                     return connection_status

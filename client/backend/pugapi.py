@@ -107,6 +107,8 @@ class PugSocketClient:
                 await self.on_match_confirmed(payload)
             elif event == "veto_started":
                 await self.on_veto_started(payload)
+            elif event == "match_data":
+                await self.on_match_data(payload)
             else:
                 print(f"Unknown event received: {event}")
         except Exception as e:
@@ -251,6 +253,18 @@ class PugSocketClient:
                 await self.veto_started_callback(data)
         except Exception as e:
             print(f"Error processing 'veto_started' event: {e}")
+    
+    async def on_match_data(self, data):
+        """Handle match data response from Django."""
+        try:
+            match_id = data.get("id") or data.get("match_id")
+            print(f"[MATCH DATA] Received match data for match ID: {match_id}")
+            
+            # Forward to main WebSocket connection via callback
+            if hasattr(self, 'match_data_callback'):
+                await self.match_data_callback(data)
+        except Exception as e:
+            print(f"Error processing 'match_data' event: {e}")
 
     ### COMMANDS ###
 

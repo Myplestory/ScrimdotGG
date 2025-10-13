@@ -11,6 +11,7 @@ import logging
 from .queue_manager import QueueManager
 from .matchmaker import Matchmaker
 from .match_confirmation import MatchConfirmationManager
+from .match_manager import MatchManager
 from .lobby_manager import LobbyManager
 from scrimgg.serializers import LobbySerializer, PlayerSerializer
 
