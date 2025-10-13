@@ -12,6 +12,7 @@ from .queue_manager import QueueManager
 from .matchmaker import Matchmaker
 from .match_confirmation import MatchConfirmationManager
 from .match_manager import MatchManager
+from .match_state_validator import MatchStateValidator
 from .lobby_manager import LobbyManager
 from scrimgg.serializers import LobbySerializer, PlayerSerializer
 
@@ -248,6 +249,8 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
             # Queue status events
             elif action == 'get_queue_status':
                 await self.get_queue_status(text_data_json)
+            elif action == 'check_queue_eligibility':
+                await self.check_queue_eligibility(text_data_json)
             
             # Player and chat events
             elif action == 'get_player_model':
@@ -583,6 +586,20 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
             return
         
         try:
+            # Pre-flight validation check
+            validation_result = await MatchStateValidator.can_lobby_queue(lobby_id)
+            if not validation_result['can_queue']:
+                await self.send(text_data=json.dumps({
+                    "event": "queue_blocked",
+                    "data": {
+                        "message": "Cannot queue: some players are in active matches",
+                        "blocked_players": validation_result['blocked_players'],
+                        "reasons": validation_result['reasons'],
+                        "active_matches": validation_result['active_matches']
+                    }
+                }))
+                return
+            
             result = await QueueManager.join_queue(lobby_id, requester_puuid)
             
             if result['status'] == 'success':
@@ -808,6 +825,58 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         except Exception as e:
             await self.send(text_data=json.dumps({"error": f"Unexpected error: {str(e)}"}))
             logger.error(f"Error getting queue status: {str(e)}")
+
+    async def check_queue_eligibility(self, data):
+        """
+        Check if a player or lobby can queue (not in active matches).
+        """
+        payload = data.get("payload", {})
+        lobby_id = payload.get("lobby_id")
+        player_puuid = payload.get("player_puuid")
+        
+        try:
+            if lobby_id:
+                # Check entire lobby eligibility
+                result = await MatchStateValidator.can_lobby_queue(lobby_id)
+                
+                await self.send(text_data=json.dumps({
+                    "event": "queue_eligibility",
+                    "data": {
+                        "type": "lobby",
+                        "lobby_id": lobby_id,
+                        "can_queue": result['can_queue'],
+                        "blocked_players": result['blocked_players'],
+                        "reasons": result['reasons'],
+                        "active_matches": result['active_matches']
+                    }
+                }))
+                
+            elif player_puuid:
+                # Check individual player eligibility
+                result = await MatchStateValidator.can_player_queue(player_puuid)
+                
+                await self.send(text_data=json.dumps({
+                    "event": "queue_eligibility", 
+                    "data": {
+                        "type": "player",
+                        "player_puuid": player_puuid,
+                        "can_queue": result['can_queue'],
+                        "reason": result['reason'],
+                        "match_id": result['match_id'],
+                        "match_state": result['match_state']
+                    }
+                }))
+                
+            else:
+                await self.send(text_data=json.dumps({
+                    "error": "Either lobby_id or player_puuid is required"
+                }))
+                
+        except Exception as e:
+            await self.send(text_data=json.dumps({
+                "error": f"Failed to check queue eligibility: {str(e)}"
+            }))
+            logger.error(f"Error checking queue eligibility: {str(e)}")
 
     # -------------------- Outgoing WebSocket Messages --------------------
     

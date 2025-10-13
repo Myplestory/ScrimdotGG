@@ -84,7 +84,17 @@ const PugQueue = () => {
   const messagesEndRef = useRef(null);
 
   // Use WebSocket context
-  const { playerData, api, on, reconnect, connected, systemStatus } = useWebSocket();
+  const { 
+    playerData, 
+    api, 
+    on, 
+    reconnect, 
+    connected, 
+    systemStatus, 
+    matchStateInfo, 
+    checkQueueEligibility,
+    lobbyData 
+  } = useWebSocket();
 
   // Monitor WebSocket connection and reconnect if needed
   useEffect(() => {
@@ -93,6 +103,14 @@ const PugQueue = () => {
       reconnect();
     }
   }, [connected, reconnect]);
+
+  // Check queue eligibility when component mounts or lobby changes
+  useEffect(() => {
+    if (connected && lobbyData?.id) {
+      console.log('🔍 Checking queue eligibility for lobby:', lobbyData.id);
+      checkQueueEligibility(lobbyData.id);
+    }
+  }, [connected, lobbyData?.id, checkQueueEligibility]);
 
   // Set default region and servers (will be overridden by user selection)
   useEffect(() => {
@@ -299,13 +317,50 @@ const PugQueue = () => {
     if (queueStatus.in_queue) {
       handleLeaveQueue();
     } else {
-      // Enter queue
-      setQueueStartTime(Date.now());
-      api.joinPugQueue({
-        queue_type: selectedQueueType,
-        preferred_maps: selectedMaps,
-        preferred_servers: selectedServers
-      });
+      // Pre-flight validation check
+      if (!matchStateInfo.canQueue) {
+        console.warn('❌ Cannot queue - player in active match:', matchStateInfo);
+        
+        // Show notification to user
+        if (window.showNotification) {
+          window.showNotification({
+            type: 'warning',
+            title: 'Cannot Queue',
+            message: matchStateInfo.blockedReason || 'You are currently in an active match',
+            action: matchStateInfo.matchId ? {
+              label: 'Go to Match',
+              onClick: () => window.location.href = `/match/${matchStateInfo.matchId}`
+            } : null
+          });
+        }
+        return;
+      }
+
+      // Double-check eligibility before queuing
+      if (connected && lobbyData?.id) {
+        checkQueueEligibility(lobbyData.id);
+        
+        // Wait a moment for validation response, then proceed
+        setTimeout(() => {
+          if (matchStateInfo.canQueue) {
+            // Enter queue
+            setQueueStartTime(Date.now());
+            api.joinPugQueue({
+              queue_type: selectedQueueType,
+              preferred_maps: selectedMaps,
+              preferred_servers: selectedServers
+            });
+          }
+        }, 100);
+      } else {
+        // Fallback - proceed without validation if no lobby data
+        setQueueStartTime(Date.now());
+        api.joinPugQueue({
+          queue_type: selectedQueueType,
+          preferred_maps: selectedMaps,
+          preferred_servers: selectedServers
+        });
+      }
     }
   };
 
@@ -577,28 +632,96 @@ const PugQueue = () => {
           </Box>
 
           {/* Right side - Find Match Button */}
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+            {/* Match State Indicator */}
+            {matchStateInfo.inActiveMatch && (
+              <Box sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+                px: 2,
+                py: 0.5,
+                backgroundColor: theme.palette.warning.main,
+                borderRadius: 1,
+                fontSize: '0.75rem',
+                color: theme.palette.getContrastText(theme.palette.warning.main)
+              }}>
+                <Box sx={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  backgroundColor: theme.palette.getContrastText(theme.palette.warning.main),
+                  animation: 'pulse 2s infinite'
+                }} />
+                <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                  {matchStateInfo.matchState ? 
+                    `${matchStateInfo.matchState.replace('_', ' ').toUpperCase()} MATCH` : 
+                    'ACTIVE MATCH'
+                  }
+                </Typography>
+                {matchStateInfo.matchId && (
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => window.location.href = `/match/${matchStateInfo.matchId}`}
+                    sx={{
+                      fontSize: '0.6rem',
+                      py: 0.25,
+                      px: 1,
+                      minHeight: 'auto',
+                      borderColor: theme.palette.getContrastText(theme.palette.warning.main),
+                      color: theme.palette.getContrastText(theme.palette.warning.main),
+                      '&:hover': {
+                        backgroundColor: 'rgba(255,255,255,0.1)'
+                      }
+                    }}
+                  >
+                    GO TO MATCH
+                  </Button>
+                )}
+              </Box>
+            )}
             <Button
               variant="contained"
               size="medium"
               onClick={handleFindMatch}
-              disabled={selectedMaps.length < 5 || !isPartyLeader() || !connected || systemStatus.valorant.status !== 'running'}
+              disabled={
+                selectedMaps.length < 5 || 
+                !isPartyLeader() || 
+                !connected || 
+                systemStatus.valorant.status !== 'running' ||
+                (!queueStatus.in_queue && !matchStateInfo.canQueue)
+              }
               sx={{
                 fontSize: '1rem',
                 py: 0.75, 
                 px: 4, 
                 minWidth: '140px', // Fixed width to prevent growing
-                backgroundColor: queueStatus.in_queue ? theme.palette.error.main : theme.palette.secondary.main,
-                color: theme.palette.getContrastText(queueStatus.in_queue ? theme.palette.error.main : theme.palette.secondary.main),
+                backgroundColor: 
+                  !matchStateInfo.canQueue && !queueStatus.in_queue ? theme.palette.warning.main :
+                  queueStatus.in_queue ? theme.palette.error.main : 
+                  theme.palette.secondary.main,
+                color: theme.palette.getContrastText(
+                  !matchStateInfo.canQueue && !queueStatus.in_queue ? theme.palette.warning.main :
+                  queueStatus.in_queue ? theme.palette.error.main : 
+                  theme.palette.secondary.main
+                ),
                 '&:hover': {
-                  backgroundColor: queueStatus.in_queue ? theme.palette.error.dark : theme.palette.secondary.dark,
+                  backgroundColor: 
+                    !matchStateInfo.canQueue && !queueStatus.in_queue ? theme.palette.warning.dark :
+                    queueStatus.in_queue ? theme.palette.error.dark : 
+                    theme.palette.secondary.dark,
                 },
                 '&:disabled': {
                   backgroundColor: theme.palette.action.disabled,
                 }
               }}
             >
-              {queueStatus.in_queue ? `CANCEL (${getQueueTime()})` : 'FIND MATCH'}
+              {
+                !matchStateInfo.canQueue && !queueStatus.in_queue ? 'IN ACTIVE MATCH' :
+                queueStatus.in_queue ? `CANCEL (${getQueueTime()})` : 
+                'FIND MATCH'
+              }
             </Button>
           </Box>
         </Box>

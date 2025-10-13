@@ -22,8 +22,8 @@ print("Cleaning up ALL test/bot players...")
 # Connect to Redis
 redis_client = redis.from_url(settings.CACHES['default']['LOCATION'])
 
-# Define all bot/test prefixes
-BOT_PREFIXES = [
+# Define all bot/test patterns (both PUUID prefixes and alias patterns)
+BOT_PUUID_PREFIXES = [
     'queuebot-',
     'bot-',
     'bot-player-',
@@ -32,10 +32,24 @@ BOT_PREFIXES = [
     'test-celery-'
 ]
 
-# Build a query to find all bot/test lobbies
+BOT_ALIAS_PATTERNS = [
+    'QueueBot',
+    'Bot',
+    'TestBot',
+    'SimBot'
+]
+
+# Build a query to find all bot/test lobbies (both old and new format)
 lobby_query = Q()
-for prefix in BOT_PREFIXES:
+
+# Old format: PUUID-based bots
+for prefix in BOT_PUUID_PREFIXES:
     lobby_query |= Q(lobby_leader__puuid__startswith=prefix)
+
+# New format: UUID-based bots with recognizable aliases
+for pattern in BOT_ALIAS_PATTERNS:
+    lobby_query |= Q(lobby_leader__alias__startswith=pattern)
+    lobby_query |= Q(lobby_leader__username__startswith=pattern)
 
 bot_lobbies = Lobby.objects.filter(lobby_query)
 lobby_count = bot_lobbies.count()
@@ -118,10 +132,17 @@ if match_count > 0:
 else:
     print("No matches found in database")
 
-# Build a query to find all bot/test players
+# Build a query to find all bot/test players (both old and new format)
 player_query = Q()
-for prefix in BOT_PREFIXES:
+
+# Old format: PUUID-based bots
+for prefix in BOT_PUUID_PREFIXES:
     player_query |= Q(puuid__startswith=prefix)
+
+# New format: UUID-based bots with recognizable aliases
+for pattern in BOT_ALIAS_PATTERNS:
+    player_query |= Q(alias__startswith=pattern)
+    player_query |= Q(username__startswith=pattern)
 
 player_count = Player.objects.filter(player_query).count()
 print(f"Found {player_count} test/bot players in database")

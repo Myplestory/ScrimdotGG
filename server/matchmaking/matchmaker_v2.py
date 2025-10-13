@@ -422,7 +422,7 @@ class MatchmakerV2:
     async def _balance_teams_mmr(players: List[Dict]) -> Tuple[List[Dict], List[Dict]]:
         """
         Balance players into two teams using MMR.
-        Uses snake draft for fairness.
+        Uses proper snake draft for 5v5 fairness.
         """
         # Sort by MMR (descending)
         sorted_players = sorted(players, key=lambda p: p.get('mmr', p.get('elo', 0)), reverse=True)
@@ -430,14 +430,36 @@ class MatchmakerV2:
         team_a = []
         team_b = []
         
-        # Snake draft
+        # Proper 5v5 snake draft: A-B-B-A-A-B-B-A-A-B
+        snake_pattern = [0, 1, 1, 0, 0, 1, 1, 0, 0, 1]  # A=0, B=1
+        
         for i, player in enumerate(sorted_players):
-            if i % 4 < 2:
-                team_a.append(player)
+            if i < len(snake_pattern):
+                if snake_pattern[i] == 0:
+                    team_a.append(player)
+                else:
+                    team_b.append(player)
             else:
-                team_b.append(player)
+                # Fallback for more than 10 players (shouldn't happen in 5v5)
+                if len(team_a) <= len(team_b):
+                    team_a.append(player)
+                else:
+                    team_b.append(player)
+        
+        # Validate team balance
+        if not MatchmakerV2._validate_team_balance(team_a, team_b):
+            logger.error(f"Team balance validation failed: Team A={len(team_a)}, Team B={len(team_b)}")
+            raise ValueError("Team balance validation failed - teams are not 5v5")
         
         return team_a, team_b
+    
+    @staticmethod
+    def _validate_team_balance(team_a: List[Dict], team_b: List[Dict]) -> bool:
+        """Validate that teams are properly balanced (5v5)"""
+        if len(team_a) != 5 or len(team_b) != 5:
+            logger.error(f"Team imbalance detected: Team A={len(team_a)}, Team B={len(team_b)}")
+            return False
+        return True
     
     @staticmethod
     async def _calculate_match_quality_mmr(team_a: List[Dict], team_b: List[Dict]) -> float:
@@ -1020,7 +1042,7 @@ class MatchmakerV2:
     def _balance_teams_mmr_sync(players: List[Dict]) -> Tuple[List[Dict], List[Dict]]:
         """
         Balance players into two teams using MMR - SYNC version.
-        Uses snake draft for fairness.
+        Uses proper snake draft for 5v5 fairness.
         """
         # Sort by MMR (descending)
         sorted_players = sorted(players, key=lambda p: p.get('mmr', p.get('elo', 0)), reverse=True)
@@ -1028,12 +1050,26 @@ class MatchmakerV2:
         team_a = []
         team_b = []
         
-        # Snake draft
+        # Proper 5v5 snake draft: A-B-B-A-A-B-B-A-A-B
+        snake_pattern = [0, 1, 1, 0, 0, 1, 1, 0, 0, 1]  # A=0, B=1
+        
         for i, player in enumerate(sorted_players):
-            if i % 4 < 2:
-                team_a.append(player)
+            if i < len(snake_pattern):
+                if snake_pattern[i] == 0:
+                    team_a.append(player)
+                else:
+                    team_b.append(player)
             else:
-                team_b.append(player)
+                # Fallback for more than 10 players (shouldn't happen in 5v5)
+                if len(team_a) <= len(team_b):
+                    team_a.append(player)
+                else:
+                    team_b.append(player)
+        
+        # Validate team balance
+        if not MatchmakerV2._validate_team_balance(team_a, team_b):
+            logger.error(f"Team balance validation failed: Team A={len(team_a)}, Team B={len(team_b)}")
+            raise ValueError("Team balance validation failed - teams are not 5v5")
         
         return team_a, team_b
     

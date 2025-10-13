@@ -11,6 +11,8 @@ from typing import Dict, List, Tuple, Optional
 import logging
 import json
 
+from .match_state_validator import MatchStateValidator
+
 logger = logging.getLogger(__name__)
 
 
@@ -64,6 +66,27 @@ class QueueManager:
                 return {
                     'status': 'error',
                     'message': 'Lobby is already in queue'
+                }
+            
+            # Validate that all players in lobby can queue (not in active matches)
+            validation_result = await MatchStateValidator.can_lobby_queue(lobby_id)
+            if not validation_result['can_queue']:
+                blocked_players = validation_result['blocked_players']
+                reasons = validation_result['reasons']
+                
+                # Create detailed error message
+                player_details = []
+                for puuid in blocked_players:
+                    reason = reasons.get(puuid, 'Unknown reason')
+                    player_details.append(f"{puuid}: {reason}")
+                
+                return {
+                    'status': 'error',
+                    'message': 'Some players are in active matches and cannot queue',
+                    'blocked_players': blocked_players,
+                    'reasons': reasons,
+                    'active_matches': validation_result['active_matches'],
+                    'details': player_details
                 }
             
             # Add lobby to sorted set with ELO as score
@@ -767,4 +790,91 @@ class QueueManager:
         except Exception as e:
             logger.error(f"Error cleaning expired lobbies (sync): {str(e)}")
             return 0
+    
+    @staticmethod
+    def enqueue_lobby_sync(lobby_id: str, lobby_data: Dict, queue_type: str = DEFAULT_QUEUE_TYPE) -> Dict:
+        """
+        Add a lobby to the matchmaking queue - SYNC version.
+        
+        Args:
+            lobby_id: UUID of the lobby
+            lobby_data: Lobby information (from LobbyManager.serialize_lobby)
+            queue_type: Type of queue ('pug', 'scrim', etc.)
+            
+        Returns:
+            Dict with status and queue information
+        """
+        try:
+            redis_conn = QueueManager.get_redis()
+            queue_key = QueueManager.QUEUE_KEY_TEMPLATE.format(queue_type=queue_type)
+            
+            # Validate lobby data
+            if not lobby_data.get('average_elo'):
+                return {
+                    'status': 'error',
+                    'message': 'Lobby must have average ELO calculated'
+                }
+            
+            # Check if lobby is already in queue
+            if redis_conn.zscore(queue_key, lobby_id):
+                return {
+                    'status': 'error',
+                    'message': 'Lobby is already in queue'
+                }
+            
+            # Validate that all players in lobby can queue (not in active matches)
+            validation_result = MatchStateValidator.can_lobby_queue_sync(lobby_id)
+            if not validation_result['can_queue']:
+                blocked_players = validation_result['blocked_players']
+                reasons = validation_result['reasons']
+                
+                # Create detailed error message
+                player_details = []
+                for puuid in blocked_players:
+                    reason = reasons.get(puuid, 'Unknown reason')
+                    player_details.append(f"{puuid}: {reason}")
+                
+                return {
+                    'status': 'error',
+                    'message': 'Some players are in active matches and cannot queue',
+                    'blocked_players': blocked_players,
+                    'reasons': reasons,
+                    'active_matches': validation_result['active_matches'],
+                    'details': player_details
+                }
+            
+            # Add lobby to sorted set with ELO as score
+            average_elo = lobby_data['average_elo']
+            redis_conn.zadd(queue_key, {lobby_id: average_elo})
+            
+            # Store lobby data
+            lobby_data_key = QueueManager.LOBBY_DATA_KEY_TEMPLATE.format(lobby_id=lobby_id)
+            redis_conn.setex(lobby_data_key, QueueManager.LOBBY_DATA_TTL, json.dumps(lobby_data))
+            
+            # Store queue time
+            queue_time_key = QueueManager.QUEUE_TIME_KEY_TEMPLATE.format(lobby_id=lobby_id)
+            current_time = timezone.now().timestamp()
+            redis_conn.setex(queue_time_key, QueueManager.QUEUE_TTL, str(current_time))
+            
+            # Get queue position
+            queue_position = redis_conn.zrevrank(queue_key, lobby_id) + 1
+            total_lobbies = redis_conn.zcard(queue_key)
+            
+            logger.info(f"Lobby {lobby_id} added to {queue_type} queue (position {queue_position}/{total_lobbies})")
+            
+            return {
+                'status': 'success',
+                'message': f'Lobby added to {queue_type} queue',
+                'queue_position': queue_position,
+                'total_lobbies': total_lobbies,
+                'average_elo': average_elo,
+                'queue_type': queue_type
+            }
+            
+        except Exception as e:
+            logger.error(f"Error adding lobby to queue (sync): {str(e)}")
+            return {
+                'status': 'error',
+                'message': f'Failed to add lobby to queue: {str(e)}'
+            }
 

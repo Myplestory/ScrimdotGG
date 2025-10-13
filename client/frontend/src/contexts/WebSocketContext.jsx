@@ -39,6 +39,15 @@ export const WebSocketProvider = ({ children }) => {
   const [queueStatus, setQueueStatus] = useState({ in_queue: false, estimated_wait: 0 });
   const [chatMessages, setChatMessages] = useState([]);
   
+  // Match state validation tracking
+  const [matchStateInfo, setMatchStateInfo] = useState({
+    inActiveMatch: false,
+    matchId: null,
+    matchState: null,
+    canQueue: true,
+    blockedReason: null
+  });
+  
   // Event handlers registry
   const eventHandlers = useRef({});
   const reconnectAttempts = useRef(0);
@@ -198,6 +207,50 @@ export const WebSocketProvider = ({ children }) => {
         setMatchData(payload);
         break;
         
+      case 'queue_eligibility':
+        console.log('📥 [FRONTEND] Queue eligibility check:', payload);
+        setMatchStateInfo(prev => ({
+          ...prev,
+          canQueue: payload.can_queue,
+          blockedReason: payload.reason || null,
+          inActiveMatch: !payload.can_queue,
+          matchId: payload.match_id || null,
+          matchState: payload.match_state || null
+        }));
+        break;
+        
+      case 'queue_blocked':
+        console.log('📥 [FRONTEND] Queue blocked:', payload);
+        setMatchStateInfo(prev => ({
+          ...prev,
+          canQueue: false,
+          blockedReason: payload.message,
+          inActiveMatch: true
+        }));
+        
+        // Show notification to user
+        if (window.showNotification) {
+          window.showNotification({
+            type: 'error',
+            title: 'Cannot Queue',
+            message: payload.message,
+            details: payload.blocked_players ? 
+              `Blocked players: ${payload.blocked_players.join(', ')}` : null
+          });
+        }
+        break;
+        
+      case 'match_state_changed':
+        console.log('📥 [FRONTEND] Match state changed:', payload);
+        setMatchStateInfo(prev => ({
+          ...prev,
+          inActiveMatch: !payload.can_queue,
+          matchId: payload.match_id,
+          matchState: payload.state,
+          canQueue: payload.can_queue
+        }));
+        break;
+        
       case 'match_acceptance_required':
         setMatchData(prev => ({
           ...prev,
@@ -301,6 +354,17 @@ export const WebSocketProvider = ({ children }) => {
     leavePugQueue: () => sendEvent('leave_pug_queue', {}),
   };
 
+  // Helper function to check queue eligibility
+  const checkQueueEligibility = useCallback((lobbyId = null, playerPuuid = null) => {
+    if (!connected) return;
+    
+    const payload = {};
+    if (lobbyId) payload.lobby_id = lobbyId;
+    if (playerPuuid) payload.player_puuid = playerPuuid;
+    
+    sendEvent('check_queue_eligibility', payload);
+  }, [connected, sendEvent]);
+
   const value = {
     // Connection state
     connected,
@@ -315,11 +379,13 @@ export const WebSocketProvider = ({ children }) => {
     matchData,
     queueStatus,
     chatMessages,
+    matchStateInfo,
     
     // Methods
     sendEvent,
     on,
     api,
+    checkQueueEligibility,
     
     // Manual reconnect
     reconnect: connectWebSocket,
