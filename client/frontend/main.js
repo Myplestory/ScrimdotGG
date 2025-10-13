@@ -160,7 +160,12 @@ function createWindow() {
         // Windows: Use taskkill to forcefully kill the process and its children
         exec(`taskkill /pid ${pythonProcessPid} /T /F`, (error, stdout, stderr) => {
           if (error) {
-            console.error(`❌ Error killing process: ${error.message}`);
+            // Don't show error if process is already dead
+            if (!error.message.includes('not found') && !error.message.includes('No such process')) {
+              console.error(`❌ Error killing process: ${error.message}`);
+            } else {
+              console.log(`✅ Process already terminated`);
+            }
           } else {
             console.log(`✅ Python backend killed successfully`);
           }
@@ -171,7 +176,12 @@ function createWindow() {
           process.kill(pythonProcessPid, 'SIGKILL');
           console.log(`✅ Python backend killed successfully`);
         } catch (error) {
-          console.error(`❌ Error killing process: ${error.message}`);
+          // Don't show error if process is already dead
+          if (!error.message.includes('No such process') && !error.message.includes('ESRCH')) {
+            console.error(`❌ Error killing process: ${error.message}`);
+          } else {
+            console.log(`✅ Process already terminated`);
+          }
         }
       }
       

@@ -6,7 +6,7 @@
 ![Status](https://img.shields.io/badge/Status-In%20Development-yellow?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 
-**A third-party competitive matchmaking and scrim service for Valorant, similar to FACEIT.**
+**A third-party competitive matchmaking and scrim service for Valorant, tailored specifically for serious players who want to elevate their gameplay to the next level.**
 
 </div>
 
@@ -14,38 +14,35 @@
 
 ## Overview
 
-Scrim.GG is a comprehensive matchmaking platform for Valorant that provides:
+Scrim.GG is a comprehensive matchmaking platform that provides highly engaged players with:
 - ELO/MMR-based competitive matchmaking with TrueSkill integration
-- Organized 5v5 custom game matches
+- Organized 5v5 PUG matches
+- Scrim finder and organizer
 - Detailed player statistics and rankings
 - Real-time lobby chat and communication
-- Interactive map/server veto system
-- WebSocket-based real-time updates
-- Match acceptance flow with automatic requeueing
+- Clans and team support
+- Tournament capabilities
+- Monthly elo ladders with cash rewards
+– Admin support for dispute resolution, player assistance, and fair play
+- Karma and social/matchmaking block system for community self governance
+– Forums for team recruitment, community growth, and networking for players of all skill levels
+
 
 ## Architecture
 
-The platform consists of three main components:
-
-### 1. Django Server (`server/`)
-- MMR-based matchmaking with time tolerance
-- Django Channels for WebSocket support
-- Redis for caching, queues, and state management
+### 1. Django ASGI Server (`server/`)
+- MMR-based matchmaking with time tolerance and priority requeue bias
+- Django Channels for WebSocket consumer support
+- Redis for caching, queues, state management, and async to sync support
 - PostgreSQL database
-- Celery for background tasks (matchmaking, cleanup)
-- RESTful API + WebSocket consumers
+- Celery for concurrent batched synchronous tasks
 
-### 2. Electron Client (`client/`)
-- Desktop application for players
+### 2. User Client (`client/`)
+- ElectronJs Desktop application
 - React frontend with Material-UI
-- Local Python backend (Quart)
-- Interfaces with Valorant's local API
+- Lightweight ASGI Python backend (Quart)
 - WebSocket communication with server
-
-### 3. Web Frontend (Optional)
-- Web-based interface
-- Admin panel
-- Match statistics viewer
+- Valorant local client API
 
 ## Quick Start
 
@@ -150,7 +147,6 @@ npm start
 ### Backend
 - **Django 5.0** - Web framework
 - **Django Channels** - WebSocket support (via Daphne ASGI server)
-- **Django REST Framework** - API
 - **Redis** - Caching, queues, and channel layer
 - **Celery + Beat** - Background tasks and scheduling
 - **PostgreSQL** - Primary database
@@ -221,7 +217,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - Inspired by [FACEIT](https://www.faceit.com)
 - Built with [valclient](https://github.com/colinhartigan/valclient-python)
-- UI design inspired by Valorant's aesthetic
+- UI design inspired by ESEA
 - TrueSkill algorithm by Microsoft Research
 
 ---

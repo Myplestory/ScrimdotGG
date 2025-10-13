@@ -4,7 +4,7 @@ Welcome to the Scrim.GG documentation hub. This directory contains comprehensive
 
 ---
 
-## 🎯 Backend Refactoring Guide (NEW!)
+## 🎯 Backend Refactoring Guide
 
 **Complete suite for refactoring the client backend to a modular architecture.**
 
@@ -12,6 +12,7 @@ Welcome to the Scrim.GG documentation hub. This directory contains comprehensive
 
 | Document | Purpose | When to Use |
 |----------|---------|-------------|
+| **[backend-refactor/](backend-refactor/)** | **COMPLETE** - All implementation docs | Testing & reference |
 | **[REFACTOR_INDEX.md](REFACTOR_INDEX.md)** | Overview & navigation | Start here - choose your path |
 | **[REFACTOR_QUICKSTART.md](REFACTOR_QUICKSTART.md)** | Step-by-step implementation | When you're ready to code |
 | **[BACKEND_REFACTOR_PLAN.md](BACKEND_REFACTOR_PLAN.md)** | Complete technical spec | Reference during implementation |
@@ -66,15 +67,31 @@ open docs/BACKEND_REFACTOR_PLAN.md
 
 ---
 
-## 📁 Other Documentation
+## 📁 Organized Documentation
 
-### Architecture
-- **[ARCHITECTURE_IMPROVEMENTS.md](ARCHITECTURE_IMPROVEMENTS.md)** - General architecture improvements and recommendations
+### **Backend Refactor**
+- **[backend-refactor/](backend-refactor/)** - Complete backend refactor documentation (COMPLETED ✅)
 
-### Server
+### **Development Phases**
+- **[phases/](phases/)** - Phase 1, 2, and 3 development documentation
+
+### **Features & Systems**
+- **[features/](features/)** - Match system, veto system, heartbeat system
+- **[system/](system/)** - Current status, next steps, system documentation
+
+### **Implementation**
+- **[implementation/](implementation/)** - Implementation guides and technical documentation
+
+### **Setup & Deployment**
+- **[setup/](setup/)** - Development setup, GitHub setup, production deployment
+- **[testing/](testing/)** - Testing guides and procedures
+- **[troubleshooting/](troubleshooting/)** - Troubleshooting guides
+
+### **Architecture**
+- **[architecture/](architecture/)** - Architecture improvements and comparisons
+
+### **Legacy Documentation**
 - **Server documentation** - Located in `server/` directory
-
-### Client
 - **Client documentation** - Located in `client/` directory
 
 ---

@@ -126,4 +126,3 @@ npm start
 **Found a bug?** See the rollback instructions above.
 
 **Everything working?** Congrats! The refactor is successful! 🎉
-
