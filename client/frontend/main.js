@@ -13,6 +13,8 @@ function createWindow() {
     height: 800,
     resizable: false,
     frame: false,
+    transparent: true, // Make window transparent initially
+    opacity: 0, // Start with 0 opacity
     webPreferences: {
       nodeIntegration: true,
       // preload: path.join(__dirname, 'preload.js'),
@@ -26,6 +28,9 @@ function createWindow() {
       window.electronAPI = {
         closeApp: () => {
           require('electron').ipcRenderer.send('close-app');
+        },
+        fadeInWindow: () => {
+          require('electron').ipcRenderer.send('react-ready');
         }
       };
     `);
@@ -35,8 +40,23 @@ function createWindow() {
   ipcMain.on('close-app', () => {
     win.close();
   });
+
+  // Handle fade in window when React is ready
+  ipcMain.on('react-ready', () => {
+    console.log('🎬 React is ready, fading in window...');
+    // Set opacity to 1 immediately (no animation for now)
+    win.setOpacity(1);
+  });
   
   win.loadURL('http://localhost:3000');
+  
+  // Fallback: Make window visible after 3 seconds if React doesn't signal ready
+  setTimeout(() => {
+    if (win.getOpacity() === 0) {
+      console.log('🔄 Fallback: Making window visible after timeout');
+      win.setOpacity(1);
+    }
+    }, 3000);
   }
 
   function startPythonBackend() {

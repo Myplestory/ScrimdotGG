@@ -12,6 +12,8 @@ from .queue_manager import QueueManager
 from .matchmaker import Matchmaker
 from .matchmaker_v2 import MatchmakerV2  # New MMR-based matchmaker
 from .match_confirmation import MatchConfirmationManager
+from .match_manager import MatchManager
+from .models_match import Match
 
 logger = get_task_logger(__name__)
 
@@ -20,14 +22,16 @@ def periodic_matchmaking(self):
     """
     Periodic task to find matches for lobbies in queue.
     Runs every 30 seconds.
+    
+    SYNC TASK: Uses direct ORM/Redis calls following Celery best practices.
     """
     try:
         logger.info("="*70)
         logger.info("🔄 PERIODIC MATCHMAKING STARTED")
         logger.info("="*70)
         
-        # Get queue statistics
-        queue_stats = async_to_sync(QueueManager.get_queue_stats)()
+        # Get queue statistics (SYNC)
+        queue_stats = QueueManager.get_queue_stats_sync()
         total_lobbies = queue_stats.get('total_lobbies', 0)
         total_players = queue_stats.get('total_players', 0)
         
@@ -42,9 +46,9 @@ def periodic_matchmaking(self):
                 'matches_found': 0
             }
         
-        # Run matchmaking algorithm (using MMR-based matchmaker)
+        # Run matchmaking algorithm (using MMR-based matchmaker) - SYNC
         logger.info(f"🎯 Running MMR-based matchmaker (MatchmakerV2)...")
-        matchmaking_result = async_to_sync(MatchmakerV2.find_matches)()
+        matchmaking_result = MatchmakerV2.find_matches_sync()
         
         if matchmaking_result['status'] == 'success':
             matches_found = matchmaking_result.get('matches_found', 0)
@@ -66,11 +70,9 @@ def periodic_matchmaking(self):
                             logger.info(f"   Lobby 1: {len(match['lobby1'].get('players', []))} players")
                             logger.info(f"   Lobby 2: {len(match['lobby2'].get('players', []))} players")
                         
-                        # Create match confirmation
+                        # Create match confirmation (SYNC)
                         logger.info(f"   Creating match confirmation...")
-                        confirmation_id = async_to_sync(
-                            MatchConfirmationManager.initiate_confirmation
-                        )(match)
+                        confirmation_id = MatchConfirmationManager.initiate_confirmation_sync(match)
                         
                         if confirmation_id:
                             confirmations_created += 1
@@ -147,67 +149,49 @@ def cleanup_expired_matches(self):
     Clean up expired match confirmations.
     Runs every 60 seconds.
     
-    IMPORTANT: This is a synchronous Celery task that calls async functions.
-    We use run_until_complete to execute async code in a new event loop.
+    SYNC TASK: Uses direct Redis/ORM calls following Celery best practices.
     """
-    import asyncio
-    
     try:
         logger.info("Starting cleanup of expired matches...")
         
-        # Create a new event loop for this task
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+        # Get all active match confirmations (SYNC)
+        active_confirmations = MatchConfirmationManager.get_all_active_confirmations_sync()
         
-        try:
-            # Get all active match confirmations
-            active_confirmations = loop.run_until_complete(
-                MatchConfirmationManager.get_all_active_confirmations()
-            )
-            
-            expired_count = 0
-            processed_count = 0
-            
-            for confirmation in active_confirmations:
-                try:
-                    processed_count += 1
+        expired_count = 0
+        processed_count = 0
+        
+        for confirmation in active_confirmations:
+            try:
+                processed_count += 1
+                
+                # Check if match confirmation has expired (SYNC)
+                is_expired = MatchConfirmationManager.is_match_expired_sync(confirmation['id'])
+                
+                if is_expired:
+                    # Handle expired match (SYNC)
+                    result = MatchConfirmationManager.handle_expired_match_sync(confirmation['id'])
                     
-                    # Check if match confirmation has expired
-                    is_expired = loop.run_until_complete(
-                        MatchConfirmationManager.is_match_expired(confirmation['id'])
-                    )
-                    
-                    if is_expired:
-                        # Handle expired match
-                        result = loop.run_until_complete(
-                            MatchConfirmationManager.handle_expired_match(confirmation['id'])
-                        )
+                    if result['status'] == 'success':
+                        expired_count += 1
+                        logger.info(f"Handled expired match: {confirmation['id']}")
                         
-                        if result['status'] == 'success':
-                            expired_count += 1
-                            logger.info(f"Handled expired match: {confirmation['id']}")
-                            
-                            # Notify affected lobbies
-                            for lobby_id in result.get('affected_lobbies', []):
-                                _notify_match_timeout(lobby_id, 'Match confirmation timed out')
-                        else:
-                            logger.error(f"Failed to handle expired match {confirmation['id']}: {result.get('message')}")
-                            
-                except Exception as e:
-                    logger.error(f"Error processing confirmation {confirmation.get('id', 'unknown')}: {str(e)}")
-            
-            logger.info(f"Cleanup completed: {expired_count} expired matches handled out of {processed_count} processed")
-            
-            return {
-                'status': 'success',
-                'message': f'Cleanup completed: {expired_count} expired matches handled',
-                'processed_confirmations': processed_count,
-                'expired_matches': expired_count
-            }
-            
-        finally:
-            # Clean up the event loop
-            loop.close()
+                        # Notify affected lobbies
+                        for lobby_id in result.get('affected_lobbies', []):
+                            _notify_match_timeout(lobby_id, 'Match confirmation timed out')
+                    else:
+                        logger.error(f"Failed to handle expired match {confirmation['id']}: {result.get('message')}")
+                        
+            except Exception as e:
+                logger.error(f"Error processing confirmation {confirmation.get('id', 'unknown')}: {str(e)}")
+        
+        logger.info(f"Cleanup completed: {expired_count} expired matches handled out of {processed_count} processed")
+        
+        return {
+            'status': 'success',
+            'message': f'Cleanup completed: {expired_count} expired matches handled',
+            'processed_confirmations': processed_count,
+            'expired_matches': expired_count
+        }
         
     except Exception as e:
         logger.error(f"Error in cleanup_expired_matches: {str(e)}")
@@ -223,12 +207,14 @@ def cleanup_expired_queues(self):
     """
     Clean up expired lobbies from queue.
     Runs every 5 minutes.
+    
+    SYNC TASK: Uses direct Redis calls following Celery best practices.
     """
     try:
         logger.info("Starting cleanup of expired queue entries...")
         
-        # Clean up expired lobbies from queue
-        cleaned_count = async_to_sync(QueueManager.cleanup_expired_lobbies)()
+        # Clean up expired lobbies from queue (SYNC)
+        cleaned_count = QueueManager.cleanup_expired_lobbies_sync()
         
         logger.info(f"Queue cleanup completed: {cleaned_count} expired lobbies removed")
         
@@ -300,7 +286,7 @@ def _notify_match_found(lobby_id, match_confirmation_id):
         
         logger.info(f"Channel layer obtained, sending to group lobby_{lobby_id}")
         
-        # Send match found notification
+        # Send match found notification (SYNC→ASYNC bridge)
         async_to_sync(channel_layer.group_send)(
             f"lobby_{lobby_id}",
             {
@@ -326,7 +312,7 @@ def _notify_match_timeout(lobby_id, reason):
     try:
         channel_layer = get_channel_layer()
         
-        # Send match timeout notification
+        # Send match timeout notification (SYNC→ASYNC bridge)
         async_to_sync(channel_layer.group_send)(
             f"lobby_{lobby_id}",
             {
@@ -378,15 +364,15 @@ def update_lobby_queue_status_task(self, lobby_id, in_queue):
 def health_check(self):
     """
     Health check task to monitor system status.
+    
+    SYNC TASK: Uses direct Redis/ORM calls following Celery best practices.
     """
     try:
-        # Check Redis connection
-        queue_stats = async_to_sync(QueueManager.get_queue_stats)()
+        # Check Redis connection (SYNC)
+        queue_stats = QueueManager.get_queue_stats_sync()
         
-        # Check active match confirmations
-        active_confirmations = async_to_sync(
-            MatchConfirmationManager.get_all_active_confirmations
-        )()
+        # Check active match confirmations (SYNC)
+        active_confirmations = MatchConfirmationManager.get_all_active_confirmations_sync()
         
         health_status = {
             'status': 'healthy',
@@ -411,4 +397,88 @@ def health_check(self):
             'timestamp': self.request.utc_time,
             'error': str(e),
             'redis_connected': False
+        }
+
+
+@shared_task(bind=True, name='matchmaking.tasks.check_veto_timeouts')
+def check_veto_timeouts(self):
+    """
+    Check for matches with expired veto deadlines and auto-veto.
+    Runs every 5 seconds.
+    
+    SYNC TASK: Uses direct ORM calls following Celery best practices.
+    """
+    from django.utils import timezone
+    
+    try:
+        logger.debug("Checking for veto timeouts...")
+        
+        # Find matches in veto phase with expired deadlines (direct ORM query)
+        expired_matches = list(Match.objects.filter(
+            state=Match.STATE_VETO,
+            veto_deadline__lt=timezone.now()
+        ))
+        
+        count = len(expired_matches)
+        
+        if count == 0:
+            logger.debug("No expired veto deadlines found")
+            return {
+                'status': 'success',
+                'expired_count': 0
+            }
+        
+        logger.info(f"Found {count} match(es) with expired veto deadline")
+        
+        processed = 0
+        for match in expired_matches:
+            try:
+                logger.info(f"Processing timeout for match {match.id}")
+                
+                # Handle timeout (auto-veto) - SYNC, pass match ID
+                result = MatchManager.handle_veto_timeout_sync(match.id)
+                
+                if result['status'] == 'success':
+                    processed += 1
+                    
+                    # Broadcast timeout event to all players (SYNC→ASYNC bridge)
+                    channel_layer = get_channel_layer()
+                    async_to_sync(channel_layer.group_send)(
+                        f"match_{match.id}",
+                        {
+                            'type': 'veto_timeout',
+                            'match_id': str(match.id),
+                            'auto_vetoed_map': result.get('auto_vetoed_map'),
+                            'veto_complete': result.get('veto_complete', False),
+                            'next_turn': result.get('next_turn'),
+                            'remaining_maps': result.get('remaining_maps', []),
+                            'deadline': result.get('deadline'),
+                            'final_map': result.get('final_map'),
+                        }
+                    )
+                    
+                    logger.info(f"Match {match.id}: Timeout handled successfully")
+                else:
+                    logger.error(f"Match {match.id}: Timeout handling failed - {result.get('message')}")
+                    
+            except Exception as e:
+                logger.error(f"Error processing timeout for match {match.id}: {str(e)}")
+                import traceback
+                logger.error(traceback.format_exc())
+        
+        logger.info(f"Processed {processed}/{count} veto timeouts")
+        
+        return {
+            'status': 'success',
+            'expired_count': count,
+            'processed': processed
+        }
+            
+    except Exception as e:
+        logger.error(f"Error in check_veto_timeouts: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {
+            'status': 'error',
+            'message': str(e)
         }

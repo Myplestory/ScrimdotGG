@@ -1,14 +1,15 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import { CssBaseline, ThemeProvider } from "@mui/material";
 import { ColorModeContext, useMode } from "./theme";
 import { Box } from "@mui/material"
-import logo from './logo.svg';  
 import DragBar from './components/dragbar';
+import AnimatedLogo from './components/AnimatedLogo';
 
 // Pages
 import LoadingScreen from './components/loadingscreen';
 import AuthenticationScreen from './pages/login';
-import LandingPage from './pages/landing'
+import LandingPage from './pages/landing';
+import MatchPage from './pages/MatchPage';
 
 // Routings
 import {Routes, Route, Navigate, useNavigate } from "react-router-dom"; // Make sure you are using BrowserRouter
@@ -25,12 +26,41 @@ function App() {
   // Grab theme, use state, and auth state
   const [theme, colorMode] = useMode();
   const [authenticated, setAuthenticated] = useState(false);
+  const [appReady, setAppReady] = useState(false);
 
   //Loading states
-  const [loading, setLoading] = useState(true);
-  const [showLoading, setShowLoading] = useState(false); // Add a loading state
+  const [showLoading, setShowLoading] = useState(false);
 
   const navigate = useNavigate();
+  
+  // App initialization with extended logo display (5.5 seconds total)
+  useEffect(() => {
+    const initApp = async () => {
+      const htmlLoader = document.getElementById('initial-loader');
+      if (htmlLoader) {
+        htmlLoader.classList.add('fade-out');
+        setTimeout(() => htmlLoader.style.display = 'none', 500);
+      }
+      
+      // Wait a bit for electronAPI to be available, then fade in window
+      setTimeout(() => {
+        console.log('🔍 Checking for electronAPI...', window.electronAPI);
+        if (window.electronAPI && window.electronAPI.fadeInWindow) {
+          console.log('✅ Fading in window...');
+          window.electronAPI.fadeInWindow();
+        } else {
+          console.log('❌ electronAPI not available');
+        }
+      }, 100);
+      
+      // Random spinner duration between 1-2 seconds
+      const spinnerDuration = Math.random() * 1000 + 1000; // 1000-2000ms
+      await new Promise(resolve => setTimeout(resolve, spinnerDuration));
+      setAppReady(true);
+    };
+    
+    initApp();
+  }, []);
 
 
   const handleLogout = () => {
@@ -52,6 +82,16 @@ function App() {
   };
 
 
+  // Show animated logo while app initializes
+  if (!appReady) {
+    return (
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <AnimatedLogo />
+      </ThemeProvider>
+    );
+  }
+  
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
@@ -62,14 +102,17 @@ function App() {
         ) : (
           <ColorModeContext.Provider value={colorMode}>
             <div className="app">
-              {!authenticated ? ( // Show login screen if not authenticated
+              {!authenticated ? (
                 <AuthenticationScreen onAuthentication={handleAuthentication} />
               ) : (
-                <Routes>
-                  <Route path="/" element={<Navigate to="/landingpage" replace />} />
-                  <Route path="/Logout" element={<Logout setAuthenticated={setAuthenticated} />} />
-                  <Route path="/landingpage" element={<LandingPage />} />
-                </Routes>
+                <Suspense fallback={<AnimatedLogo />}>
+                  <Routes>
+                    <Route path="/" element={<Navigate to="/landingpage" replace />} />
+                    <Route path="/Logout" element={<Logout setAuthenticated={setAuthenticated} />} />
+                    <Route path="/landingpage" element={<LandingPage />} />
+                    <Route path="/match/:matchId" element={<MatchPage />} />
+                  </Routes>
+                </Suspense>
               )}
             </div>
           </ColorModeContext.Provider>

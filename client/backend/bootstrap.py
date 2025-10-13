@@ -311,6 +311,26 @@ async def valorant_heartbeat_loop():
                     # Broadcast to all connected clients
                     await broadcast_to_all('match_ready', match_ready_data)
                     print(f"[HEARTBEAT] Broadcasted match_ready to {len(active_connections)} clients")
+                
+                # Check for pending match confirmed notifications
+                if valorant_api and hasattr(valorant_api, '_pending_match_confirmed_data') and valorant_api._pending_match_confirmed_data:
+                    print(f"[HEARTBEAT] Found pending match confirmed data, broadcasting...")
+                    match_confirmed_data = valorant_api._pending_match_confirmed_data
+                    valorant_api._pending_match_confirmed_data = None  # Clear it
+                    
+                    # Broadcast to all connected clients
+                    await broadcast_to_all('match_confirmed', match_confirmed_data)
+                    print(f"[HEARTBEAT] Broadcasted match_confirmed to {len(active_connections)} clients")
+                
+                # Check for pending veto started notifications
+                if valorant_api and hasattr(valorant_api, '_pending_veto_started_data') and valorant_api._pending_veto_started_data:
+                    print(f"[HEARTBEAT] Found pending veto started data, broadcasting...")
+                    veto_started_data = valorant_api._pending_veto_started_data
+                    valorant_api._pending_veto_started_data = None  # Clear it
+                    
+                    # Broadcast to all connected clients
+                    await broadcast_to_all('veto_started', veto_started_data)
+                    print(f"[HEARTBEAT] Broadcasted veto_started to {len(active_connections)} clients")
             
             # Wait 3 seconds before next check
             await asyncio.sleep(3)

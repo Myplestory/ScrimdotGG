@@ -635,4 +635,136 @@ class QueueManager:
             logger.info(f"[DECAY] Sigma: {old_sigma:.2f} → {new_sigma:.2f} (×{multiplier:.2f})")
             
             player.save()
+    
+    # ============================================================================
+    # SYNCHRONOUS METHODS FOR CELERY TASKS
+    # ============================================================================
+    
+    @staticmethod
+    def get_queue_stats_sync(queue_type: str = DEFAULT_QUEUE_TYPE) -> Dict:
+        """
+        Get current queue statistics - SYNC version for Celery tasks.
+        
+        Returns:
+            Dict with queue stats
+        """
+        try:
+            redis_conn = QueueManager.get_redis()
+            queue_key = QueueManager.QUEUE_KEY_TEMPLATE.format(queue_type=queue_type)
+            
+            # Get total lobbies
+            total_lobbies = redis_conn.zcard(queue_key)
+            
+            # Get all lobby data to count players
+            total_players = 0
+            lobby_ids = redis_conn.zrange(queue_key, 0, -1)
+            
+            for lobby_id_bytes in lobby_ids:
+                lobby_id = lobby_id_bytes.decode('utf-8') if isinstance(lobby_id_bytes, bytes) else lobby_id_bytes
+                lobby_data_key = QueueManager.LOBBY_DATA_KEY_TEMPLATE.format(lobby_id=lobby_id)
+                lobby_data_json = redis_conn.get(lobby_data_key)
+                
+                if lobby_data_json:
+                    # Decode if bytes
+                    data_str = lobby_data_json.decode('utf-8') if isinstance(lobby_data_json, bytes) else lobby_data_json
+                    lobby_data = json.loads(data_str)
+                    total_players += len(lobby_data.get('players', []))
+            
+            return {
+                'total_lobbies': total_lobbies,
+                'total_players': total_players,
+                'queue_type': queue_type
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting queue stats (sync): {str(e)}")
+            return {
+                'total_lobbies': 0,
+                'total_players': 0,
+                'queue_type': queue_type
+            }
+    
+    @staticmethod
+    def get_all_queued_lobbies_sync(queue_type: str = DEFAULT_QUEUE_TYPE) -> List[Dict]:
+        """
+        Get all lobbies currently in queue - SYNC version for Celery tasks.
+        
+        Returns:
+            List of lobby data dicts
+        """
+        try:
+            redis_conn = QueueManager.get_redis()
+            queue_key = QueueManager.QUEUE_KEY_TEMPLATE.format(queue_type=queue_type)
+            
+            # Get all lobby IDs from sorted set
+            lobby_ids = redis_conn.zrange(queue_key, 0, -1, withscores=True)
+            
+            lobbies = []
+            for lobby_id_bytes, queue_time in lobby_ids:
+                lobby_id = lobby_id_bytes.decode('utf-8') if isinstance(lobby_id_bytes, bytes) else lobby_id_bytes
+                
+                # Get lobby data
+                lobby_data_key = QueueManager.LOBBY_DATA_KEY_TEMPLATE.format(lobby_id=lobby_id)
+                lobby_data_json = redis_conn.get(lobby_data_key)
+                
+                if lobby_data_json:
+                    # Decode if bytes
+                    data_str = lobby_data_json.decode('utf-8') if isinstance(lobby_data_json, bytes) else lobby_data_json
+                    lobby_data = json.loads(data_str)
+                    lobby_data['queue_time'] = queue_time
+                    lobbies.append(lobby_data)
+            
+            return lobbies
+            
+        except Exception as e:
+            logger.error(f"Error getting queued lobbies (sync): {str(e)}")
+            return []
+    
+    @staticmethod
+    def cleanup_expired_lobbies_sync() -> int:
+        """
+        Remove expired lobbies from all queues - SYNC version for Celery tasks.
+        
+        Returns:
+            Number of lobbies cleaned up
+        """
+        try:
+            redis_conn = QueueManager.get_redis()
+            cleaned = 0
+            
+            # Check all queue types
+            for queue_type in [QueueManager.DEFAULT_QUEUE_TYPE]:
+                queue_key = QueueManager.QUEUE_KEY_TEMPLATE.format(queue_type=queue_type)
+                current_time = timezone.now().timestamp()
+                
+                # Get all lobbies in queue
+                lobby_entries = redis_conn.zrange(queue_key, 0, -1, withscores=True)
+                
+                for lobby_id_bytes, queue_time in lobby_entries:
+                    lobby_id = lobby_id_bytes.decode('utf-8') if isinstance(lobby_id_bytes, bytes) else lobby_id_bytes
+                    
+                    # Check if lobby is expired (> 1 hour in queue)
+                    if current_time - queue_time > QueueManager.QUEUE_TTL:
+                        # Remove from queue
+                        redis_conn.zrem(queue_key, lobby_id)
+                        
+                        # Remove lobby data
+                        lobby_data_key = QueueManager.LOBBY_DATA_KEY_TEMPLATE.format(lobby_id=lobby_id)
+                        redis_conn.delete(lobby_data_key)
+                        
+                        # Remove queue time
+                        queue_time_key = QueueManager.QUEUE_TIME_KEY_TEMPLATE.format(lobby_id=lobby_id)
+                        redis_conn.delete(queue_time_key)
+                        
+                        cleaned += 1
+                        logger.info(f"Cleaned up expired lobby {lobby_id} from queue")
+            
+            if cleaned > 0:
+                logger.info(f"Cleaned up {cleaned} expired lobbies")
+            
+            return cleaned
+            
+        except Exception as e:
+            logger.error(f"Error cleaning expired lobbies (sync): {str(e)}")
+            return 0
 

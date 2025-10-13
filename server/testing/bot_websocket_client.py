@@ -43,10 +43,16 @@ class BotWebSocketClient:
         """
         try:
             logger.info(f"[BOT WS] Connecting bot {self.bot_puuid[:12]}... to {self.websocket_url}")
-            self.websocket = await websockets.connect(self.websocket_url)
+            # Add keepalive to prevent connection from timing out
+            self.websocket = await websockets.connect(
+                self.websocket_url,
+                ping_interval=20,  # Send ping every 20 seconds
+                ping_timeout=10,   # Wait 10 seconds for pong response
+                close_timeout=10   # Timeout for close handshake
+            )
             self.connected = True
             self.running = True
-            logger.info(f"[BOT WS] ✅ Bot {self.bot_puuid[:12]} connected")
+            logger.info(f"[BOT WS] ✅ Bot {self.bot_puuid[:12]} connected with keepalive")
             
             # Start listening for messages
             self.listen_task = asyncio.create_task(self._listen())

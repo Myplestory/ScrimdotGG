@@ -21,7 +21,7 @@ app.autodiscover_tasks()
 app.conf.beat_schedule = {
     'periodic-matchmaking': {
         'task': 'matchmaking.tasks.periodic_matchmaking',
-        'schedule': 10.0,  # Run every 30 seconds
+        'schedule': 10.0,  # Run every 10 seconds
     },
     'cleanup-expired-matches': {
         'task': 'matchmaking.tasks.cleanup_expired_matches',
@@ -30,6 +30,10 @@ app.conf.beat_schedule = {
     'cleanup-expired-queues': {
         'task': 'matchmaking.tasks.cleanup_expired_queues',
         'schedule': 300.0,  # Run every 5 minutes
+    },
+    'check-veto-timeouts': {
+        'task': 'matchmaking.tasks.check_veto_timeouts',
+        'schedule': 5.0,  # Run every 5 seconds
     },
 }
 

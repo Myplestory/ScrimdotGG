@@ -222,6 +222,12 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
             elif action == 'decline_match':
                 await self.decline_match(text_data_json)
             
+            # Match page events
+            elif action == 'get_match_data':
+                await self.handle_get_match_data(text_data_json)
+            elif action == 'veto_map':
+                await self.handle_veto_map(text_data_json)
+            
             # Match execution events
             elif action == 'custom_game_created':
                 await self.handle_custom_game_created(text_data_json)
@@ -980,6 +986,203 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
                 'message': event.get('message', 'Match is ready!')
             }
         }))
+    
+    # -------------------- Match Page WebSocket Events --------------------
+    
+    async def match_confirmed(self, event):
+        """
+        All players accepted - redirect to match page.
+        """
+        await self.send(text_data=json.dumps({
+            'event': 'match_confirmed',
+            'data': {
+                'match_id': event['match_id'],
+                'team': event.get('team'),
+                'redirect_url': f"/match/{event['match_id']}"
+            }
+        }))
+    
+    async def veto_started(self, event):
+        """
+        Veto phase has begun.
+        """
+        await self.send(text_data=json.dumps({
+            'event': 'veto_started',
+            'data': {
+                'match_id': event['match_id'],
+                'current_turn': event['current_turn'],
+                'available_maps': event['available_maps'],
+                'deadline': event['deadline']
+            }
+        }))
+    
+    async def map_vetoed(self, event):
+        """
+        A map was vetoed.
+        """
+        await self.send(text_data=json.dumps({
+            'event': 'map_vetoed',
+            'data': {
+                'match_id': event['match_id'],
+                'map': event['map_name'],
+                'vetoed_by': event['vetoed_by'],
+                'next_turn': event.get('next_turn'),
+                'remaining_maps': event['remaining_maps'],
+                'deadline': event.get('deadline')
+            }
+        }))
+    
+    async def veto_timeout(self, event):
+        """
+        Veto timeout occurred - auto-veto.
+        """
+        await self.send(text_data=json.dumps({
+            'event': 'veto_timeout',
+            'data': {
+                'match_id': event['match_id'],
+                'auto_vetoed_map': event['auto_vetoed_map'],
+                'veto_complete': event.get('veto_complete', False),
+                'next_turn': event.get('next_turn'),
+                'remaining_maps': event.get('remaining_maps', []),
+                'deadline': event.get('deadline'),
+                'final_map': event.get('final_map')
+            }
+        }))
+    
+    async def veto_complete(self, event):
+        """
+        Veto complete - final map selected.
+        """
+        await self.send(text_data=json.dumps({
+            'event': 'veto_complete',
+            'data': {
+                'match_id': event['match_id'],
+                'final_map': event['final_map'],
+                'side_selector': event.get('side_selector')
+            }
+        }))
+    
+    # -------------------- Match Page Event Handlers (Incoming) --------------------
+    
+    async def handle_get_match_data(self, data):
+        """
+        Client requests match data.
+        """
+        payload = data.get('payload', {})
+        match_id = payload.get('match_id')
+        
+        if not match_id:
+            await self.send(text_data=json.dumps({
+                'error': 'match_id is required'
+            }))
+            return
+        
+        try:
+            # Get match data
+            match_data = await MatchManager.get_match_data(match_id)
+            
+            if match_data:
+                # Add player to match group
+                await self.channel_layer.group_add(
+                    f"match_{match_id}",
+                    self.channel_name
+                )
+                
+                await self.send(text_data=json.dumps({
+                    'event': 'match_data',
+                    'data': match_data
+                }))
+            else:
+                await self.send(text_data=json.dumps({
+                    'error': 'Match not found'
+                }))
+                
+        except Exception as e:
+            await self.send(text_data=json.dumps({
+                'error': f'Failed to get match data: {str(e)}'
+            }))
+            logger.error(f"Error getting match data: {str(e)}")
+    
+    async def handle_veto_map(self, data):
+        """
+        Captain vetoes a map.
+        """
+        payload = data.get('payload', {})
+        match_id = payload.get('match_id')
+        map_name = payload.get('map')
+        
+        if not match_id or not map_name:
+            await self.send(text_data=json.dumps({
+                'error': 'match_id and map are required'
+            }))
+            return
+        
+        try:
+            # Get match (use sync_to_async for compatibility)
+            from .models_match import Match
+            match = await sync_to_async(lambda: Match.objects.get(id=match_id), thread_sensitive=False)()
+            
+            # Determine which team this player is on
+            team = match.get_player_team(self.puuid)
+            
+            if not team:
+                await self.send(text_data=json.dumps({
+                    'error': 'You are not in this match'
+                }))
+                return
+            
+            # Process veto
+            result = await MatchManager.process_veto(match, map_name, team, self.puuid)
+            
+            if result['status'] == 'success':
+                # Broadcast veto to all players in match
+                event_data = {
+                    'match_id': str(match.id),
+                    'map_name': map_name,
+                    'vetoed_by': team,
+                }
+                
+                if result.get('veto_complete'):
+                    # Veto phase complete
+                    await self.channel_layer.group_send(
+                        f"match_{match.id}",
+                        {
+                            'type': 'veto_complete',
+                            'match_id': str(match.id),
+                            'final_map': result['final_map'],
+                            'side_selector': result.get('side_selector')
+                        }
+                    )
+                else:
+                    # Veto continues
+                    event_data['next_turn'] = result['next_turn']
+                    event_data['remaining_maps'] = result['remaining_maps']
+                    event_data['deadline'] = result['deadline']
+                    
+                    await self.channel_layer.group_send(
+                        f"match_{match.id}",
+                        {
+                            'type': 'map_vetoed',
+                            **event_data
+                        }
+                    )
+                
+                await self.send(text_data=json.dumps({
+                    'event': 'veto_acknowledged',
+                    'data': result
+                }))
+                
+                logger.info(f"Map {map_name} vetoed by {team} in match {match.id}")
+            else:
+                await self.send(text_data=json.dumps({
+                    'error': result.get('message')
+                }))
+                
+        except Exception as e:
+            await self.send(text_data=json.dumps({
+                'error': f'Failed to veto map: {str(e)}'
+            }))
+            logger.error(f"Error vetoing map: {str(e)}")
         
     # -------------------- Lobby Chat WebSocket Messages --------------------        
         

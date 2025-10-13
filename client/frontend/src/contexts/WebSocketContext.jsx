@@ -6,6 +6,8 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 
 const WebSocketContext = createContext(null);
 
+export { WebSocketContext };
+
 export const useWebSocket = () => {
   const context = useContext(WebSocketContext);
   if (!context) {

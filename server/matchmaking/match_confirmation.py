@@ -25,6 +25,7 @@ class MatchConfirmationManager:
     ACCEPTED_PLAYERS_KEY = "{base}:accepted"
     MATCH_DATA_KEY = "{base}:data"
     LOBBIES_KEY = "{base}:lobbies"
+    DEADLINE_KEY = "{base}:deadline"
     
     # Timeouts
     ACCEPTANCE_TIMEOUT = 30  # seconds
@@ -201,6 +202,16 @@ class MatchConfirmationManager:
             }
             
             logger.info(f"Player {player_puuid} accepted match {match_id}: {accepted_count}/{total_players} accepted, {timeout_seconds}s remaining")
+            
+            # If all players accepted, transition to Match instance and start veto
+            if all_accepted:
+                logger.info(f"All players accepted match {match_id}, transitioning to Match instance...")
+                transition_result = await MatchConfirmationManager.transition_to_match(match_id)
+                
+                if transition_result['status'] == 'success':
+                    logger.info(f"Match {match_id} transitioned successfully, veto phase started")
+                else:
+                    logger.error(f"Failed to transition match {match_id}: {transition_result.get('message')}")
             
             return result
             
@@ -601,6 +612,89 @@ class MatchConfirmationManager:
             logger.error(f"Error cleaning up match: {str(e)}")
     
     @staticmethod
+    async def transition_to_match(match_id: str) -> Dict:
+        """
+        Transition from match confirmation to Match instance.
+        Called after all players have accepted.
+        
+        Args:
+            match_id: Match confirmation ID
+            
+        Returns:
+            Dict with transition result and match instance
+        """
+        try:
+            from .match_manager import MatchManager
+            from channels.layers import get_channel_layer
+            
+            logger.info(f"Transitioning match {match_id} to Match instance...")
+            
+            # Create Match instance
+            match = await MatchManager.create_match_from_confirmation(match_id)
+            
+            if not match:
+                return {
+                    'status': 'error',
+                    'message': 'Failed to create match instance'
+                }
+            
+            # Get all player PUUIDs and their teams
+            all_players = match.get_all_player_puuids()
+            
+            # Broadcast match_confirmed to all players
+            channel_layer = get_channel_layer()
+            
+            for player_puuid in all_players:
+                team = match.get_player_team(player_puuid)
+                
+                await channel_layer.group_send(
+                    f"player_{player_puuid}",
+                    {
+                        'type': 'match_confirmed',
+                        'match_id': str(match.id),
+                        'team': team
+                    }
+                )
+            
+            logger.info(f"Match confirmed broadcast sent to {len(all_players)} players")
+            
+            # Start veto phase
+            veto_result = await MatchManager.start_veto(match)
+            
+            if veto_result['status'] == 'success':
+                # Broadcast veto started
+                await channel_layer.group_send(
+                    f"match_{match.id}",
+                    {
+                        'type': 'veto_started',
+                        'match_id': str(match.id),
+                        'current_turn': veto_result['current_turn'],
+                        'available_maps': veto_result['available_maps'],
+                        'deadline': veto_result['deadline']
+                    }
+                )
+                
+                logger.info(f"Veto started for match {match.id}")
+            
+            # Clean up match confirmation data
+            await MatchConfirmationManager.cleanup_match(match_id)
+            
+            return {
+                'status': 'success',
+                'match_id': str(match.id),
+                'match': match
+            }
+            
+        except Exception as e:
+            logger.error(f"Error transitioning match {match_id}: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return {
+                'status': 'error',
+                'message': str(e)
+            }
+    
+    @staticmethod
     async def get_all_active_confirmations() -> List[Dict]:
         """
         Get all active match confirmations.
@@ -823,4 +917,385 @@ class MatchConfirmationManager:
                 'status': 'error',
                 'message': f'Failed to handle expired match: {str(e)}'
             }
+    
+    # ============================================================================
+    # SYNCHRONOUS METHODS FOR CELERY TASKS
+    # ============================================================================
+    
+    @staticmethod
+    def get_all_active_confirmations_sync() -> List[Dict]:
+        """
+        Get all active match confirmations - SYNC version for Celery tasks.
+        
+        Returns:
+            List of active confirmation data
+        """
+        try:
+            from django_redis import get_redis_connection
+            redis_conn = get_redis_connection("default")
+            
+            # Get all match confirmation keys
+            pattern = "match_confirmation:*"
+            keys = redis_conn.keys(pattern)
+            
+            active_confirmations = []
+            for key in keys:
+                # Decode key if it's bytes
+                key_str = key.decode('utf-8') if isinstance(key, bytes) else key
+                
+                confirmation_data = redis_conn.get(key_str)
+                if confirmation_data:
+                    # Decode data if it's bytes
+                    data_str = confirmation_data.decode('utf-8') if isinstance(confirmation_data, bytes) else confirmation_data
+                    data = json.loads(data_str)
+                    # Extract ID from key
+                    match_id = key_str.split(':')[-1]
+                    active_confirmations.append({
+                        'id': match_id,
+                        **data
+                    })
+            
+            return active_confirmations
+            
+        except Exception as e:
+            logger.error(f"Error getting active confirmations (sync): {str(e)}")
+            return []
+    
+    @staticmethod
+    def is_match_expired_sync(match_confirmation_id: str) -> bool:
+        """
+        Check if a match confirmation has expired - SYNC version for Celery tasks.
+        
+        Returns:
+            True if expired, False otherwise
+        """
+        try:
+            from django_redis import get_redis_connection
+            from django.utils import timezone
+            
+            redis_conn = get_redis_connection("default")
+            key = f"match_confirmation:{match_confirmation_id}"
+            
+            confirmation_data = redis_conn.get(key)
+            if not confirmation_data:
+                return False  # Already cleaned up or doesn't exist
+            
+            # Decode if bytes
+            data_str = confirmation_data.decode('utf-8') if isinstance(confirmation_data, bytes) else confirmation_data
+            data = json.loads(data_str)
+            
+            # Check if acceptance deadline has passed
+            if 'acceptance_deadline' in data:
+                deadline = timezone.datetime.fromisoformat(data['acceptance_deadline'])
+                return timezone.now() > deadline
+            
+            return False
+            
+        except Exception as e:
+            logger.error(f"Error checking if match expired (sync): {str(e)}")
+            return False
+    
+    @staticmethod
+    def handle_expired_match_sync(match_confirmation_id: str) -> Dict:
+        """
+        Handle an expired match confirmation - SYNC version for Celery tasks.
+        Requeues all lobbies that accepted.
+        
+        Returns:
+            Dict with status and affected lobbies
+        """
+        try:
+            from django_redis import get_redis_connection
+            from django.utils import timezone
+            
+            redis_conn = get_redis_connection("default")
+            logger.info(f"Handling expired match {match_confirmation_id}")
+            
+            # Get match data
+            match_data = MatchConfirmationManager.get_match_data_sync(match_confirmation_id)
+            
+            if not match_data:
+                return {
+                    'status': 'error',
+                    'message': 'Match not found'
+                }
+            
+            # Get accepted players
+            acceptances_key = f"match_acceptance:{match_confirmation_id}"
+            accepted_players = redis_conn.smembers(acceptances_key)
+            accepted_player_puuids = [p.decode('utf-8') if isinstance(p, bytes) else p for p in accepted_players]
+            
+            logger.info(f"Match expired with {len(accepted_player_puuids)} acceptances")
+            
+            # Find lobbies with players who accepted
+            lobbies_to_requeue = set()
+            all_lobby_ids = match_data.get('lobbies', [])
+            
+            if not all_lobby_ids:
+                # Fallback to lobby1/lobby2 format
+                if 'lobby1' in match_data and 'lobby2' in match_data:
+                    all_lobby_ids = [match_data['lobby1']['id'], match_data['lobby2']['id']]
+            
+            # Get match_lobbies with full player info
+            match_lobbies = match_data.get('match_lobbies', [])
+            
+            for lobby in match_lobbies:
+                lobby_players = lobby.get('players', [])
+                lobby_player_puuids = [p.get('puuid') for p in lobby_players]
+                
+                # Check if ALL players in this lobby accepted (100% acceptance required)
+                all_players_accepted = all(puuid in accepted_player_puuids for puuid in lobby_player_puuids)
+                
+                if all_players_accepted:
+                    lobbies_to_requeue.add(lobby['id'])
+                    logger.info(f"Lobby {lobby['id']} will be requeued (ALL {len(lobby_player_puuids)} players accepted)")
+                else:
+                    accepting_count = sum(1 for puuid in lobby_player_puuids if puuid in accepted_player_puuids)
+                    logger.info(f"Lobby {lobby['id']} will NOT be requeued (only {accepting_count}/{len(lobby_player_puuids)} players accepted)")
+            
+            # Requeue lobbies (use sync version)
+            for lobby_id in lobbies_to_requeue:
+                # Get lobby data from match
+                lobby_data = next((l for l in match_lobbies if l['id'] == lobby_id), None)
+                
+                if lobby_data:
+                    result = MatchConfirmationManager._requeue_lobby_sync(lobby_id, lobby_data)
+                    if result['status'] == 'success':
+                        logger.info(f"Requeued lobby {lobby_id}")
+                    else:
+                        logger.error(f"Failed to requeue lobby {lobby_id}: {result.get('message')}")
+            
+            # Clean up match confirmation data
+            MatchConfirmationManager._cleanup_match_data_sync(match_confirmation_id)
+            
+            return {
+                'status': 'success',
+                'requeued_lobbies': list(lobbies_to_requeue),
+                'affected_lobbies': all_lobby_ids
+            }
+            
+        except Exception as e:
+            logger.error(f"Error handling expired match (sync): {str(e)}")
+            return {
+                'status': 'error',
+                'message': f'Failed to handle expired match: {str(e)}'
+            }
+    
+    @staticmethod
+    def get_match_data_sync(match_confirmation_id: str) -> Optional[Dict]:
+        """
+        Get match data from Redis - SYNC version for Celery tasks.
+        Uses the SAME key format as async version.
+        
+        Returns:
+            Match data dict or None
+        """
+        try:
+            from django_redis import get_redis_connection
+            redis_conn = get_redis_connection("default")
+            
+            # Use the SAME key template as async version
+            base_key = MatchConfirmationManager.MATCH_KEY_TEMPLATE.format(match_id=match_confirmation_id)
+            data_key = MatchConfirmationManager.MATCH_DATA_KEY.format(base=base_key)
+            
+            match_data_json = redis_conn.get(data_key)
+            
+            if match_data_json:
+                # Decode if bytes
+                data_str = match_data_json.decode('utf-8') if isinstance(match_data_json, bytes) else match_data_json
+                return json.loads(data_str)
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error getting match data (sync): {str(e)}")
+            return None
+    
+    @staticmethod
+    def _requeue_lobby_sync(lobby_id: str, lobby_data: Dict) -> Dict:
+        """
+        Requeue a lobby - SYNC version for Celery tasks.
+        """
+        try:
+            from django_redis import get_redis_connection
+            redis_conn = get_redis_connection("default")
+            
+            queue_key = QueueManager.QUEUE_KEY_TEMPLATE.format(queue_type='pug')
+            current_time = timezone.now().timestamp()
+            
+            # Add back to queue
+            redis_conn.zadd(queue_key, {lobby_id: current_time})
+            
+            # Store lobby data
+            lobby_data_key = QueueManager.LOBBY_DATA_KEY_TEMPLATE.format(lobby_id=lobby_id)
+            redis_conn.set(lobby_data_key, json.dumps(lobby_data))
+            
+            # Store queue time
+            queue_time_key = QueueManager.QUEUE_TIME_KEY_TEMPLATE.format(lobby_id=lobby_id)
+            redis_conn.set(queue_time_key, str(current_time))
+            
+            logger.info(f"Requeued lobby {lobby_id}")
+            
+            return {'status': 'success'}
+            
+        except Exception as e:
+            logger.error(f"Error requeueing lobby (sync): {str(e)}")
+            return {
+                'status': 'error',
+                'message': f'Failed to requeue lobby: {str(e)}'
+            }
+    
+    @staticmethod
+    def _cleanup_match_data_sync(match_confirmation_id: str):
+        """
+        Clean up match confirmation data from Redis - SYNC version.
+        Uses the SAME key format as async version.
+        """
+        try:
+            from django_redis import get_redis_connection
+            redis_conn = get_redis_connection("default")
+            
+            # Use the SAME key template as async version
+            base_key = MatchConfirmationManager.MATCH_KEY_TEMPLATE.format(match_id=match_confirmation_id)
+            
+            # Delete all keys associated with this match
+            keys_to_delete = [
+                MatchConfirmationManager.MATCH_DATA_KEY.format(base=base_key),
+                MatchConfirmationManager.NOTIFIED_PLAYERS_KEY.format(base=base_key),
+                MatchConfirmationManager.ACCEPTED_PLAYERS_KEY.format(base=base_key),
+                MatchConfirmationManager.DEADLINE_KEY.format(base=base_key),
+                MatchConfirmationManager.LOBBIES_KEY.format(base=base_key)
+            ]
+            
+            for key in keys_to_delete:
+                redis_conn.delete(key)
+            
+            logger.info(f"Cleaned up match confirmation data for {match_confirmation_id}")
+            
+        except Exception as e:
+            logger.error(f"Error cleaning up match data (sync): {str(e)}")
+    
+    @staticmethod
+    def initiate_confirmation_sync(match_data: Dict) -> Optional[str]:
+        """
+        Create a match confirmation - SYNC version for Celery tasks.
+        Uses the SAME key format as async version.
+        
+        Args:
+            match_data: Match data from matchmaker
+            
+        Returns:
+            match_confirmation_id (UUID string) or None
+        """
+        from django_redis import get_redis_connection
+        from django.utils import timezone
+        from datetime import timedelta
+        import uuid
+        
+        try:
+            redis_conn = get_redis_connection("default")
+            
+            # Generate unique match confirmation ID
+            match_id = str(uuid.uuid4())
+            
+            # Use the SAME key template as async version
+            base_key = MatchConfirmationManager.MATCH_KEY_TEMPLATE.format(match_id=match_id)
+            
+            # Extract all players from match data
+            all_players = []
+            lobby_leaders = []
+            all_lobby_ids = []
+            
+            # 'lobbies' field contains lobby IDs (strings)
+            # 'match_lobbies' field contains full lobby objects with player data
+            if 'match_lobbies' in match_data and match_data['match_lobbies']:
+                # Use match_lobbies for full lobby data
+                for lobby in match_data['match_lobbies']:
+                    lobby_players = lobby.get('players', [])
+                    if lobby_players:
+                        # Extract captain (highest MMR player) as leader
+                        # Captain is already selected in matchmaker, fallback to first player if not set
+                        captain = lobby.get('captain')
+                        if captain:
+                            leader_puuid = captain.get('puuid') if isinstance(captain, dict) else captain
+                        else:
+                            leader_puuid = lobby_players[0].get('puuid') if isinstance(lobby_players[0], dict) else lobby_players[0]
+                        lobby_leaders.append(leader_puuid)
+                        all_players.extend([p.get('puuid') if isinstance(p, dict) else p for p in lobby_players])
+                    all_lobby_ids.append(lobby['id'])
+            elif 'lobby1' in match_data and 'lobby2' in match_data:
+                # Converted format with lobby1/lobby2
+                # Extract captain (highest MMR player) as leader
+                lobby1_players = match_data['lobby1'].get('players', [])
+                lobby2_players = match_data['lobby2'].get('players', [])
+                
+                if lobby1_players:
+                    captain1 = match_data['lobby1'].get('captain')
+                    if captain1:
+                        leader1 = captain1.get('puuid') if isinstance(captain1, dict) else captain1
+                    else:
+                        leader1 = lobby1_players[0].get('puuid') if isinstance(lobby1_players[0], dict) else lobby1_players[0]
+                    lobby_leaders.append(leader1)
+                    all_players.extend([p.get('puuid') if isinstance(p, dict) else p for p in lobby1_players])
+                
+                if lobby2_players:
+                    captain2 = match_data['lobby2'].get('captain')
+                    if captain2:
+                        leader2 = captain2.get('puuid') if isinstance(captain2, dict) else captain2
+                    else:
+                        leader2 = lobby2_players[0].get('puuid') if isinstance(lobby2_players[0], dict) else lobby2_players[0]
+                    lobby_leaders.append(leader2)
+                    all_players.extend([p.get('puuid') if isinstance(p, dict) else p for p in lobby2_players])
+                
+                all_lobby_ids.extend([match_data['lobby1']['id'], match_data['lobby2']['id']])
+            else:
+                raise ValueError("Invalid match_data format - missing match_lobbies or lobby1/lobby2")
+            
+            # Set acceptance timeout
+            timeout_seconds = MatchConfirmationManager.ACCEPTANCE_TIMEOUT
+            acceptance_deadline = timezone.now() + timedelta(seconds=timeout_seconds)
+            
+            # Store acceptance deadline
+            deadline_key = MatchConfirmationManager.DEADLINE_KEY.format(base=base_key)
+            redis_conn.setex(deadline_key, MatchConfirmationManager.MATCH_DATA_TTL, acceptance_deadline.isoformat())
+            
+            # Store all notified players
+            notified_key = MatchConfirmationManager.NOTIFIED_PLAYERS_KEY.format(base=base_key)
+            if all_players:
+                redis_conn.sadd(notified_key, *all_players)
+            redis_conn.expire(notified_key, MatchConfirmationManager.MATCH_DATA_TTL)
+            
+            # Initialize empty accepted set
+            accepted_key = MatchConfirmationManager.ACCEPTED_PLAYERS_KEY.format(base=base_key)
+            redis_conn.delete(accepted_key)
+            redis_conn.expire(accepted_key, MatchConfirmationManager.MATCH_DATA_TTL)
+            
+            # Store full match data including lobby data for requeue
+            full_lobby_data = match_data.get('full_lobby_data', {})
+            match_data['full_lobby_data'] = full_lobby_data
+            match_data['match_id'] = match_id
+            match_data['initiated_at'] = timezone.now().isoformat()  # CRITICAL: needed for timeout calculation
+            
+            data_key = MatchConfirmationManager.MATCH_DATA_KEY.format(base=base_key)
+            redis_conn.setex(
+                data_key,
+                MatchConfirmationManager.MATCH_DATA_TTL,
+                json.dumps(match_data)
+            )
+            
+            # Store lobby IDs
+            lobbies_key = MatchConfirmationManager.LOBBIES_KEY.format(base=base_key)
+            if all_lobby_ids:
+                redis_conn.sadd(lobbies_key, *all_lobby_ids)
+            redis_conn.expire(lobbies_key, MatchConfirmationManager.MATCH_DATA_TTL)
+            
+            logger.info(f"Match confirmation initiated: {match_id} with {len(all_players)} players")
+            
+            return match_id
+            
+        except Exception as e:
+            logger.error(f"Error initiating match confirmation (sync): {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return None
+
 

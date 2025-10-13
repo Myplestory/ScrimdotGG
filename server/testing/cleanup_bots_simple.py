@@ -12,6 +12,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'scrimgg.settings')
 django.setup()
 
 from scrimgg.models import Player, Lobby
+from matchmaking.models_match import Match, MatchPlayer, VetoAction
 import redis
 from django.conf import settings
 from django.db.models import Q
@@ -90,6 +91,33 @@ if match_conf_keys:
 else:
     print("No match confirmations to clear")
 
+# Clean up ALL Match instances (not just bot matches)
+print("\nCleaning up ALL Match instances...")
+all_matches = Match.objects.all()
+match_count = all_matches.count()
+
+if match_count > 0:
+    print(f"Found {match_count} total match(es) in database")
+    
+    # Show match details before deletion
+    for match in all_matches:
+        print(f"  - Match {match.id}: state={match.state}, created={match.created_at}")
+    
+    # Delete related MatchPlayer and VetoAction records first
+    match_ids = list(all_matches.values_list('id', flat=True))
+    veto_count = VetoAction.objects.filter(match_id__in=match_ids).count()
+    player_count_in_matches = MatchPlayer.objects.filter(match_id__in=match_ids).count()
+    
+    VetoAction.objects.filter(match_id__in=match_ids).delete()
+    MatchPlayer.objects.filter(match_id__in=match_ids).delete()
+    all_matches.delete()
+    
+    print(f"  ✅ Deleted {match_count} Match instances")
+    print(f"  ✅ Deleted {player_count_in_matches} MatchPlayer records")
+    print(f"  ✅ Deleted {veto_count} VetoAction records")
+else:
+    print("No matches found in database")
+
 # Build a query to find all bot/test players
 player_query = Q()
 for prefix in BOT_PREFIXES:
@@ -102,13 +130,25 @@ print(f"Found {player_count} test/bot players in database")
 bot_lobbies.delete()
 Player.objects.filter(player_query).delete()
 
-print(f"\n=== CLEANUP SUMMARY ===")
-print(f"Database: Cleaned up {lobby_count} lobbies and {player_count} players")
-print(f"Redis: Cleaned up {removed_from_queue + orphaned_count} total lobbies from queue")
-print(f"  - {removed_from_queue} lobbies with database entries")
-print(f"  - {orphaned_count} orphaned lobbies (no database entry)")
-print("\n[NOTE] WebSocket Cleanup:")
-print("  - Bot WebSocket connections will auto-close when test script exits")
-print("  - If test script crashed, connections will timeout naturally (30-60s)")
-print("  - Or restart Daphne server to force close all connections")
-print("Done!")
+print(f"\n{'='*60}")
+print(f"CLEANUP SUMMARY")
+print(f"{'='*60}")
+print(f"\nDatabase:")
+print(f"  - Lobbies:        {lobby_count}")
+print(f"  - Players:        {player_count}")
+print(f"  - Matches:        {match_count}")
+if match_count > 0:
+    print(f"    • MatchPlayers: {player_count_in_matches}")
+    print(f"    • VetoActions:  {veto_count}")
+print(f"\nRedis:")
+print(f"  - Queue lobbies:          {removed_from_queue + orphaned_count}")
+print(f"    • With DB entries:      {removed_from_queue}")
+print(f"    • Orphaned (no DB):     {orphaned_count}")
+print(f"  - Match confirmations:    {len(match_conf_keys) if match_conf_keys else 0}")
+print(f"\n{'='*60}")
+print(f"[NOTE] WebSocket Cleanup:")
+print(f"  - Bot connections auto-close when test script exits")
+print(f"  - If crashed: connections timeout naturally (30-60s)")
+print(f"  - Or restart Daphne to force close all connections")
+print(f"{'='*60}")
+print(f"\n✅ Cleanup complete! System is clean for next test.\n")

@@ -103,6 +103,10 @@ class PugSocketClient:
                 await self.on_direct_message(payload)
             elif event == "match_found":
                 await self.on_match_found(payload)
+            elif event == "match_confirmed":
+                await self.on_match_confirmed(payload)
+            elif event == "veto_started":
+                await self.on_veto_started(payload)
             else:
                 print(f"Unknown event received: {event}")
         except Exception as e:
@@ -219,6 +223,34 @@ class PugSocketClient:
                 await self.match_found_callback(data)
         except Exception as e:
             print(f"Error processing 'match_found' event: {e}")
+    
+    async def on_match_confirmed(self, data):
+        """Handle match confirmed event."""
+        try:
+            match_id = data.get("match_id")
+            team = data.get("team")
+            redirect_url = data.get("redirect_url")
+            
+            print(f"[MATCH CONFIRMED] Match ID: {match_id}, Team: {team}")
+            print(f"[MATCH CONFIRMED] Redirect URL: {redirect_url}")
+            
+            # Forward to main WebSocket connection via callback
+            if hasattr(self, 'match_confirmed_callback'):
+                await self.match_confirmed_callback(data)
+        except Exception as e:
+            print(f"Error processing 'match_confirmed' event: {e}")
+    
+    async def on_veto_started(self, data):
+        """Handle veto started event."""
+        try:
+            match_id = data.get("match_id")
+            print(f"[VETO STARTED] Match ID: {match_id}")
+            
+            # Forward to main WebSocket connection via callback
+            if hasattr(self, 'veto_started_callback'):
+                await self.veto_started_callback(data)
+        except Exception as e:
+            print(f"Error processing 'veto_started' event: {e}")
 
     ### COMMANDS ###
 

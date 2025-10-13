@@ -1,5 +1,6 @@
 // PugQueue.jsx - Main PUG queue screen (FACEIT-like)
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Button,
@@ -43,6 +44,7 @@ import PlayerSlot from '../components/lobby/playerslot';
 
 const PugQueue = () => {
   const [theme, colorMode] = useMode();
+  const navigate = useNavigate();
   const [queueStatus, setQueueStatus] = useState({
     in_queue: false,
     queue_type: null,
@@ -167,16 +169,38 @@ const PugQueue = () => {
       console.log('🔔 [DEBUG] player_accepted event received:', payload);
       console.log('🔔 [DEBUG] Setting acceptedCount to:', payload.accepted_count || 0);
       console.log('🔔 [DEBUG] Setting totalPlayers to:', payload.total_players || 10);
+      console.log('🔔 [DEBUG] Server timeout_seconds:', payload.timeout_seconds);
       setAcceptedCount(payload.accepted_count || 0);
       setTotalPlayers(payload.total_players || 10);
-      setTimeLeft(payload.timeout_seconds || 30);
+      
+      // Sync with server time if there's a significant discrepancy (>2 seconds)
+      // This handles clock drift while keeping the countdown smooth
+      const serverTime = payload.timeout_seconds || 30;
+      setTimeLeft(prev => {
+        const diff = Math.abs(prev - serverTime);
+        if (diff > 2) {
+          console.log(`⏰ Syncing timer: ${prev}s -> ${serverTime}s (diff: ${diff}s)`);
+          return serverTime;
+        }
+        return prev; // Keep local countdown if close enough
+      });
     });
 
     const unsubscribeMatchReady = on('match_ready', (payload) => {
-      // All players accepted - redirect to matchroom
+      // All players accepted - match ready (legacy event)
       setMatchFound(false);
-      // TODO: Navigate to matchroom page
-      console.log('Match ready! Redirecting to matchroom...', payload);
+      console.log('Match ready!', payload);
+    });
+    
+    const unsubscribeMatchConfirmed = on('match_confirmed', (payload) => {
+      // All players accepted - redirect to match page
+      console.log('Match confirmed! Redirecting to match page...', payload);
+      setMatchFound(false);
+      
+      // Auto-redirect to match page
+      if (payload.match_id) {
+        navigate(`/match/${payload.match_id}`);
+      }
     });
 
     const unsubscribeMatchTimeout = on('match_timeout', (payload) => {
@@ -208,13 +232,14 @@ const PugQueue = () => {
     });
 
     return () => {
-      unsubscribeQueueJoined();
-      unsubscribeQueueLeft();
-      unsubscribeMatchFound();
-      unsubscribePlayerAccepted();
-      unsubscribeMatchReady();
-      unsubscribeMatchTimeout();
-      unsubscribeLobbyMessage();
+      if (typeof unsubscribeQueueJoined === 'function') unsubscribeQueueJoined();
+      if (typeof unsubscribeQueueLeft === 'function') unsubscribeQueueLeft();
+      if (typeof unsubscribeMatchFound === 'function') unsubscribeMatchFound();
+      if (typeof unsubscribePlayerAccepted === 'function') unsubscribePlayerAccepted();
+      if (typeof unsubscribeMatchReady === 'function') unsubscribeMatchReady();
+      if (typeof unsubscribeMatchConfirmed === 'function') unsubscribeMatchConfirmed();
+      if (typeof unsubscribeMatchTimeout === 'function') unsubscribeMatchTimeout();
+      if (typeof unsubscribeLobbyMessage === 'function') unsubscribeLobbyMessage();
     };
   }, [on]);
 

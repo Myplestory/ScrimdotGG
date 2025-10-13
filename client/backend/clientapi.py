@@ -131,12 +131,46 @@ class ValorantAPI(object):
                             import traceback
                             traceback.print_exc()
                     
+                    # Set up the match_confirmed callback to forward to main WebSocket
+                    async def match_confirmed_callback(data):
+                        """Forward match_confirmed event to main WebSocket connection"""
+                        try:
+                            print(f"[MATCH_CONFIRMED_CALLBACK] Received match_confirmed event: {data}")
+                            
+                            # Store the match confirmed data temporarily
+                            api_instance._pending_match_confirmed_data = data
+                            
+                            print(f"[MATCH_CONFIRMED_CALLBACK] Stored pending match confirmed data, will be picked up by main loop")
+                        except Exception as e:
+                            print(f"[MATCH_CONFIRMED_CALLBACK] Error storing match_confirmed: {e}")
+                            import traceback
+                            traceback.print_exc()
+                    
+                    # Set up the veto_started callback to forward to main WebSocket
+                    async def veto_started_callback(data):
+                        """Forward veto_started event to main WebSocket connection"""
+                        try:
+                            print(f"[VETO_STARTED_CALLBACK] Received veto_started event: {data}")
+                            
+                            # Store the veto started data temporarily
+                            api_instance._pending_veto_started_data = data
+                            
+                            print(f"[VETO_STARTED_CALLBACK] Stored pending veto started data, will be picked up by main loop")
+                        except Exception as e:
+                            print(f"[VETO_STARTED_CALLBACK] Error storing veto_started: {e}")
+                            import traceback
+                            traceback.print_exc()
+                    
                     self.pugsocket.match_found_callback = match_found_callback
                     self.pugsocket.player_accepted_callback = player_accepted_callback
                     self.pugsocket.match_ready_callback = match_ready_callback
+                    self.pugsocket.match_confirmed_callback = match_confirmed_callback
+                    self.pugsocket.veto_started_callback = veto_started_callback
                     self._pending_match_data = None
                     self._pending_player_accepted_data = None
                     self._pending_match_ready_data = None
+                    self._pending_match_confirmed_data = None
+                    self._pending_veto_started_data = None
                     
                     await asyncio.sleep(1)
                     return connection_status
