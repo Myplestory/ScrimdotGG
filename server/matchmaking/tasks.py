@@ -22,17 +22,19 @@ def periodic_matchmaking(self):
     Runs every 30 seconds.
     """
     try:
-        logger.info("Starting periodic matchmaking...")
+        logger.info("="*70)
+        logger.info("🔄 PERIODIC MATCHMAKING STARTED")
+        logger.info("="*70)
         
         # Get queue statistics
         queue_stats = async_to_sync(QueueManager.get_queue_stats)()
         total_lobbies = queue_stats.get('total_lobbies', 0)
         total_players = queue_stats.get('total_players', 0)
         
-        logger.info(f"Queue status: {total_lobbies} lobbies, {total_players} players")
+        logger.info(f"📊 Queue Status: {total_lobbies} lobbies, {total_players} players")
         
         if total_lobbies < 2:
-            logger.info("Not enough lobbies in queue for matchmaking")
+            logger.info("⏸️  Not enough lobbies in queue for matchmaking (need 2+)")
             return {
                 'status': 'success',
                 'message': 'Not enough lobbies in queue',
@@ -41,49 +43,66 @@ def periodic_matchmaking(self):
             }
         
         # Run matchmaking algorithm (using MMR-based matchmaker)
+        logger.info(f"🎯 Running MMR-based matchmaker (MatchmakerV2)...")
         matchmaking_result = async_to_sync(MatchmakerV2.find_matches)()
         
         if matchmaking_result['status'] == 'success':
             matches_found = matchmaking_result.get('matches_found', 0)
-            logger.info(f"Matchmaking completed: {matches_found} matches found")
+            logger.info(f"✅ Matchmaking completed: {matches_found} matches found")
             
             # If matches were found, create match confirmations
             if matches_found > 0:
+                logger.info(f"🎮 Processing {matches_found} match(es)...")
                 matches = matchmaking_result.get('matches', [])
                 confirmations_created = 0
                 
-                for match in matches:
+                for idx, match in enumerate(matches, 1):
                     try:
+                        logger.info(f"📋 Match {idx}/{len(matches)}:")
+                        logger.info(f"   Match data keys: {list(match.keys())}")
+                        
+                        # Log team info
+                        if 'lobby1' in match and 'lobby2' in match:
+                            logger.info(f"   Lobby 1: {len(match['lobby1'].get('players', []))} players")
+                            logger.info(f"   Lobby 2: {len(match['lobby2'].get('players', []))} players")
+                        
                         # Create match confirmation
+                        logger.info(f"   Creating match confirmation...")
                         confirmation_id = async_to_sync(
                             MatchConfirmationManager.initiate_confirmation
                         )(match)
                         
                         if confirmation_id:
                             confirmations_created += 1
-                            logger.info(f"Created match confirmation: {confirmation_id}")
+                            logger.info(f"   ✅ Created confirmation: {confirmation_id[:8]}...")
                             
                             # Send match found notifications to ALL lobbies in the match
-                            # (could be 2-10 lobbies depending on party sizes)
                             all_lobby_ids = match.get('lobbies', [])
-                            
-                            logger.debug(f"Match data keys: {match.keys()}")
-                            logger.debug(f"Lobbies field: {all_lobby_ids}")
                             
                             if not all_lobby_ids:
                                 # Fallback to lobby1/lobby2 if 'lobbies' field not present
                                 all_lobby_ids = [match['lobby1']['id'], match['lobby2']['id']]
-                                logger.warning(f"'lobbies' field missing or empty, using fallback: {all_lobby_ids}")
+                                logger.info(f"   Using lobby1/lobby2 format: {all_lobby_ids}")
                             
-                            logger.info(f"Notifying {len(all_lobby_ids)} lobbies about match {confirmation_id}")
+                            logger.info(f"   📢 Notifying {len(all_lobby_ids)} lobbies...")
                             
-                            for i, lobby_id in enumerate(all_lobby_ids):
-                                logger.info(f"Notifying lobby {i+1}/{len(all_lobby_ids)}: {lobby_id}")
-                                _notify_match_found(lobby_id, confirmation_id)
+                            # Spawn async notification tasks for each lobby (non-blocking)
+                            for i, lobby_id in enumerate(all_lobby_ids, 1):
+                                logger.info(f"   📨 Spawning notification task for lobby {i}/{len(all_lobby_ids)}: {lobby_id}")
+                                notify_match_found_task.apply_async(
+                                    args=[lobby_id, confirmation_id],
+                                    queue='celery'  # Use default queue for fast dispatch
+                                )
+                            
+                            logger.info(f"   ✅ All notification tasks spawned for match {confirmation_id[:8]}")
                             
                     except Exception as e:
-                        logger.error(f"Error creating match confirmation: {str(e)}")
+                        logger.error(f"   ❌ Error creating match confirmation: {str(e)}")
+                        import traceback
+                        logger.error(traceback.format_exc())
                 
+                logger.info(f"🎉 MATCHMAKING SUCCESS: {confirmations_created} confirmations created")
+                logger.info("="*70)
                 return {
                     'status': 'success',
                     'message': f'Matchmaking completed successfully',
@@ -92,6 +111,8 @@ def periodic_matchmaking(self):
                     'confirmations_created': confirmations_created
                 }
             else:
+                logger.info(f"⚠️  No matches found this cycle")
+                logger.info("="*70)
                 return {
                     'status': 'success',
                     'message': 'No suitable matches found',
@@ -99,7 +120,8 @@ def periodic_matchmaking(self):
                     'matches_found': 0
                 }
         else:
-            logger.error(f"Matchmaking failed: {matchmaking_result.get('message')}")
+            logger.error(f"❌ Matchmaking failed: {matchmaking_result.get('message')}")
+            logger.info("="*70)
             return {
                 'status': 'error',
                 'message': matchmaking_result.get('message', 'Matchmaking failed'),
@@ -108,7 +130,10 @@ def periodic_matchmaking(self):
             }
             
     except Exception as e:
-        logger.error(f"Error in periodic matchmaking: {str(e)}")
+        logger.error(f"❌ ERROR in periodic matchmaking: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        logger.info("="*70)
         return {
             'status': 'error',
             'message': f'Matchmaking task failed: {str(e)}',
@@ -121,54 +146,68 @@ def cleanup_expired_matches(self):
     """
     Clean up expired match confirmations.
     Runs every 60 seconds.
+    
+    IMPORTANT: This is a synchronous Celery task that calls async functions.
+    We use run_until_complete to execute async code in a new event loop.
     """
+    import asyncio
+    
     try:
         logger.info("Starting cleanup of expired matches...")
         
-        # Get all active match confirmations
-        active_confirmations = async_to_sync(
-            MatchConfirmationManager.get_all_active_confirmations
-        )()
+        # Create a new event loop for this task
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
         
-        expired_count = 0
-        processed_count = 0
-        
-        for confirmation in active_confirmations:
-            try:
-                processed_count += 1
-                
-                # Check if match confirmation has expired
-                is_expired = async_to_sync(
-                    MatchConfirmationManager.is_match_expired
-                )(confirmation['id'])
-                
-                if is_expired:
-                    # Handle expired match
-                    result = async_to_sync(
-                        MatchConfirmationManager.handle_expired_match
-                    )(confirmation['id'])
+        try:
+            # Get all active match confirmations
+            active_confirmations = loop.run_until_complete(
+                MatchConfirmationManager.get_all_active_confirmations()
+            )
+            
+            expired_count = 0
+            processed_count = 0
+            
+            for confirmation in active_confirmations:
+                try:
+                    processed_count += 1
                     
-                    if result['status'] == 'success':
-                        expired_count += 1
-                        logger.info(f"Handled expired match: {confirmation['id']}")
+                    # Check if match confirmation has expired
+                    is_expired = loop.run_until_complete(
+                        MatchConfirmationManager.is_match_expired(confirmation['id'])
+                    )
+                    
+                    if is_expired:
+                        # Handle expired match
+                        result = loop.run_until_complete(
+                            MatchConfirmationManager.handle_expired_match(confirmation['id'])
+                        )
                         
-                        # Notify affected lobbies
-                        for lobby_id in result.get('affected_lobbies', []):
-                            _notify_match_timeout(lobby_id, 'Match confirmation timed out')
-                    else:
-                        logger.error(f"Failed to handle expired match {confirmation['id']}: {result.get('message')}")
-                        
-            except Exception as e:
-                logger.error(f"Error processing confirmation {confirmation.get('id', 'unknown')}: {str(e)}")
-        
-        logger.info(f"Cleanup completed: {expired_count} expired matches handled out of {processed_count} processed")
-        
-        return {
-            'status': 'success',
-            'message': f'Cleanup completed: {expired_count} expired matches handled',
-            'processed_confirmations': processed_count,
-            'expired_matches': expired_count
-        }
+                        if result['status'] == 'success':
+                            expired_count += 1
+                            logger.info(f"Handled expired match: {confirmation['id']}")
+                            
+                            # Notify affected lobbies
+                            for lobby_id in result.get('affected_lobbies', []):
+                                _notify_match_timeout(lobby_id, 'Match confirmation timed out')
+                        else:
+                            logger.error(f"Failed to handle expired match {confirmation['id']}: {result.get('message')}")
+                            
+                except Exception as e:
+                    logger.error(f"Error processing confirmation {confirmation.get('id', 'unknown')}: {str(e)}")
+            
+            logger.info(f"Cleanup completed: {expired_count} expired matches handled out of {processed_count} processed")
+            
+            return {
+                'status': 'success',
+                'message': f'Cleanup completed: {expired_count} expired matches handled',
+                'processed_confirmations': processed_count,
+                'expired_matches': expired_count
+            }
+            
+        finally:
+            # Clean up the event loop
+            loop.close()
         
     except Exception as e:
         logger.error(f"Error in cleanup_expired_matches: {str(e)}")
@@ -219,14 +258,18 @@ def manual_matchmaking(self):
 def notify_match_found_task(self, lobby_id, match_confirmation_id):
     """
     Task to send match found notifications to a specific lobby.
+    Runs asynchronously to avoid blocking the matchmaker.
     """
     try:
+        logger.info(f"🔔 Notifying lobby {lobby_id[:8]}... about match {match_confirmation_id[:8]}...")
         _notify_match_found(lobby_id, match_confirmation_id)
-        logger.info(f"Sent match found notification to lobby {lobby_id}")
+        logger.info(f"✅ Successfully sent match found to lobby {lobby_id[:8]}...")
         return {'status': 'success', 'lobby_id': lobby_id}
     except Exception as e:
-        logger.error(f"Error sending match found notification: {str(e)}")
-        return {'status': 'error', 'message': str(e)}
+        logger.error(f"❌ Error sending match found notification to {lobby_id[:8]}...: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {'status': 'error', 'message': str(e), 'lobby_id': lobby_id}
 
 @shared_task(bind=True, name='matchmaking.tasks.notify_match_timeout')
 def notify_match_timeout_task(self, lobby_id, reason):
@@ -299,6 +342,37 @@ def _notify_match_timeout(lobby_id, reason):
         logger.error(f"Error sending match timeout notification: {str(e)}")
 
 # Task monitoring and health check
+
+@shared_task(bind=True, name='matchmaking.tasks.update_lobby_queue_status')
+def update_lobby_queue_status_task(self, lobby_id, in_queue):
+    """
+    Background task to update lobby queue status in database.
+    Non-blocking, runs separately from matchmaking flow.
+    Synchronous task - safe in Celery context.
+    """
+    try:
+        from django.apps import apps
+        from django.utils import timezone
+        Lobby = apps.get_model('scrimgg', 'Lobby')
+        
+        # Regular synchronous Django ORM (safe in Celery task)
+        try:
+            lobby = Lobby.objects.get(id=lobby_id)
+            lobby.in_queue = in_queue
+            lobby.queued_at = timezone.now() if in_queue else None
+            lobby.save()
+            
+            logger.debug(f"✅ Updated lobby {lobby_id[:8]}... DB: in_queue={in_queue}")
+            return {'status': 'success', 'lobby_id': lobby_id}
+        except Lobby.DoesNotExist:
+            logger.warning(f"⚠️ Lobby {lobby_id[:8]}... not found for DB update (may be deleted)")
+            return {'status': 'error', 'message': 'Lobby not found'}
+            
+    except Exception as e:
+        logger.error(f"❌ Error updating lobby queue status in DB: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {'status': 'error', 'message': str(e)}
 
 @shared_task(bind=True, name='matchmaking.tasks.health_check')
 def health_check(self):

@@ -77,15 +77,63 @@ class MatchConfirmationManager:
             accepted_key = MatchConfirmationManager.ACCEPTED_PLAYERS_KEY.format(base=base_key)
             redis_conn.expire(accepted_key, MatchConfirmationManager.ACCEPTANCE_TIMEOUT)
             
+            # Build lobby data map for requeue (no database queries needed)
+            lobby_leaders = {}
+            full_lobby_data = {}  # Store complete lobby data for requeue
+            
+            # Extract from match_lobbies if available
+            if 'match_lobbies' in match_data:
+                for lobby in match_data['match_lobbies']:
+                    lobby_id = lobby.get('id')
+                    players = lobby.get('players', [])
+                    if lobby_id and players:
+                        # Store leader PUUID
+                        lobby_leaders[lobby_id] = players[0]['puuid']
+                        
+                        # Store full lobby data for requeue
+                        full_lobby_data[lobby_id] = {
+                            'id': lobby_id,
+                            'players': players,
+                            'size': lobby.get('size', len(players)),
+                            'average_elo': lobby.get('average_elo', 0),
+                            'average_mmr': lobby.get('average_mmr', 0),
+                            'map_preferences': lobby.get('map_preferences', []),
+                            'server_preferences': lobby.get('server_preferences', []),
+                            'queued_at': lobby.get('queued_at', timezone.now().isoformat())
+                        }
+            
+            # Fallback to lobby1/lobby2 format
+            elif 'lobby1' in match_data and 'lobby2' in match_data:
+                for lobby_key in ['lobby1', 'lobby2']:
+                    lobby = match_data[lobby_key]
+                    lobby_id = lobby.get('id')
+                    players = lobby.get('players', [])
+                    if lobby_id and players:
+                        lobby_leaders[lobby_id] = players[0]['puuid']
+                        full_lobby_data[lobby_id] = {
+                            'id': lobby_id,
+                            'players': players,
+                            'size': len(players),
+                            'average_elo': lobby.get('average_elo', 0),
+                            'average_mmr': lobby.get('average_mmr', 0),
+                            'map_preferences': match_data.get('map_pool', []),
+                            'server_preferences': match_data.get('server_pool', []),
+                            'queued_at': timezone.now().isoformat()
+                        }
+            
             # Store match data
             data_key = MatchConfirmationManager.MATCH_DATA_KEY.format(base=base_key)
             match_data['match_id'] = match_id
             match_data['initiated_at'] = timezone.now().isoformat()
+            match_data['lobby_leaders'] = lobby_leaders  # For identifying leaders
+            match_data['full_lobby_data'] = full_lobby_data  # For requeue without DB
             redis_conn.setex(
                 data_key,
                 MatchConfirmationManager.MATCH_DATA_TTL,
                 json.dumps(match_data)
             )
+            
+            logger.debug(f"Stored complete data for {len(lobby_leaders)} lobbies (requeue ready, no DB needed)")
             
             # Store lobby IDs (handle both formats)
             lobbies_key = MatchConfirmationManager.LOBBIES_KEY.format(base=base_key)
@@ -198,6 +246,9 @@ class MatchConfirmationManager:
             
             # Mark as accepted
             redis_conn.sadd(accepted_key, player_puuid)
+            
+            # Ensure TTL is set (Redis doesn't preserve TTL when adding to empty set)
+            redis_conn.expire(accepted_key, MatchConfirmationManager.MATCH_DATA_TTL)
             
             # Get acceptance counts
             total_players = redis_conn.scard(notified_key)
@@ -560,17 +611,21 @@ class MatchConfirmationManager:
         try:
             redis_conn = MatchConfirmationManager.get_redis()
             
-            # Find all match confirmation keys
-            pattern = MatchConfirmationManager.MATCH_KEY_TEMPLATE.format(match_id="*")
-            match_keys = redis_conn.keys(pattern)
+            # Find all match confirmation data keys (search for :data suffix)
+            base_pattern = MatchConfirmationManager.MATCH_KEY_TEMPLATE.format(match_id="*")
+            data_pattern = MatchConfirmationManager.MATCH_DATA_KEY.format(base=base_pattern)
+            # This creates: match_confirmation:*:data
+            
+            data_keys = redis_conn.keys(data_pattern)
             
             active_confirmations = []
             
-            for match_key in match_keys:
-                match_id = match_key.decode('utf-8').split(':')[-1]
+            for data_key_bytes in data_keys:
+                data_key = data_key_bytes.decode('utf-8')
+                # Extract match_id from key like "match_confirmation:UUID:data"
+                match_id = data_key.split(':')[1]
                 
                 # Get match data
-                data_key = MatchConfirmationManager.MATCH_DATA_KEY.format(base=match_key.decode('utf-8'))
                 match_data = redis_conn.get(data_key)
                 
                 if match_data:
@@ -606,30 +661,47 @@ class MatchConfirmationManager:
             data_key = MatchConfirmationManager.MATCH_DATA_KEY.format(base=base_key)
             match_data = redis_conn.get(data_key)
             
+            logger.info(f"[EXPIRATION CHECK] Match {match_id[:8]}...")
+            
             if not match_data:
+                logger.info(f"  No match data found - returning True (expired)")
                 return True  # Match doesn't exist, consider it expired
             
             try:
                 match_info = json.loads(match_data)
-                created_at = match_info.get('created_at')
+                initiated_at = match_info.get('initiated_at')  # Fixed: was 'created_at'
                 
-                if created_at:
+                logger.info(f"  initiated_at (from Redis): {initiated_at}")
+                
+                if initiated_at:
                     from datetime import datetime
-                    created_time = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                    initiated_time = datetime.fromisoformat(initiated_at.replace('Z', '+00:00'))
                     now = timezone.now()
                     
                     # Check if more than ACCEPTANCE_TIMEOUT seconds have passed
-                    time_diff = (now - created_time).total_seconds()
+                    time_diff = (now - initiated_time).total_seconds()
+                    
+                    # DEBUG LOGGING
+                    logger.info(f"  initiated_time (parsed): {initiated_time}")
+                    logger.info(f"  initiated_time.tzinfo: {initiated_time.tzinfo}")
+                    logger.info(f"  now: {now}")
+                    logger.info(f"  now.tzinfo: {now.tzinfo}")
+                    logger.info(f"  time_diff: {time_diff} seconds")
+                    logger.info(f"  ACCEPTANCE_TIMEOUT: {MatchConfirmationManager.ACCEPTANCE_TIMEOUT}")
+                    logger.info(f"  time_diff > ACCEPTANCE_TIMEOUT: {time_diff} > {MatchConfirmationManager.ACCEPTANCE_TIMEOUT} = {time_diff > MatchConfirmationManager.ACCEPTANCE_TIMEOUT}")
+                    logger.info(f"  RESULT: {'EXPIRED' if time_diff > MatchConfirmationManager.ACCEPTANCE_TIMEOUT else 'NOT EXPIRED'}")
+                    
                     return time_diff > MatchConfirmationManager.ACCEPTANCE_TIMEOUT
                 
-                return True  # No creation time, consider expired
+                logger.info(f"  No initiated_at field - returning True (expired)")
+                return True  # No initiation time, consider expired
                 
             except (json.JSONDecodeError, ValueError) as e:
-                logger.warning(f"Error parsing match data for {match_id}: {e}")
+                logger.warning(f"  Error parsing match data for {match_id}: {e} - returning True (expired)")
                 return True
             
         except Exception as e:
-            logger.error(f"Error checking if match expired: {str(e)}")
+            logger.error(f"  Error checking if match expired: {str(e)} - returning True (expired)")
             return True
     
     @staticmethod
@@ -653,43 +725,84 @@ class MatchConfirmationManager:
                     'message': 'Match not found'
                 }
             
-            # Get affected lobbies
+            # Get affected lobbies and accepting players
             lobbies = await MatchConfirmationManager.get_match_lobbies(match_id)
+            accepting_players = await MatchConfirmationManager.get_accepting_players(match_id)
             
             # Cancel the match
             cancel_result = await MatchConfirmationManager.cancel_match(match_id, 'Match confirmation timed out')
             
             if cancel_result['status'] == 'cancelled':
-                # Requeue the lobbies if they're still eligible
-                requeued_lobbies = []
+                # Get full lobby data from match confirmation
+                full_lobby_data = match_data.get('full_lobby_data', {})
                 
-                for lobby_id in lobbies:
-                    try:
-                        # Check if lobby is still eligible for queue
-                        from .queue_manager import QueueManager
-                        from .lobby_manager import LobbyManager
+                if not full_lobby_data:
+                    logger.warning(f"   No lobby data found in match confirmation, cannot requeue")
+                else:
+                    logger.info(f"   Found complete data for {len(full_lobby_data)} lobbies")
+                    
+                    # Determine which lobbies to requeue (only those with 100% acceptance)
+                    lobbies_to_requeue = []
+                    skipped_lobbies = []
+                    
+                    for lobby_id in lobbies:
+                        lobby_data = full_lobby_data.get(lobby_id)
                         
-                        # Get lobby leader
-                        Lobby = __import__('django.apps', fromlist=['apps']).apps.get_model('scrimgg', 'Lobby')
+                        if not lobby_data:
+                            logger.warning(f"   No data for lobby {lobby_id[:8]}..., skipping")
+                            skipped_lobbies.append(lobby_id)
+                            continue
                         
-                        def get_lobby():
-                            return Lobby.objects.select_related('lobby_leader').get(id=lobby_id)
+                        # Get all players in this lobby
+                        lobby_players = lobby_data.get('players', [])
+                        lobby_player_puuids = [p['puuid'] for p in lobby_players]
                         
-                        from asgiref.sync import sync_to_async
-                        lobby = await sync_to_async(get_lobby)()
+                        # Check if ALL players in this lobby accepted
+                        all_players_accepted = all(puuid in accepting_players for puuid in lobby_player_puuids)
                         
-                        if lobby.lobby_leader:
-                            # Try to requeue
-                            requeue_result = await QueueManager.join_queue(lobby_id, lobby.lobby_leader.puuid)
+                        if all_players_accepted:
+                            lobbies_to_requeue.append(lobby_id)
+                            logger.info(f"   ✅ Lobby {lobby_id[:8]}... - ALL {len(lobby_player_puuids)} player(s) accepted → Will requeue")
+                        else:
+                            accepting_count = sum(1 for puuid in lobby_player_puuids if puuid in accepting_players)
+                            skipped_lobbies.append(lobby_id)
+                            logger.info(f"   ❌ Lobby {lobby_id[:8]}... - Only {accepting_count}/{len(lobby_player_puuids)} player(s) accepted → Will NOT requeue")
+                    
+                    # Log summary
+                    logger.info(f"🔄 Requeuing {len(lobbies_to_requeue)}/{len(lobbies)} lobbies (only those with 100% acceptance)")
+                    if skipped_lobbies:
+                        logger.info(f"   Skipped {len(skipped_lobbies)} lobbies due to incomplete acceptance")
+                    
+                    # Requeue only the qualifying lobbies
+                    from .queue_manager import QueueManager
+                    requeued_lobbies = []
+                    
+                    for lobby_id in lobbies_to_requeue:
+                        try:
+                            lobby_data = full_lobby_data.get(lobby_id)
+                            
+                            logger.debug(f"   Requeuing lobby {lobby_id[:8]}... with stored data")
+                            
+                            # Enqueue directly using Redis (NO DATABASE CALLS)
+                            requeue_result = await QueueManager.enqueue_lobby(lobby_id, lobby_data, queue_type='pug')
                             
                             if requeue_result['status'] == 'success':
                                 requeued_lobbies.append(lobby_id)
-                                logger.info(f"Requeued lobby {lobby_id} after match timeout")
-                            else:
-                                logger.warning(f"Failed to requeue lobby {lobby_id}: {requeue_result.get('message')}")
+                                logger.info(f"   ✅ Lobby {lobby_id[:8]}... back in queue (position: {requeue_result.get('queue_position', 'N/A')})")
                                 
-                    except Exception as e:
-                        logger.error(f"Error requeuing lobby {lobby_id}: {str(e)}")
+                                # Queue background task to update database (non-blocking)
+                                from .tasks import update_lobby_queue_status_task
+                                update_lobby_queue_status_task.apply_async(
+                                    args=[lobby_id, True],  # in_queue=True
+                                    queue='celery'
+                                )
+                            else:
+                                logger.warning(f"   ❌ Failed to requeue lobby {lobby_id[:8]}: {requeue_result.get('message')}")
+                                
+                        except Exception as e:
+                            logger.error(f"   Error requeuing lobby {lobby_id[:8]}: {str(e)}")
+                            import traceback
+                            logger.error(traceback.format_exc())
                 
                 return {
                     'status': 'success',

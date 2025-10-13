@@ -80,6 +80,16 @@ for lobby_id_bytes in all_queue_entries:
 
 print(f"Removed {orphaned_count} orphaned lobbies from Redis queue")
 
+# Clear all match confirmations from Redis
+print("\nClearing all match confirmations...")
+match_conf_keys = redis_client.keys('match_confirmation:*')
+if match_conf_keys:
+    for key in match_conf_keys:
+        redis_client.delete(key)
+    print(f"Cleared {len(match_conf_keys)} match confirmations")
+else:
+    print("No match confirmations to clear")
+
 # Build a query to find all bot/test players
 player_query = Q()
 for prefix in BOT_PREFIXES:
@@ -97,4 +107,8 @@ print(f"Database: Cleaned up {lobby_count} lobbies and {player_count} players")
 print(f"Redis: Cleaned up {removed_from_queue + orphaned_count} total lobbies from queue")
 print(f"  - {removed_from_queue} lobbies with database entries")
 print(f"  - {orphaned_count} orphaned lobbies (no database entry)")
+print("\n[NOTE] WebSocket Cleanup:")
+print("  - Bot WebSocket connections will auto-close when test script exits")
+print("  - If test script crashed, connections will timeout naturally (30-60s)")
+print("  - Or restart Daphne server to force close all connections")
 print("Done!")

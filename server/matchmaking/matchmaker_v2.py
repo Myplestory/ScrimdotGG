@@ -120,10 +120,14 @@ class MatchmakerV2:
             logger.info(f"Attempting matchmaking with {len(queued_lobbies)} lobbies ({total_players} players)")
             
             # Calculate adaptive team ratings for all lobbies
+            logger.info(f"   Step 1: Enriching {len(queued_lobbies)} lobbies with adaptive ratings...")
             lobbies_with_ratings = await MatchmakerV2._enrich_lobbies_with_ratings(queued_lobbies)
+            logger.info(f"   Step 1 complete: {len(lobbies_with_ratings)} lobbies enriched")
             
             # Try to find compatible lobby combinations
+            logger.info(f"   Step 2: Finding compatible lobby combinations...")
             match_lobbies = await MatchmakerV2._find_compatible_lobbies(lobbies_with_ratings)
+            logger.info(f"   Step 2 complete: Found {len(match_lobbies) if match_lobbies else 0} matching lobbies")
             
             if not match_lobbies:
                 logger.debug("No compatible combinations found")
@@ -147,6 +151,7 @@ class MatchmakerV2:
             # Create match data
             match_data = {
                 'lobbies': [lobby['id'] for lobby in match_lobbies],
+                'match_lobbies': match_lobbies,  # Store full lobby data for later use
                 'team_a': {
                     'players': team_a,
                     'average_elo': sum(p['elo'] for p in team_a) / len(team_a),
@@ -182,97 +187,184 @@ class MatchmakerV2:
     async def _enrich_lobbies_with_ratings(lobbies: List[Dict]) -> List[Dict]:
         """
         Add adaptive rating data to each lobby.
+        Uses data already in lobby_data (from queue_manager serialization).
         """
-        from django.apps import apps
-        
-        Lobby = apps.get_model('scrimgg', 'Lobby')
+        logger.info(f"      Enriching {len(lobbies)} lobbies with adaptive ratings...")
         
         enriched_lobbies = []
         
-        for lobby_data in lobbies:
+        for idx, lobby_data in enumerate(lobbies, 1):
             try:
-                # Get lobby object
-                def get_lobby():
-                    lobby = Lobby.objects.prefetch_related('players').get(id=lobby_data['id'])
-                    players = list(lobby.players.all())
-                    return players
+                logger.debug(f"      Processing lobby {idx}/{len(lobbies)}: {lobby_data['id'][:8]}...")
                 
-                players = await sync_to_async(get_lobby)()
+                # Use player data already in lobby_data (includes ELO and MMR)
+                players = lobby_data.get('players', [])
                 
-                # Calculate adaptive team rating
-                rating_data = calculate_adaptive_team_rating(players)
+                if not players:
+                    logger.warning(f"      Lobby {lobby_data['id'][:8]} has no players!")
+                    continue
+                
+                logger.debug(f"      Lobby has {len(players)} players with MMR data")
+                
+                # Calculate adaptive team rating using the player dicts
+                # convert Player objects to dicts if needed
+                player_dicts = []
+                for p in players:
+                    if isinstance(p, dict):
+                        player_dicts.append(p)
+                    else:
+                        # It's a Player model object
+                        player_dicts.append({
+                            'elo': p.elo,
+                            'mmr': p.mmr,
+                            'puuid': p.puuid,
+                            'alias': p.alias
+                        })
+                
+                # Calculate team rating manually (adaptive weighting logic inline)
+                if not player_dicts:
+                    continue
+                
+                total_mmr = sum(p['mmr'] for p in player_dicts)
+                total_display = sum(p['elo'] for p in player_dicts)
+                total_gap = sum(abs(p['mmr'] - p['elo']) for p in player_dicts)
+                
+                avg_mmr = total_mmr / len(player_dicts)
+                avg_display = total_display / len(player_dicts)
+                avg_gap = total_gap / len(player_dicts)
+                
+                # Determine convergence state and weights
+                from .adaptive_weighting import get_convergence_state, ADAPTIVE_WEIGHTING_CONFIG
+                convergence_state = get_convergence_state(avg_gap)
+                config = ADAPTIVE_WEIGHTING_CONFIG[convergence_state]
+                
+                mmr_weight = config['mmr_weight']
+                display_weight = config['display_weight']
+                
+                team_rating = (avg_mmr * mmr_weight) + (avg_display * display_weight)
+                
+                rating_data = {
+                    'team_rating': team_rating,
+                    'avg_mmr': avg_mmr,
+                    'avg_display': avg_display,
+                    'avg_gap': avg_gap,
+                    'mmr_weight': mmr_weight,
+                    'display_weight': display_weight,
+                    'convergence_state': convergence_state
+                }
                 
                 # Add rating data to lobby
                 lobby_enriched = lobby_data.copy()
                 lobby_enriched['team_rating'] = rating_data['team_rating']
                 lobby_enriched['avg_mmr'] = rating_data['avg_mmr']
                 lobby_enriched['avg_display'] = rating_data['avg_display']
-                lobby_enriched['avg_gap'] = rating_data['avg_gap']
+                lobby_enriched['avg_gap'] = rating_data.get('avg_gap', 0)
                 lobby_enriched['convergence_state'] = rating_data['convergence_state']
                 
                 enriched_lobbies.append(lobby_enriched)
+                logger.debug(f"      Lobby {idx} enriched: Rating={rating_data['team_rating']:.0f}, State={rating_data['convergence_state']}")
                 
             except Exception as e:
-                logger.error(f"Error enriching lobby {lobby_data['id']}: {e}")
+                logger.error(f"      Error enriching lobby {lobby_data.get('id', 'unknown')[:8]}: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
                 continue
         
+        logger.info(f"      ✅ Enriched {len(enriched_lobbies)}/{len(lobbies)} lobbies successfully")
         return enriched_lobbies
     
     @staticmethod
     async def _find_compatible_lobbies(lobbies: List[Dict]) -> Optional[List[Dict]]:
         """
         Find compatible lobbies using adaptive team ratings and tolerance.
+        Supports any combination of 2-10 lobbies that sum to exactly 10 players.
         """
         # Sort by team rating (descending)
         lobbies.sort(key=lambda l: l.get('team_rating', 0), reverse=True)
         
-        # Try to find combination that equals 10 players
-        for i in range(len(lobbies)):
-            lobby1 = lobbies[i]
-            
-            # Calculate tolerance based on time in queue
-            time_in_queue = (timezone.now() - lobby1.get('queued_at', timezone.now())).total_seconds()
-            tolerance = MatchmakerV2.calculate_hybrid_tolerance(
-                lobby1.get('avg_mmr', 4350),
-                time_in_queue
-            )
-            
-            # Try to find complementary lobbies
-            for j in range(i + 1, len(lobbies)):
-                lobby2 = lobbies[j]
-                
-                # Check if team ratings are within tolerance
-                rating_diff = abs(lobby1['team_rating'] - lobby2['team_rating'])
-                
-                if rating_diff > tolerance:
-                    continue
-                
-                # Check if player count matches
-                total_size = lobby1['size'] + lobby2['size']
-                
-                if total_size == MatchmakerV2.PLAYERS_PER_MATCH:
-                    # Exact match (2 lobbies = 10 players)
-                    if await MatchmakerV2._validate_lobby_compatibility(lobby1, lobby2):
-                        logger.info(f"Found 2-lobby match: {lobby1['id'][:8]}... + {lobby2['id'][:8]}...")
-                        return [lobby1, lobby2]
-                
-                elif total_size < MatchmakerV2.PLAYERS_PER_MATCH:
-                    # Need more lobbies
-                    remaining_needed = MatchmakerV2.PLAYERS_PER_MATCH - total_size
-                    
-                    # Try to find additional lobbies
-                    for k in range(j + 1, len(lobbies)):
-                        lobby3 = lobbies[k]
-                        
-                        if lobby3['size'] == remaining_needed:
-                            # Check if all three are compatible
-                            rating_diff_3 = abs(lobby1['team_rating'] - lobby3['team_rating'])
-                            
-                            if rating_diff_3 <= tolerance:
-                                if await MatchmakerV2._validate_lobby_compatibility_multi([lobby1, lobby2, lobby3]):
-                                    logger.info(f"Found 3-lobby match")
-                                    return [lobby1, lobby2, lobby3]
+        logger.debug(f"      Searching through {len(lobbies)} lobbies for combinations...")
         
+        # Use first lobby as reference for tolerance
+        if not lobbies:
+            return None
+        
+        reference_lobby = lobbies[0]
+        queued_at = reference_lobby.get('queued_at')
+        if isinstance(queued_at, str):
+            queued_at = timezone.datetime.fromisoformat(queued_at)
+        if not queued_at:
+            queued_at = timezone.now()
+        
+        time_in_queue = (timezone.now() - queued_at).total_seconds()
+        tolerance = MatchmakerV2.calculate_hybrid_tolerance(
+            reference_lobby.get('avg_mmr', 4350),
+            time_in_queue
+        )
+        
+        logger.debug(f"      Reference lobby MMR: {reference_lobby.get('avg_mmr', 0):.0f}, Tolerance: ±{tolerance:.0f}")
+        
+        # Try to find any combination that sums to 10 players
+        # Use recursive backtracking to find valid combinations
+        def find_combination(start_idx, current_lobbies, current_size):
+            """Recursively find lobby combinations that sum to 10 players"""
+            
+            # Base case: Found exact match
+            if current_size == MatchmakerV2.PLAYERS_PER_MATCH:
+                return current_lobbies
+            
+            # Base case: Exceeded target
+            if current_size > MatchmakerV2.PLAYERS_PER_MATCH:
+                return None
+            
+            # Base case: No more lobbies to try
+            if start_idx >= len(lobbies):
+                return None
+            
+            # Try adding each remaining lobby
+            for i in range(start_idx, len(lobbies)):
+                candidate = lobbies[i]
+                
+                # Check if adding this lobby keeps us compatible
+                if not current_lobbies:
+                    # First lobby in combination
+                    new_lobbies = [candidate]
+                    new_size = candidate['size']
+                else:
+                    # Check if candidate is within tolerance of reference
+                    rating_diff = abs(reference_lobby['team_rating'] - candidate['team_rating'])
+                    if rating_diff > tolerance:
+                        continue  # Skip incompatible lobbies
+                    
+                    new_lobbies = current_lobbies + [candidate]
+                    new_size = current_size + candidate['size']
+                
+                # Recursively try to complete the combination
+                result = find_combination(i + 1, new_lobbies, new_size)
+                if result:
+                    return result
+            
+            return None
+        
+        # Find combination starting from first lobby
+        matched_lobbies = find_combination(0, [], 0)
+        
+        if matched_lobbies:
+            lobby_count = len(matched_lobbies)
+            total_players = sum(l['size'] for l in matched_lobbies)
+            logger.info(f"      ✅ Found {lobby_count}-lobby match (total: {total_players} players)")
+            
+            # Log the combination
+            for idx, lobby in enumerate(matched_lobbies, 1):
+                logger.debug(f"         Lobby {idx}: {lobby['id'][:8]}... ({lobby['size']} players, Rating: {lobby['team_rating']:.0f})")
+            
+            # Validate overall match quality
+            if await MatchmakerV2._validate_lobby_compatibility_multi(matched_lobbies):
+                return matched_lobbies
+            else:
+                logger.debug(f"      Match quality validation failed for {lobby_count}-lobby combination")
+                return None
+        
+        logger.debug(f"      No valid combination found within tolerance ±{tolerance:.0f}")
         return None
     
     @staticmethod
@@ -305,12 +397,23 @@ class MatchmakerV2:
     async def _validate_lobby_compatibility_multi(lobbies: List[Dict]) -> bool:
         """
         Validate multiple lobbies are compatible.
+        For simplicity with many lobbies, just check overall MMR spread.
         """
-        # Check each pair
-        for i in range(len(lobbies)):
-            for j in range(i + 1, len(lobbies)):
-                if not await MatchmakerV2._validate_lobby_compatibility(lobbies[i], lobbies[j]):
-                    return False
+        if len(lobbies) <= 1:
+            return True
+        
+        # Get all lobby MMRs
+        all_mmrs = [lobby.get('avg_mmr', 0) for lobby in lobbies]
+        
+        # Check spread
+        mmr_spread = max(all_mmrs) - min(all_mmrs)
+        max_spread = 1500  # Allow wider spread for multi-lobby matches
+        
+        if mmr_spread > max_spread:
+            logger.debug(f"      MMR spread too large: {mmr_spread:.0f} > {max_spread}")
+            return False
+        
+        logger.debug(f"      MMR spread acceptable: {mmr_spread:.0f} <= {max_spread}")
         return True
     
     @staticmethod
@@ -415,30 +518,57 @@ class MatchmakerV2:
                 match = await MatchmakerV2.find_match(queue_type)
                 
                 if match:
+                    logger.info(f"   Step 3: Converting match format...")
                     # Convert to format expected by confirmation system
                     converted_match = MatchmakerV2._convert_match_format(match)
                     matches_found.append(converted_match)
-                    logger.info(f"Found match {len(matches_found)}")
+                    logger.info(f"   ✅ Found match {len(matches_found)}, converted successfully")
                     
                     # Remove matched lobbies from queue
                     lobby_ids = converted_match.get('lobbies', [])
-                    for lobby_id in lobby_ids:
+                    logger.info(f"   Step 4: Removing {len(lobby_ids)} lobbies from queue...")
+                    
+                    # Get all match lobbies with their player data
+                    match_lobbies_data = match.get('match_lobbies', [])
+                    
+                    for idx, lobby_id in enumerate(lobby_ids, 1):
                         try:
-                            from django.apps import apps
-                            Lobby = apps.get_model('scrimgg', 'Lobby')
+                            # Get leader PUUID from the match_lobbies data (no database call)
+                            leader_puuid = None
                             
-                            def get_lobby_leader():
-                                lobby = Lobby.objects.select_related('lobby_leader').get(id=lobby_id)
-                                return lobby.lobby_leader.puuid if lobby.lobby_leader else None
-                            
-                            leader_puuid = await sync_to_async(get_lobby_leader)()
+                            # Find the lobby in match_lobbies to get its leader
+                            for lobby in match_lobbies_data:
+                                if lobby.get('id') == lobby_id:
+                                    # Get first player as leader
+                                    if lobby.get('players'):
+                                        leader_puuid = lobby['players'][0]['puuid']
+                                    break
                             
                             if leader_puuid:
-                                result = await QueueManager.leave_queue(lobby_id, leader_puuid, queue_type)
+                                logger.debug(f"      Removing lobby {idx}/{len(lobby_ids)}: {lobby_id[:8]}... (leader: {leader_puuid[:12]}...)")
+                                
+                                # Use dequeue_lobby directly (Redis only, no DB calls)
+                                result = await QueueManager.dequeue_lobby(lobby_id, queue_type)
+                                
                                 if result.get('status') == 'success':
-                                    logger.info(f"Removed lobby {lobby_id} from queue")
+                                    logger.debug(f"      ✅ Lobby {lobby_id[:8]}... removed from Redis queue")
+                                    
+                                    # Queue a background task to update database (non-blocking)
+                                    from .tasks import update_lobby_queue_status_task
+                                    update_lobby_queue_status_task.apply_async(
+                                        args=[lobby_id, False],  # in_queue=False
+                                        queue='celery'
+                                    )
+                                else:
+                                    logger.warning(f"      Failed to remove lobby {lobby_id[:8]}: {result.get('message')}")
+                            else:
+                                logger.warning(f"      Could not find leader for lobby {lobby_id[:8]}...")
                         except Exception as e:
-                            logger.error(f"Error removing lobby {lobby_id}: {e}")
+                            logger.error(f"      Error removing lobby {lobby_id[:8]}: {e}")
+                            import traceback
+                            logger.error(traceback.format_exc())
+                    
+                    logger.info(f"   ✅ Step 4 complete: Lobbies removed from queue")
                 else:
                     break
             
@@ -462,6 +592,7 @@ class MatchmakerV2:
     def _convert_match_format(match: Dict) -> Dict:
         """
         Convert match format for confirmation system.
+        Preserves match_lobbies for proper requeueing.
         """
         all_lobby_ids = match.get('lobbies', [])
         
@@ -481,6 +612,7 @@ class MatchmakerV2:
                 'captain': match['team_b']['captain']
             },
             'lobbies': all_lobby_ids,
+            'match_lobbies': match.get('match_lobbies', []),  # Preserve for requeueing!
             'match_quality': match.get('match_quality', 0.0),
             'map_pool': match.get('map_pool', []),
             'server_pool': match.get('server_pool', []),

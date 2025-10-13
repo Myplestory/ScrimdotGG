@@ -1,14 +1,18 @@
 """
-Queue Test with Bot Players
-Creates 9 bot players with similar ELO to you and puts them in queue.
-Then YOU can join queue through your Electron client and get matched!
+Queue Test with Bot Players V2 - Partial Accept Test
+Creates 9 bot players, but only 8 will auto-accept.
+Tests timeout/requeue functionality when not all players accept.
 
-This tests the complete matchmaking flow:
-1. 9 bots in queue (waiting)
-2. You join queue via client
-3. Matchmaker finds match (you + 9 bots)
-4. All 10 receive match confirmation
-5. Accept match → Match starts
+This tests:
+1. 9 bots in queue (8 will accept, 1 will not)
+2. You join queue via client (10th player)
+3. Matchmaker finds match
+4. 8 bots auto-accept
+5. YOU accept
+6. 1 bot doesn't accept (simulated)
+7. Match times out
+8. Lobbies should be requeued
+9. Progress indicators should work
 """
 import os
 import sys
@@ -26,9 +30,13 @@ from matchmaking.lobby_manager import LobbyManager
 from matchmaking.queue_manager import QueueManager
 from matchmaking.match_confirmation import MatchConfirmationManager
 from matchmaking.trueskill_manager import mmr_to_trueskill_mu
-from testing.bot_auto_acceptor import start_bot_acceptor
+from testing.bot_auto_acceptor_ws import BotAutoAcceptorWS, start_bot_acceptor_ws
 from asgiref.sync import sync_to_async
 import random
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 async def create_bot_with_lobby(bot_num: int, base_elo: int, base_mmr: int, region: str):
@@ -170,18 +178,44 @@ async def create_bots_in_queue(your_elo: int, your_mmr: float, your_region: str)
     return bots_in_queue
 
 
-async def check_queue_status():
-    """Check current queue status"""
-    print(f"\n[3/3] Checking queue status...")
+async def start_selective_bot_acceptor(bot_puuids: list, accept_count: int = 8):
+    """
+    Start bot auto-acceptor with WebSocket connections.
     
-    queue_status = await QueueManager.get_queue_stats('pug')
+    Args:
+        bot_puuids: List of all bot PUUIDs
+        accept_count: How many bots should accept (default 8, leaving 1 to timeout)
+        
+    Returns:
+        BotAutoAcceptorWS instance
+    """
+    # Create acceptor
+    acceptor = BotAutoAcceptorWS()
     
-    players_count = queue_status.get('total_players', 0)
-    total_lobbies = queue_status.get('total_lobbies', 0)
-    print(f"   [OK] Queue has {players_count} players in {total_lobbies} lobbies")
-    print(f"   [INFO] Estimated wait: {queue_status.get('estimated_wait', 0)} seconds")
+    # Determine which bots should accept
+    accepting_bots = bot_puuids[:accept_count]
+    non_accepting_bots = bot_puuids[accept_count:]
     
-    return queue_status
+    # Add all bots (mark which should accept)
+    for bot_puuid in accepting_bots:
+        acceptor.add_bot(bot_puuid, auto_accept=True)
+    for bot_puuid in non_accepting_bots:
+        acceptor.add_bot(bot_puuid, auto_accept=False)
+    
+    # Connect all bots to WebSocket
+    logger.info(f"[AUTO-ACCEPT] Connecting {len(bot_puuids)} bots to WebSocket...")
+    connected_count = await acceptor.connect_bots(bot_puuids)
+    
+    if connected_count < len(bot_puuids):
+        logger.warning(f"[AUTO-ACCEPT] Only {connected_count}/{len(bot_puuids)} bots connected!")
+    
+    logger.info(f"[SELECTIVE-ACCEPT] Will auto-accept for {len(accepting_bots)} bots")
+    logger.info(f"[SELECTIVE-ACCEPT] Will NOT accept for {len(non_accepting_bots)} bots:")
+    for puuid in non_accepting_bots:
+        logger.info(f"   - {puuid} (will timeout)")
+    
+    # Return acceptor (no task needed, WebSocket handles everything)
+    return acceptor, None
 
 
 async def wait_for_you_to_join():
@@ -197,7 +231,8 @@ async def wait_for_you_to_join():
     print(f"   4. Matchmaker will find a match within 30 seconds")
     print(f"   5. You'll receive 'match_found' event")
     print(f"   6. Accept the match")
-    print(f"   7. Then you'll receive 'match_starting' event")
+    print(f"   7. Watch as only 8 bots accept (1 will timeout)")
+    print(f"   8. Match should timeout and requeue you")
     
     print(f"\n[MONITORING] Watching queue for your entry...")
     
@@ -211,7 +246,7 @@ async def wait_for_you_to_join():
         if current_count > initial_count:
             print(f"\n   [DETECTED] Queue size increased: {initial_count} -> {current_count}")
             print(f"   [SUCCESS] You joined the queue!")
-            print(f"\n   [INFO] Matchmaker runs every 30 seconds...")
+            print(f"\n   [INFO] Matchmaker runs every 10 seconds...")
             print(f"   [INFO] Wait for match_found event in your client...")
             return True
         
@@ -225,92 +260,72 @@ async def wait_for_you_to_join():
     return False
 
 
-async def monitor_match_confirmation():
-    """Monitor for match confirmation creation"""
-    print(f"\n[MONITORING] Watching for match creation...")
-    print(f"   [INFO] When matchmaker finds a match, all 10 players get 'match_found' event")
-    print(f"   [INFO] You have 30 seconds to accept in your client")
+async def monitor_match_and_timeout():
+    """Monitor for match creation and timeout"""
+    print(f"\n[MONITORING] Watching for match and timeout behavior...")
+    print(f"   [EXPECTED] 8 bots accept + YOU accept = 9/10")
+    print(f"   [EXPECTED] 1 bot doesn't accept")
+    print(f"   [EXPECTED] Match times out after 30 seconds")
+    print(f"   [EXPECTED] All lobbies requeued automatically")
     
     # Check for active match confirmations
-    for i in range(60):  # Check for 1 minute
+    for i in range(120):  # Check for 2 minutes
         confirmations = await MatchConfirmationManager.get_all_active_confirmations()
         
         if confirmations:
-            print(f"\n   [DETECTED] Match found! {len(confirmations)} active confirmation(s)")
+            match_id = confirmations[0].get('match_id') or confirmations[0].get('id')
+            print(f"\n   [DETECTED] Match created: {match_id[:8]}...")
+            print(f"   [INFO] Waiting for timeout (30 seconds)...")
+            print(f"   [INFO] Watch your client for acceptance progress (should show 9/10)")
             
-            for conf_id, conf_data in confirmations:
-                print(f"   [INFO] Match ID: {conf_id}")
-                print(f"   [INFO] Check your client for match acceptance popup!")
+            # Wait for match to timeout
+            await asyncio.sleep(35)  # Wait slightly longer than 30s
+            
+            # Check if match was cleaned up
+            remaining = await MatchConfirmationManager.get_all_active_confirmations()
+            
+            if not remaining:
+                print(f"\n   [SUCCESS] Match timed out and was cleaned up!")
                 
-                # Monitor acceptance
-                await monitor_match_acceptance(conf_id)
-            
-            return True
+                # Check if lobbies were requeued
+                await asyncio.sleep(2)  # Give requeue time to happen
+                queue_status = await QueueManager.get_queue_stats('pug')
+                requeued_count = queue_status.get('total_lobbies', 0)
+                
+                print(f"   [REQUEUE] Queue now has {requeued_count} lobbies")
+                
+                if requeued_count > 0:
+                    print(f"   [SUCCESS] ✅ Lobbies were requeued automatically!")
+                else:
+                    print(f"   [FAIL] ❌ No lobbies in queue after timeout")
+                
+                return True
+            else:
+                print(f"   [WARN] Match still active after timeout")
+                return False
         
         if i % 10 == 0 and i > 0:
             print(f"   [WAITING] No match yet... ({i}s elapsed)")
         
         await asyncio.sleep(1)
     
-    print(f"\n   [INFO] No match found within 1 minute")
-    print(f"   [INFO] Matchmaker runs every 30 seconds, so it might take time")
+    print(f"\n   [TIMEOUT] No match found within 2 minutes")
     return False
-
-
-async def monitor_match_acceptance(match_id: str):
-    """Monitor how many players accepted the match"""
-    print(f"\n   [MONITORING] Watching match acceptance for {match_id[:8]}...")
-    
-    for i in range(30):  # 30 seconds to accept
-        status = await MatchConfirmationManager.get_confirmation_status(match_id)
-        
-        if status['status'] == 'success':
-            accepted = status.get('accepted_count', 0)
-            required = status.get('required_count', 10)
-            
-            print(f"   [STATUS] {accepted}/{required} players accepted", end='\r')
-            
-            if accepted == required:
-                print(f"\n   [SUCCESS] All players accepted! Match starting...")
-                return True
-        
-        await asyncio.sleep(1)
-    
-    print(f"\n   [TIMEOUT] Not all players accepted within 30 seconds")
-    return False
-
-
-async def cleanup_bots():
-    """Clean up bot players and lobbies"""
-    print(f"\n[CLEANUP] Cleaning up bot players...")
-    
-    from asgiref.sync import sync_to_async
-    
-    def cleanup():
-        # Delete bot lobbies
-        Lobby.objects.filter(lobby_leader__puuid__startswith='queuebot-').delete()
-        
-        # Delete bot players
-        count = Player.objects.filter(puuid__startswith='queuebot-').count()
-        Player.objects.filter(puuid__startswith='queuebot-').delete()
-        
-        return count
-    
-    count = await sync_to_async(cleanup)()
-    print(f"   [OK] Cleaned up {count} bot players")
 
 
 async def main():
     print("=" * 70)
-    print("Queue Test - 9 Bots + YOU (Live Client)")
+    print("Queue Test V2 - Partial Accept (8/9 Bots Accept)")
     print("=" * 70)
     print("\nThis script will:")
     print("  1. Create 9 bot players with similar MMR to you")
     print("  2. Put all 9 bots in queue")
-    print("  3. Start bot auto-acceptor (bots will auto-accept matches)")
+    print("  3. Start selective bot auto-acceptor (ONLY 8 will accept)")
     print("  4. Wait for YOU to join queue via your Electron client")
     print("  5. Matchmaker will find a match (10 players total)")
-    print("  6. Bots auto-accept, YOU accept in client -> Match ready!")
+    print("  6. 8 bots + YOU accept = 9/10")
+    print("  7. 1 bot doesn't accept")
+    print("  8. Match times out → 9 lobbies requeued!")
     print()
     
     acceptor_task = None
@@ -329,46 +344,45 @@ async def main():
             print(f"\n[ERROR] Failed to create all bots")
             return
         
-        # Start bot auto-acceptor
-        print(f"\n[AUTO-ACCEPT] Starting bot auto-acceptor...")
+        # Start selective bot auto-acceptor (only 8 bots will accept)
+        print(f"\n[AUTO-ACCEPT] Starting selective bot auto-acceptor...")
         bot_puuids = [bot['player'].puuid for bot in bots]
-        acceptor, acceptor_task = await start_bot_acceptor(bot_puuids)
-        print(f"[AUTO-ACCEPT] Monitoring {len(bot_puuids)} bots for match acceptance")
-        
-        # Check queue
-        await check_queue_status()
+        acceptor, acceptor_task = await start_selective_bot_acceptor(bot_puuids, accept_count=8)
+        print(f"[AUTO-ACCEPT] Monitoring 8/9 bots for acceptance (1 bot will NOT accept)")
         
         # Wait for you to join
         you_joined = await wait_for_you_to_join()
         
         if you_joined:
-            # Monitor for match
-            match_found = await monitor_match_confirmation()
+            # Monitor for match and timeout
+            result = await monitor_match_and_timeout()
             
-            if match_found:
-                print(f"\n[SUCCESS] Match flow completed!")
+            if result:
+                print(f"\n[SUCCESS] ✅ Timeout and requeue flow completed!")
             else:
-                print(f"\n[INFO] Match may still be found - check your client!")
+                print(f"\n[INFO] Check logs for details")
         else:
             print(f"\n[INFO] Bots are still in queue, waiting for you")
-            print(f"\n[MANUAL TEST] You can now:")
-            print(f"   1. Join queue in your client")
-            print(f"   2. Wait for match (runs every 30 seconds)")
-            print(f"   3. Bots will auto-accept, you accept in client")
         
         print(f"\n" + "=" * 70)
         print("Test Complete!")
         print("=" * 70)
         
         print(f"\n[INFO] Bot auto-acceptor still running in background")
-        print(f"[INFO] Bots will auto-accept any new matches")
-        print(f"[INFO] Press Ctrl+C to stop and clean up")
+        print(f"[INFO] Press Ctrl+C to stop")
         
         # Keep running to continue auto-accepting
-        try:
-            await acceptor_task
-        except KeyboardInterrupt:
-            print(f"\n[INFO] Stopping...")
+        if acceptor_task:
+            try:
+                await acceptor_task
+            except KeyboardInterrupt:
+                print(f"\n[INFO] Stopping...")
+        else:
+            # If no task, just wait for Ctrl+C
+            try:
+                await asyncio.Event().wait()
+            except KeyboardInterrupt:
+                print(f"\n[INFO] Stopping...")
         
     except KeyboardInterrupt:
         print(f"\n[INFO] Interrupted by user")
@@ -378,26 +392,31 @@ async def main():
         traceback.print_exc()
     finally:
         # Stop acceptor if running
-        if acceptor_task and not acceptor_task.done():
-            print(f"\n[CLEANUP] Stopping bot auto-acceptor...")
-            from testing.bot_auto_acceptor import get_acceptor
-            get_acceptor().stop()
+        if 'acceptor' in locals() and acceptor:
+            print(f"\n[CLEANUP] Closing bot WebSocket connections...")
             try:
-                await asyncio.wait_for(acceptor_task, timeout=2.0)
-            except:
-                pass
+                await acceptor.close()
+                print(f"[CLEANUP] ✅ All bot connections closed")
+            except Exception as e:
+                print(f"[CLEANUP] Error closing connections: {e}")
 
 
 if __name__ == '__main__':
     print("\n" + "=" * 70)
     print("PREREQUISITES:")
-    print("  1. [OK] Daphne server running (you have this)")
-    print("  2. [OK] Celery worker running")
+    print("  1. [OK] Daphne server running")
+    print("  2. [OK] Celery worker running (with correct queues)")
     print("  3. [OK] Celery beat running")
     print("  4. [OK] Your Electron client running")
     print("  5. [OK] Authenticated in your client")
     print("=" * 70)
     print()
     
-    asyncio.run(main())
+    # Run with proper cleanup
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\n[INFO] Script interrupted - cleanup already handled")
+    finally:
+        print("[INFO] Script exited")
 

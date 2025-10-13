@@ -1,6 +1,7 @@
 """
-Migration Script: Update Existing Players to New MMR/ELO System
+Migration Script: Update Existing Players to New MMR/ELO System (Auto-run)
 Run this after applying database migrations to set MMR values for existing players.
+Non-interactive version that runs automatically.
 """
 
 import os
@@ -41,7 +42,6 @@ def migrate_players():
         print("[INFO] No players to migrate")
         return
     
-    # Ask for confirmation
     print("Migration Strategy:")
     print("  1. Keep existing Display ELO (unchanged)")
     print("  2. Estimate MMR from current ELO:")
@@ -50,14 +50,8 @@ def migrate_players():
     print("  3. Set TrueSkill components based on MMR")
     print("  4. Mark as settled (sigma = 2.5, moderate confidence)")
     print("  5. Set games_played = 50 (simulated history)")
-    print("\nThis preserves their current rank while initializing MMR.\n")
-    
-    choice = input("Proceed with migration? (yes/no): ")
-    if choice.lower() != 'yes':
-        print("Migration cancelled")
-        return
-    
-    print("\nMigrating players...\n")
+    print("\nThis preserves their current rank while initializing MMR.")
+    print("\n[AUTO-RUN] Starting migration automatically...\n")
     
     migrated_count = 0
     
@@ -142,14 +136,15 @@ def verify_migration():
         print("\n[OK] All players have valid MMR and TrueSkill data!")
         
         # Print sample
-        sample = players[:5]
-        print(f"\nSample of {len(sample)} players:")
+        sample = players.order_by('-elo')[:5]
+        print(f"\nSample of {len(sample)} players (top by ELO):")
         for p in sample:
             print(f"  {p.alias}:")
             print(f"    Display ELO: {p.elo}")
             print(f"    Hidden MMR: {p.mmr:.0f}")
             print(f"    TrueSkill: mu={p.trueskill_mu:.2f}, sigma={p.trueskill_sigma:.2f}")
             print(f"    Gap: {abs(p.mmr - p.elo):.0f}")
+            print(f"    Games: {p.games_played}, Settled: {p.is_settled}")
         
         return True
 

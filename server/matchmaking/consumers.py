@@ -662,44 +662,65 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
             }))
             return
         
+        logger.info(f"✅ Player {player_puuid[:12]}... ACCEPTED match {match_confirmation_id[:8]}...")
+        
         try:
             result = await MatchConfirmationManager.accept_match(match_confirmation_id, player_puuid)
             
             if result['status'] == 'success':
                 if result.get('match_confirmed'):
                     # All players accepted - match is ready
+                    logger.info(f"🎉 MATCH READY! All players accepted match {result.get('match_id', '')[:8]}...")
                     # Send to ALL lobbies involved in the match
                     match_lobbies = result.get('match_lobbies', [])
+                    logger.info(f"   Notifying {len(match_lobbies)} lobbies that match is ready")
                     for lobby_id in match_lobbies:
                         await self.channel_layer.group_send(
                             f"lobby_{lobby_id}",
                             {
                                 'type': 'match_ready',
                                 'message': 'Match is ready!',
-                                'match_id': result.get('match_id')
+                                'match_id': str(result.get('match_id')) if result.get('match_id') else None
                             }
                         )
-                    logger.info(f"Match {result.get('match_id')} confirmed - notified {len(match_lobbies)} lobbies")
+                    logger.info(f"   ✅ All {len(match_lobbies)} lobbies notified - match starting!")
                 else:
-                    # Some players still need to accept - send to player's lobby only
-                    lobby_id = result.get('lobby_id')
-                    if lobby_id:
-                        await self.channel_layer.group_send(
-                            f"lobby_{lobby_id}",
-                            {
-                                'type': 'player_accepted',
-                                'accepted_count': result.get('accepted_count'),
-                                'total_players': result.get('total_players'),
-                                'timeout_seconds': result.get('timeout_seconds')
-                            }
-                        )
-                        logger.info(f"Player acceptance update sent to lobby {lobby_id}: {result.get('accepted_count')}/{result.get('total_players')} accepted")
+                    # Send acceptance update to ALL lobbies in the match, not just the accepting lobby
+                    match_lobbies = result.get('match_lobbies', [])
+                    accepted_count = result.get('accepted_count')
+                    total_players = result.get('total_players')
+                    timeout_seconds = result.get('timeout_seconds')
+                    
+                    if match_lobbies:
+                        # Broadcast to all lobbies involved in this match
+                        for lobby_id in match_lobbies:
+                            await self.channel_layer.group_send(
+                                f"lobby_{lobby_id}",
+                                {
+                                    'type': 'player_accepted',
+                                    'accepted_count': accepted_count,
+                                    'total_players': total_players,
+                                    'timeout_seconds': timeout_seconds
+                                }
+                            )
+                        logger.info(f"Player acceptance update sent to ALL {len(match_lobbies)} lobbies: {accepted_count}/{total_players} accepted")
                     else:
-                        logger.warning(f"Could not determine lobby_id for player {player_puuid}")
+                        logger.warning(f"Could not determine match lobbies for player {player_puuid}")
+                
+                # Convert any UUID objects to strings for JSON serialization
+                safe_result = {
+                    'status': result.get('status'),
+                    'match_confirmed': result.get('match_confirmed'),
+                    'accepted_count': result.get('accepted_count'),
+                    'total_players': result.get('total_players'),
+                    'timeout_seconds': result.get('timeout_seconds'),
+                    'match_id': str(result.get('match_id')) if result.get('match_id') else None,
+                    'lobby_id': str(result.get('lobby_id')) if result.get('lobby_id') else None,
+                }
                 
                 await self.send(text_data=json.dumps({
                     "event": "match_accepted",
-                    "data": result
+                    "data": safe_result
                 }))
                 
                 logger.info(f"Player {player_puuid} accepted match {match_confirmation_id}")
@@ -898,6 +919,10 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         """
         Sends a notification that a match has been found.
         """
+        match_id = event['match_confirmation_id']
+        logger.info(f"🎮 MATCH PROPOSED to player {self.puuid[:12]}... - Match ID: {match_id[:8]}...")
+        logger.info(f"   Timeout: {event.get('timeout_seconds', 30)}s")
+        
         await self.send(text_data=json.dumps({
             'event': 'match_found',
             'data': {
@@ -908,6 +933,8 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
                 'message': event.get('message', 'Match found! Please accept to continue.')
             }
         }))
+        
+        logger.info(f"   ✅ Match proposal sent to {self.puuid[:12]}... via WebSocket")
     
     async def match_declined(self, event):
         """

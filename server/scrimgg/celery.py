@@ -25,7 +25,7 @@ app.conf.beat_schedule = {
     },
     'cleanup-expired-matches': {
         'task': 'matchmaking.tasks.cleanup_expired_matches',
-        'schedule': 60.0,  # Run every 60 seconds
+        'schedule': 10.0,  # Run every 10 seconds
     },
     'cleanup-expired-queues': {
         'task': 'matchmaking.tasks.cleanup_expired_queues',

@@ -137,6 +137,10 @@ const PugQueue = () => {
         estimated_wait: payload.estimated_wait,
         players_in_queue: payload.players_in_queue || 0
       });
+      // Set queue start time if not already set
+      if (!queueStartTime) {
+        setQueueStartTime(Date.now());
+      }
     });
 
     const unsubscribeQueueLeft = on('queue_left', () => {
@@ -150,6 +154,7 @@ const PugQueue = () => {
     });
 
     const unsubscribeMatchFound = on('pug_match_found', (payload) => {
+      console.log('🎮 [DEBUG] pug_match_found event received:', payload);
       setMatchFound(true);
       setMatchData(payload);
       setTimeLeft(payload.accept_deadline || 30);
@@ -159,6 +164,9 @@ const PugQueue = () => {
     });
 
     const unsubscribePlayerAccepted = on('player_accepted', (payload) => {
+      console.log('🔔 [DEBUG] player_accepted event received:', payload);
+      console.log('🔔 [DEBUG] Setting acceptedCount to:', payload.accepted_count || 0);
+      console.log('🔔 [DEBUG] Setting totalPlayers to:', payload.total_players || 10);
       setAcceptedCount(payload.accepted_count || 0);
       setTotalPlayers(payload.total_players || 10);
       setTimeLeft(payload.timeout_seconds || 30);
@@ -172,18 +180,26 @@ const PugQueue = () => {
     });
 
     const unsubscribeMatchTimeout = on('match_timeout', (payload) => {
-      // Match acceptance timed out - close modal and remove from queue
+      // Match acceptance timed out - close modal
       console.log('Match acceptance timed out:', payload);
+      
+      // Check if user accepted before timing out
+      const userDidAccept = userAccepted;
+      
       setMatchFound(false);
       setMatchData(null);
       setAcceptedCount(0);
       setTotalPlayers(10);
       setUserAccepted(false);
       
-      // Remove user from queue since match timed out
-      if (queueStatus.in_queue) {
+      // Only remove from queue if user DIDN'T accept
+      // If user accepted, they should be requeued automatically by the server
+      if (!userDidAccept && queueStatus.in_queue) {
+        console.log('User did not accept - leaving queue');
         api.leavePugQueue();
         setQueueStartTime(null);
+      } else if (userDidAccept) {
+        console.log('User accepted - staying in queue for automatic requeue');
       }
     });
 
@@ -210,18 +226,27 @@ const PugQueue = () => {
       }, 1000);
       return () => clearTimeout(timer);
     } else if (matchFound && timeLeft === 0) {
-      // Timer expired - auto close modal and remove from queue
-      console.log('Match acceptance timer expired, closing modal and leaving queue');
+      // Timer expired - check if user accepted before removing from queue
+      console.log('Match acceptance timer expired, closing modal');
+      
+      // Check if user accepted before timing out
+      const userDidAccept = userAccepted;
+      
       setMatchFound(false);
       setMatchData(null);
       setAcceptedCount(0);
       setTotalPlayers(10);
       setUserAccepted(false);
       
-      // Remove user from queue since they didn't accept in time
-      if (queueStatus.in_queue) {
+      // Only remove from queue if user DIDN'T accept
+      // If user accepted, they should be requeued automatically by the server
+      if (!userDidAccept && queueStatus.in_queue) {
+        console.log('User did not accept - leaving queue');
         api.leavePugQueue();
         setQueueStartTime(null);
+      } else if (userDidAccept) {
+        console.log('User accepted - staying in queue, waiting for server requeue');
+        // Don't reset queueStartTime - keep timer running
       }
       
       // Optional: Show a brief message that the match expired
@@ -301,11 +326,13 @@ const PugQueue = () => {
   };
 
   // Update queue timer every second when in queue
+  const [, forceUpdate] = useState(0);
   useEffect(() => {
     let interval;
     if (queueStatus.in_queue && queueStartTime) {
       interval = setInterval(() => {
         // Force re-render to update timer display
+        forceUpdate(prev => prev + 1);
       }, 1000);
     }
     return () => clearInterval(interval);
@@ -379,6 +406,7 @@ const PugQueue = () => {
 
   // Component for showing acceptance progress
   const AcceptanceProgress = () => {
+    console.log('🎯 [DEBUG] AcceptanceProgress render - acceptedCount:', acceptedCount, 'totalPlayers:', totalPlayers);
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', gap: 0.5, mb: 2 }}>
         {Array.from({ length: totalPlayers }).map((_, index) => (
@@ -429,85 +457,7 @@ const PugQueue = () => {
           {getQueueTitle()}
         </Typography>
         
-        {/* Temporary Preview Button - Remove in production */}
-        <Box sx={{ textAlign: 'center', mb: 2 }}>
-          <Button
-            variant="outlined"
-            size="small"
-            onClick={() => {
-              setMatchFound(true);
-              setTimeLeft(30);
-              setAcceptedCount(0);
-              setTotalPlayers(10);
-              setUserAccepted(false);
-              setMatchData({
-                match_id: 'preview-123',
-                timeout_seconds: 30,
-                message: 'Preview match found!'
-              });
-            }}
-            sx={{ opacity: 0.7, mr: 1 }}
-          >
-            🎨 Preview Modal
-          </Button>
-          <Button
-            variant="outlined"
-            size="small"
-            onClick={() => {
-              setMatchFound(true);
-              setTimeLeft(15);
-              setAcceptedCount(7);
-              setTotalPlayers(10);
-              setUserAccepted(true);
-              setMatchData({
-                match_id: 'preview-456',
-                timeout_seconds: 15,
-                message: 'Preview acceptance progress!'
-              });
-            }}
-            sx={{ opacity: 0.7, mr: 1 }}
-          >
-            📊 Preview Progress
-          </Button>
-          <Button
-            variant="outlined"
-            size="small"
-            onClick={() => {
-              setMatchFound(true);
-              setTimeLeft(3);
-              setAcceptedCount(3);
-              setTotalPlayers(10);
-              setUserAccepted(false);
-              setMatchData({
-                match_id: 'preview-timeout',
-                timeout_seconds: 3,
-                message: 'Preview timeout in 3 seconds!'
-              });
-            }}
-            sx={{ opacity: 0.7, mr: 1 }}
-          >
-            ⏰ Preview Timeout
-          </Button>
-          <Button
-            variant="outlined"
-            size="small"
-            onClick={() => {
-              setMatchFound(true);
-              setTimeLeft(30);
-              setAcceptedCount(0);
-              setTotalPlayers(10);
-              setUserAccepted(false);
-              setMatchData({
-                match_id: 'preview-decline',
-                timeout_seconds: 30,
-                message: 'Preview decline functionality!'
-              });
-            }}
-            sx={{ opacity: 0.7 }}
-          >
-            ❌ Preview Decline
-          </Button>
-        </Box>
+
         
         
         {/* Player Cards Section */}
