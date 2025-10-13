@@ -243,6 +243,16 @@ const MapVetoSection = ({ maps, vetoedMaps, currentTurn, timeLeft, onMapVeto, th
   };
 
   const isMyTurn = currentTurn === myTeam && isCaptain;
+  
+  // Debug logging
+  console.log('🎮 [VETO COMPONENT] State:', {
+    currentTurn,
+    myTeam,
+    isCaptain,
+    isMyTurn,
+    mapsCount: maps.length,
+    vetoedCount: vetoedMaps.length
+  });
 
   return (
     <Box sx={{ width: '180px', textAlign: 'center' }}>
@@ -337,146 +347,6 @@ const MapVetoSection = ({ maps, vetoedMaps, currentTurn, timeLeft, onMapVeto, th
   );
 };
 
-// Mock data for preview (remove in production)
-const MOCK_MATCH_DATA = {
-  match_id: "76d0a036-8c22-4206-b783-8bc5fa258c76",
-  state: "veto_phase",
-  team_a_players: [
-    {
-      puuid: "player1-52f0666e-4d7a-5b84-9e1a-a35286de3d27",
-      alias: "bakkyzzz",
-      elo: 1862,
-      mmr: 1300,
-      team: "team_a",
-      is_captain: true,
-      is_ready: false,
-      joined_pregame: false
-    },
-    {
-      puuid: "player2-uuid-here", 
-      alias: "tadomekarlz",
-      elo: 1520,
-      mmr: 1220,
-      team: "team_a",
-      is_captain: false,
-      is_ready: false,
-      joined_pregame: false
-    },
-    {
-      puuid: "player3-uuid-here",
-      alias: "DomikYTx", 
-      elo: 1531,
-      mmr: 1350,
-      team: "team_a",
-      is_captain: false,
-      is_ready: false,
-      joined_pregame: false
-    },
-    {
-      puuid: "player4-uuid-here",
-      alias: "61gn",
-      elo: 1648,
-      mmr: 1150,
-      team: "team_a",
-      is_captain: false,
-      is_ready: false,
-      joined_pregame: false
-    },
-    {
-      puuid: "player5-uuid-here",
-      alias: "R1_EDDIE",
-      elo: 1641,
-      mmr: 1420,
-      team: "team_a",
-      is_captain: false,
-      is_ready: false,
-      joined_pregame: false
-    }
-  ],
-  team_b_players: [
-    {
-      puuid: "player6-uuid-here",
-      alias: "1mpulsV",
-      elo: 1782,
-      mmr: 1310,
-      team: "team_b",
-      is_captain: true,
-      is_ready: false,
-      joined_pregame: false
-    },
-    {
-      puuid: "player7-uuid-here",
-      alias: "sairo",
-      elo: 1686,
-      mmr: 1190,
-      team: "team_b",
-      is_captain: false,
-      is_ready: false,
-      joined_pregame: false
-    },
-    {
-      puuid: "player8-uuid-here",
-      alias: "n0matter",
-      elo: 1631,
-      mmr: 1380,
-      team: "team_b",
-      is_captain: false,
-      is_ready: false,
-      joined_pregame: false
-    },
-    {
-      puuid: "player9-uuid-here",
-      alias: "adriannr",
-      elo: 1749,
-      mmr: 1240,
-      team: "team_b",
-      is_captain: false,
-      is_ready: false,
-      joined_pregame: false
-    },
-    {
-      puuid: "player10-uuid-here",
-      alias: "gennt10",
-      elo: 1375,
-      mmr: 1480,
-      team: "team_b",
-      is_captain: false,
-      is_ready: false,
-      joined_pregame: false
-    }
-  ],
-  team_a_captain: "player1-uuid-here",
-  team_b_captain: "player6-uuid-here",
-  team_a_lobbies: ["lobby-uuid-1", "lobby-uuid-2"],
-  team_b_lobbies: ["lobby-uuid-3", "lobby-uuid-4"],
-  map_pool: ["Bind", "Haven", "Split", "Ascent", "Icebox", "Breeze", "Fracture"],
-  vetoed_maps: ["Bind", "Haven"],
-  remaining_maps: ["Split", "Ascent", "Icebox", "Breeze", "Fracture"],
-  final_map: null,
-  veto_turn: "team_a",
-  veto_deadline: new Date(Date.now() + 30000).toISOString(), // 30 seconds from now
-  veto_history: [
-    {
-      action_type: "ban",
-      map_name: "Bind",
-      team: "team_a",
-      was_timeout: false,
-      sequence_number: 1
-    },
-    {
-      action_type: "ban", 
-      map_name: "Haven",
-      team: "team_b",
-      was_timeout: false,
-      sequence_number: 2
-    }
-  ],
-  side_selector: null,
-  selected_side: null,
-  match_quality: 0.85,
-  team_a_avg_mmr: 1288.0,
-  team_b_avg_mmr: 1320.0
-};
 
 export default function MatchPage() {
   const { matchId } = useParams();
@@ -486,8 +356,8 @@ export default function MatchPage() {
   const colors = tokens(theme.palette.mode);
   
   // Match state
-  const [matchData, setMatchData] = useState(MOCK_MATCH_DATA); // Use mock data
-  const [loading, setLoading] = useState(false); // Set to false for preview
+  const [matchData, setMatchData] = useState(null); // Real data from backend
+  const [loading, setLoading] = useState(true); // Start with loading true
   const [error, setError] = useState(null);
   
   // Veto state
@@ -497,11 +367,85 @@ export default function MatchPage() {
   const [vetoedMaps, setVetoedMaps] = useState([]);
   const [vetoHistory, setVetoHistory] = useState([]);
   const [vetoDeadline, setVetoDeadline] = useState(null);
+
+  // Fetch match data on component mount
+  useEffect(() => {
+    if (matchId && connected) {
+      console.log('📤 [MATCH PAGE] Fetching match data for:', matchId);
+      sendEvent('get_match_data', { match_id: matchId });
+    }
+  }, [matchId, connected, sendEvent]);
+
+
   const [timeLeft, setTimeLeft] = useState(null);
   
   // Player info
   const [myTeam, setMyTeam] = useState(null);
   const [isCaptain, setIsCaptain] = useState(false);
+
+  // Helper functions for player data mapping
+  const getCurrentUserTeam = () => {
+    if (!matchData || !playerData) return null;
+    
+    // Find which team the current user is on
+    const teamAHasUser = matchData.team_a_players?.some(p => p.puuid === playerData.puuid);
+    return teamAHasUser ? 'team_a' : 'team_b';
+  };
+  
+  const getCurrentUserCaptainStatus = () => {
+    if (!matchData || !playerData) return { isCaptain: false, team: null };
+    
+    // Check if user is captain in team A
+    const teamAPlayer = matchData.team_a_players?.find(p => p.puuid === playerData.puuid);
+    if (teamAPlayer && teamAPlayer.is_captain) {
+      return { isCaptain: true, team: 'team_a' };
+    }
+    
+    // Check if user is captain in team B
+    const teamBPlayer = matchData.team_b_players?.find(p => p.puuid === playerData.puuid);
+    if (teamBPlayer && teamBPlayer.is_captain) {
+      return { isCaptain: true, team: 'team_b' };
+    }
+    
+    return { isCaptain: false, team: teamAPlayer ? 'team_a' : 'team_b' };
+  };
+
+  const getMyTeamPlayers = () => {
+    if (!matchData) return [];
+    const userTeam = getCurrentUserTeam();
+    return userTeam === 'team_a' ? matchData.team_a_players : matchData.team_b_players;
+  };
+
+  const getEnemyTeamPlayers = () => {
+    if (!matchData) return [];
+    const userTeam = getCurrentUserTeam();
+    return userTeam === 'team_a' ? matchData.team_b_players : matchData.team_a_players;
+  };
+
+  const getMatchPhase = () => {
+    if (!matchData) return 'Loading...';
+    
+    switch (matchData.state) {
+      case 'VETO': return 'Ban';
+      case 'SIDE_SELECTION': return 'Side';
+      case 'READY': return 'Ready';
+      default: return 'Loading...';
+    }
+  };
+
+  const getMatchOdds = () => {
+    if (!matchData) return { teamA: 50, teamB: 50 };
+    
+    // Calculate odds based on MMR difference
+    const mmrDiff = matchData.team_a_avg_mmr - matchData.team_b_avg_mmr;
+    const oddsA = 50 + (mmrDiff / 100); // Simple calculation
+    const oddsB = 100 - oddsA;
+    
+    return {
+      teamA: Math.max(10, Math.min(90, oddsA)),
+      teamB: Math.max(10, Math.min(90, oddsB))
+    };
+  };
   
   // Fetch match data on load
   useEffect(() => {
@@ -511,113 +455,78 @@ export default function MatchPage() {
     sendEvent('get_match_data', { match_id: matchId });
   }, [connected, matchId, sendEvent]);
   
-  // Handle match data response
+  // WebSocket event handlers
   useEffect(() => {
-    const handleMatchData = (data) => {
-      console.log('[MATCH PAGE] Received match data:', data);
-      setMatchData(data);
+    const unsubscribeMatchData = on('match_data', (payload) => {
+      console.log('📥 [MATCH PAGE] Received match data:', payload);
+      setMatchData(payload);
       setLoading(false);
+      setError(null);
       
-      // Determine user's team and captain status
-      // Note: playerData will be available from WebSocket context
-      // This useEffect handles match data from server, team detection happens in render
-      
-      // Set veto state if in veto phase
-      if (data.state === 'veto_phase') {
+      // Initialize veto state from real data
+      if (payload.state === 'VETO') {
+        console.log('🎮 [MATCH PAGE] VETO PHASE DETECTED - Initializing veto component');
+        console.log('   Veto turn:', payload.veto_turn);
+        console.log('   Remaining maps:', payload.remaining_maps);
+        console.log('   Vetoed maps:', payload.vetoed_maps);
+        console.log('   Veto deadline:', payload.veto_deadline);
+        
         setVetoPhase(true);
-        setCurrentTurn(data.veto_turn);
-        setAvailableMaps(data.remaining_maps || []);
-        setVetoedMaps(data.vetoed_maps || []);
-        setVetoHistory(data.veto_history || []);
-        setVetoDeadline(data.veto_deadline);
+        setCurrentTurn(payload.veto_turn);
+        setAvailableMaps(payload.remaining_maps || []);
+        setVetoedMaps(payload.vetoed_maps || []);
+        setVetoHistory(payload.veto_history || []);
+        setVetoDeadline(payload.veto_deadline);
+      } else {
+        console.log('🎮 [MATCH PAGE] Match state:', payload.state, '- Veto component not initialized');
       }
-    };
-    
-    const unsubscribe = on('match_data', handleMatchData);
+    });
+
+    const unsubscribeVetoUpdate = on('veto_update', (payload) => {
+      console.log('📥 [MATCH PAGE] Veto update received:', payload);
+      
+      // Update veto state
+      setAvailableMaps(payload.remaining_maps || []);
+      setVetoedMaps(payload.vetoed_maps || []);
+      setVetoHistory(payload.veto_history || []);
+      setCurrentTurn(payload.veto_turn);
+      setVetoDeadline(payload.veto_deadline);
+      
+      // Update match data
+      setMatchData(prev => ({
+        ...prev,
+        remaining_maps: payload.remaining_maps,
+        vetoed_maps: payload.vetoed_maps,
+        veto_history: payload.veto_history,
+        veto_turn: payload.veto_turn,
+        veto_deadline: payload.veto_deadline
+      }));
+    });
+
+    const unsubscribeVetoComplete = on('veto_complete', (payload) => {
+      console.log('📥 [MATCH PAGE] Veto phase completed:', payload);
+      setVetoPhase(false);
+      setMatchData(prev => ({
+        ...prev,
+        state: 'SIDE_SELECTION',
+        final_map: payload.final_map
+      }));
+    });
+
+    const unsubscribeError = on('error', (payload) => {
+      console.error('❌ [MATCH PAGE] WebSocket error:', payload);
+      setError(payload.message || 'An error occurred');
+      setLoading(false);
+    });
+
     return () => {
-      if (typeof unsubscribe === 'function') unsubscribe();
+      if (typeof unsubscribeMatchData === 'function') unsubscribeMatchData();
+      if (typeof unsubscribeVetoUpdate === 'function') unsubscribeVetoUpdate();
+      if (typeof unsubscribeVetoComplete === 'function') unsubscribeVetoComplete();
+      if (typeof unsubscribeError === 'function') unsubscribeError();
     };
   }, [on]);
   
-  // Handle veto events
-  useEffect(() => {
-    const handleVetoStarted = (data) => {
-      console.log('[VETO] Veto started:', data);
-      setVetoPhase(true);
-      setCurrentTurn(data.current_turn);
-      setAvailableMaps(data.available_maps);
-      setVetoDeadline(data.deadline);
-    };
-    
-    const handleMapVetoed = (data) => {
-      console.log('[VETO] Map vetoed:', data);
-      setVetoedMaps(prev => [...prev, data.map]);
-      setAvailableMaps(data.remaining_maps);
-      setCurrentTurn(data.next_turn);
-      setVetoDeadline(data.deadline);
-      
-      // Add to history
-      setVetoHistory(prev => [...prev, {
-        map_name: data.map,
-        team: data.vetoed_by,
-        sequence_number: prev.length + 1
-      }]);
-    };
-    
-    const handleVetoTimeout = (data) => {
-      console.log('[VETO] Veto timeout:', data);
-      setVetoedMaps(prev => [...prev, data.auto_vetoed_map]);
-      
-      if (data.veto_complete) {
-        setVetoPhase(false);
-        if (matchData) {
-          setMatchData(prev => ({
-            ...prev,
-            final_map: data.final_map,
-            state: 'SIDE_SELECTION'
-          }));
-        }
-      } else {
-        setAvailableMaps(data.remaining_maps);
-        setCurrentTurn(data.next_turn);
-        setVetoDeadline(data.deadline);
-      }
-      
-      // Add to history
-      setVetoHistory(prev => [...prev, {
-        map_name: data.auto_vetoed_map,
-        team: currentTurn,
-        was_timeout: true,
-        sequence_number: prev.length + 1
-      }]);
-    };
-    
-    const handleVetoComplete = (data) => {
-      console.log('[VETO] Veto complete:', data);
-      setVetoPhase(false);
-      
-      if (matchData) {
-        setMatchData(prev => ({
-          ...prev,
-          final_map: data.final_map,
-          state: 'SIDE_SELECTION',
-          side_selector: data.side_selector
-        }));
-      }
-    };
-    
-    const unsubVetoStarted = on('veto_started', handleVetoStarted);
-    const unsubMapVetoed = on('map_vetoed', handleMapVetoed);
-    const unsubVetoTimeout = on('veto_timeout', handleVetoTimeout);
-    const unsubVetoComplete = on('veto_complete', handleVetoComplete);
-    
-    return () => {
-      if (typeof unsubVetoStarted === 'function') unsubVetoStarted();
-      if (typeof unsubMapVetoed === 'function') unsubMapVetoed();
-      if (typeof unsubVetoTimeout === 'function') unsubVetoTimeout();
-      if (typeof unsubVetoComplete === 'function') unsubVetoComplete();
-    };
-  }, [on, matchData, currentTurn]);
   
   // Countdown timer
   useEffect(() => {
@@ -644,8 +553,23 @@ export default function MatchPage() {
     return () => clearInterval(interval);
   }, [vetoDeadline]);
   
+  // Update captain status when match data changes
+  useEffect(() => {
+    if (matchData && playerData) {
+      const captainStatus = getCurrentUserCaptainStatus();
+      setIsCaptain(captainStatus.isCaptain);
+      setMyTeam(captainStatus.team);
+      
+      console.log('🎮 [MATCH PAGE] Captain status updated:', {
+        isCaptain: captainStatus.isCaptain,
+        team: captainStatus.team,
+        playerPuuid: playerData.puuid
+      });
+    }
+  }, [matchData, playerData]);
+  
   // Handle veto action
-  const handleVetoMap = (mapName) => {
+  const handleVetoMapAction = (mapName) => {
     if (!isCaptain) {
       console.log('[VETO] Not captain, cannot veto');
       return;
@@ -659,44 +583,85 @@ export default function MatchPage() {
     console.log('[VETO] Vetoing map:', mapName);
     sendEvent('veto_map', {
       match_id: matchId,
-      map: mapName
+      map_name: mapName
     });
   };
   
   // Render loading state
   if (loading) {
     return (
-      <Container maxWidth="lg" sx={{ mt: 4 }}>
-        <Paper sx={{ p: 4, textAlign: 'center' }}>
-          <Typography variant="h5" gutterBottom>
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh',
+        backgroundColor: theme.palette.background.dark
+      }}>
+        <Box sx={{ textAlign: 'center' }}>
+          <Typography variant="h5" sx={{ color: colors.grey[100], mb: 2 }}>
             Loading Match...
           </Typography>
-          <LinearProgress sx={{ mt: 2 }} />
-        </Paper>
-      </Container>
+          <LinearProgress sx={{ width: 200 }} />
+        </Box>
+      </Box>
     );
   }
   
   // Render error state
-  if (error || !matchData) {
+  if (error) {
     return (
-      <Container maxWidth="lg" sx={{ mt: 4 }}>
-        <Paper sx={{ p: 4, textAlign: 'center' }}>
-          <Typography variant="h5" color="error" gutterBottom>
-            Match Not Found
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh',
+        backgroundColor: theme.palette.background.dark
+      }}>
+        <Alert severity="error" sx={{ maxWidth: 400 }}>
+          <Typography variant="h6" gutterBottom>
+            Error Loading Match
           </Typography>
-          <Typography variant="body1" sx={{ mt: 2 }}>
-            {error || 'The requested match could not be found.'}
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            {error}
           </Typography>
           <Button 
             variant="contained" 
-            sx={{ mt: 3 }} 
             onClick={() => navigate('/')}
+            size="small"
           >
             Return Home
           </Button>
-        </Paper>
-      </Container>
+        </Alert>
+      </Box>
+    );
+  }
+
+  // No match data state
+  if (!matchData) {
+    return (
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh',
+        backgroundColor: theme.palette.background.dark
+      }}>
+        <Alert severity="warning" sx={{ maxWidth: 400 }}>
+          <Typography variant="h6" gutterBottom>
+            Match Not Found
+          </Typography>
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            The requested match could not be found.
+          </Typography>
+          <Button 
+            variant="contained" 
+            onClick={() => navigate('/')}
+            size="small"
+          >
+            Return Home
+          </Button>
+        </Alert>
+      </Box>
     );
   }
   
@@ -745,7 +710,7 @@ export default function MatchPage() {
               5v5 NA
             </Typography>
             <Typography variant="h5" sx={{ color: colors.seance[300], fontWeight: 700, mb: 0.5 }}>
-              {matchData.state === 'veto_phase' ? 'BAN' : 'READY'}
+              {getMatchPhase()}
             </Typography>
             <Typography variant="body2" sx={{ color: colors.grey[400], mb: 1 }}>
               Best of 1
@@ -759,7 +724,7 @@ export default function MatchPage() {
                   left: 0,
                   top: 0,
                   height: '100%',
-                  width: `${((matchData.team_a_avg_mmr || 1300) / ((matchData.team_a_avg_mmr || 1300) + (matchData.team_b_avg_mmr || 1300))) * 100}%`,
+                  width: `${getMatchOdds().teamA}%`,
                   bgcolor: colors.seance[400],
                   transition: 'width 0.3s ease'
                 }}
@@ -770,14 +735,14 @@ export default function MatchPage() {
                   right: 0,
                   top: 0,
                   height: '100%',
-                  width: `${((matchData.team_b_avg_mmr || 1300) / ((matchData.team_a_avg_mmr || 1300) + (matchData.team_b_avg_mmr || 1300))) * 100}%`,
+                  width: `${getMatchOdds().teamB}%`,
                   bgcolor: colors.redAccent[400],
                   transition: 'width 0.3s ease'
                 }}
               />
             </Box>
             <Typography variant="caption" sx={{ color: colors.grey[500], mt: 0.5, display: 'block' }}>
-              {Math.round(((matchData.team_a_avg_mmr || 1300) / ((matchData.team_a_avg_mmr || 1300) + (matchData.team_b_avg_mmr || 1300))) * 100)}% - {Math.round(((matchData.team_b_avg_mmr || 1300) / ((matchData.team_a_avg_mmr || 1300) + (matchData.team_b_avg_mmr || 1300))) * 100)}%
+              {Math.round(getMatchOdds().teamA)}% - {Math.round(getMatchOdds().teamB)}%
             </Typography>
           </Box>
 
@@ -800,9 +765,9 @@ export default function MatchPage() {
         </Box>
 
 
-        {/* Main Layout: Team A - Veto - Team B */}
+        {/* Main Layout: My Team - Veto - Enemy Team */}
         <Box sx={{ display: 'flex', gap: 3, justifyContent: 'center', alignItems: 'flex-start', mt: 1 }}>
-          {/* Team A (Left Side) */}
+          {/* My Team (Left Side) */}
           <Box sx={{ width: '380px' }}>
             <Paper sx={{ 
               p: 2, 
@@ -817,11 +782,11 @@ export default function MatchPage() {
                 fontWeight: 600, 
                 mb: 1.5
               }}>
-                Team A
+                {getCurrentUserTeam() === 'team_a' ? 'Team A' : 'Team B'}
               </Typography>
 
               <Stack spacing={0.75}>
-                {matchData.team_a_players?.map((player) => (
+                {getMyTeamPlayers()?.map((player) => (
                   <PlayerCard 
                     key={player.puuid}
                     player={player} 
@@ -836,14 +801,14 @@ export default function MatchPage() {
           </Box>
 
           {/* Map Veto Section - Center */}
-          {matchData.state === 'veto_phase' && (
+          {vetoPhase && (
             <Box sx={{ display: 'flex', alignItems: 'center', minHeight: '400px' }}>
               <MapVetoSection
-                maps={matchData.map_pool || []}
-                vetoedMaps={matchData.vetoed_maps || []}
-                currentTurn={matchData.veto_turn}
+                maps={availableMaps}
+                vetoedMaps={vetoedMaps}
+                currentTurn={currentTurn}
                 timeLeft={timeLeft}
-                onMapVeto={handleVetoMap}
+                onMapVeto={handleVetoMapAction}
                 theme={theme}
                 colors={colors}
                 isCaptain={isCaptain}
@@ -852,7 +817,7 @@ export default function MatchPage() {
             </Box>
           )}
 
-          {/* Team B (Right Side) */}
+          {/* Enemy Team (Right Side) */}
           <Box sx={{ width: '380px' }}>
             <Paper sx={{ 
               p: 2, 
@@ -868,11 +833,11 @@ export default function MatchPage() {
                 mb: 1.5,
                 textAlign: 'right' 
               }}>
-                Team B
+                {getCurrentUserTeam() === 'team_a' ? 'Team B' : 'Team A'}
               </Typography>
 
               <Stack spacing={0.75}>
-                {matchData.team_b_players?.map((player) => (
+                {getEnemyTeamPlayers()?.map((player) => (
                   <PlayerCard 
                     key={player.puuid}
                     player={player} 

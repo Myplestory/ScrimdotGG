@@ -176,18 +176,69 @@ class ValorantAPI(object):
                             import traceback
                             traceback.print_exc()
                     
+                    # Set up the veto_update callback to forward to main WebSocket
+                    async def veto_update_callback(data):
+                        """Forward veto_update event to main WebSocket connection"""
+                        try:
+                            print(f"[VETO_UPDATE_CALLBACK] Received veto_update event: {data}")
+                            
+                            # Store the veto update data temporarily
+                            api_instance._pending_veto_update_data = data
+                            
+                            print(f"[VETO_UPDATE_CALLBACK] Stored pending veto update data, will be picked up by main loop")
+                        except Exception as e:
+                            print(f"[VETO_UPDATE_CALLBACK] Error storing veto_update: {e}")
+                            import traceback
+                            traceback.print_exc()
+                    
+                    # Set up the veto_complete callback to forward to main WebSocket
+                    async def veto_complete_callback(data):
+                        """Forward veto_complete event to main WebSocket connection"""
+                        try:
+                            print(f"[VETO_COMPLETE_CALLBACK] Received veto_complete event: {data}")
+                            
+                            # Store the veto complete data temporarily
+                            api_instance._pending_veto_complete_data = data
+                            
+                            print(f"[VETO_COMPLETE_CALLBACK] Stored pending veto complete data, will be picked up by main loop")
+                        except Exception as e:
+                            print(f"[VETO_COMPLETE_CALLBACK] Error storing veto_complete: {e}")
+                            import traceback
+                            traceback.print_exc()
+                    
+                    # Set up the veto_acknowledged callback to forward to main WebSocket
+                    async def veto_acknowledged_callback(data):
+                        """Forward veto_acknowledged event to main WebSocket connection"""
+                        try:
+                            print(f"[VETO_ACKNOWLEDGED_CALLBACK] Received veto_acknowledged event: {data}")
+                            
+                            # Store the veto acknowledged data temporarily
+                            api_instance._pending_veto_acknowledged_data = data
+                            
+                            print(f"[VETO_ACKNOWLEDGED_CALLBACK] Stored pending veto acknowledged data, will be picked up by main loop")
+                        except Exception as e:
+                            print(f"[VETO_ACKNOWLEDGED_CALLBACK] Error storing veto_acknowledged: {e}")
+                            import traceback
+                            traceback.print_exc()
+                    
                     self.pugsocket.match_found_callback = match_found_callback
                     self.pugsocket.player_accepted_callback = player_accepted_callback
                     self.pugsocket.match_ready_callback = match_ready_callback
                     self.pugsocket.match_confirmed_callback = match_confirmed_callback
                     self.pugsocket.veto_started_callback = veto_started_callback
                     self.pugsocket.match_data_callback = match_data_callback
+                    self.pugsocket.veto_update_callback = veto_update_callback
+                    self.pugsocket.veto_complete_callback = veto_complete_callback
+                    self.pugsocket.veto_acknowledged_callback = veto_acknowledged_callback
                     self._pending_match_data = None
                     self._pending_player_accepted_data = None
                     self._pending_match_ready_data = None
                     self._pending_match_confirmed_data = None
                     self._pending_veto_started_data = None
                     self._pending_match_data_response = None
+                    self._pending_veto_update_data = None
+                    self._pending_veto_complete_data = None
+                    self._pending_veto_acknowledged_data = None
                     
                     await asyncio.sleep(1)
                     return connection_status

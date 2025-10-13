@@ -1179,7 +1179,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         """
         payload = data.get('payload', {})
         match_id = payload.get('match_id')
-        map_name = payload.get('map')
+        map_name = payload.get('map') or payload.get('map_name')  # Support both field names
         
         if not match_id or not map_name:
             await self.send(text_data=json.dumps({
@@ -1642,6 +1642,39 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
                 'new_leader': event['new_leader'],
                 'old_leader': event['old_leader'],
                 'message': event['message']
+            }
+        }))
+    
+    async def map_vetoed(self, event):
+        """
+        Handle map vetoed event - broadcast to all players in match.
+        """
+        logger.info(f"Map vetoed event received: {event}")
+        
+        await self.send(text_data=json.dumps({
+            'event': 'veto_update',
+            'data': {
+                'match_id': event['match_id'],
+                'map_name': event['map_name'],
+                'vetoed_by': event['vetoed_by'],
+                'next_turn': event['next_turn'],
+                'remaining_maps': event['remaining_maps'],
+                'deadline': event['deadline']
+            }
+        }))
+    
+    async def veto_complete(self, event):
+        """
+        Handle veto complete event - broadcast to all players in match.
+        """
+        logger.info(f"Veto complete event received: {event}")
+        
+        await self.send(text_data=json.dumps({
+            'event': 'veto_complete',
+            'data': {
+                'match_id': event['match_id'],
+                'final_map': event['final_map'],
+                'side_selector': event.get('side_selector')
             }
         }))
     

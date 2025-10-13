@@ -59,6 +59,16 @@ class BotWebSocketClient:
         self.in_queue = False
         self.match_found = False
         
+        # Veto-related state
+        self.current_match_id = None
+        self.is_captain = False
+        self.my_team = None
+        self.available_maps = []
+        self.vetoed_maps = []
+        self.current_turn = None
+        self.veto_deadline = None
+        self.veto_strategy = random.choice(['random', 'aggressive', 'strategic'])
+        
     async def connect(self):
         """Connect to the Django WebSocket consumer"""
         ws_url = f"ws://localhost:8000/ws/matchmaking/{self.bot_puuid}/"
@@ -125,7 +135,20 @@ class BotWebSocketClient:
             })
             
         elif event == 'match_confirmed':
-            logger.info(f"✅ Bot {self.bot_alias} match confirmed!")
+            self.current_match_id = payload.get('match_id')
+            logger.info(f"✅ Bot {self.bot_alias} match confirmed! Match ID: {self.current_match_id[:8] if self.current_match_id else 'Unknown'}")
+            
+        elif event == 'match_data':
+            # Handle match data (veto phase initialization)
+            await self._handle_match_data(payload)
+            
+        elif event == 'veto_update':
+            # Handle veto updates (map vetoed, turn changes)
+            await self._handle_veto_update(payload)
+            
+        elif event == 'veto_complete':
+            # Handle veto phase completion
+            await self._handle_veto_complete(payload)
             
         elif event == 'error':
             logger.error(f"❌ Bot {self.bot_alias} error: {payload}")
@@ -206,6 +229,126 @@ class BotWebSocketClient:
         
         return await sync_to_async(get_lobby)()
     
+    async def _handle_match_data(self, payload: dict):
+        """Handle match data (veto phase initialization)"""
+        logger.info(f"🎮 Bot {self.bot_alias} received match data")
+        
+        # Initialize veto state from match data
+        if payload.get('state') == 'VETO':
+            self.available_maps = payload.get('remaining_maps', [])
+            self.vetoed_maps = payload.get('vetoed_maps', [])
+            self.current_turn = payload.get('veto_turn')
+            self.veto_deadline = payload.get('veto_deadline')
+            
+            # Determine if this bot is captain
+            team_a_players = payload.get('team_a_players', [])
+            team_b_players = payload.get('team_b_players', [])
+            
+            # Check if bot is captain in either team
+            self.is_captain = False
+            self.my_team = None
+            
+            for player in team_a_players:
+                if player.get('puuid') == self.bot_puuid and player.get('is_captain'):
+                    self.is_captain = True
+                    self.my_team = 'team_a'
+                    break
+            
+            if not self.is_captain:
+                for player in team_b_players:
+                    if player.get('puuid') == self.bot_puuid and player.get('is_captain'):
+                        self.is_captain = True
+                        self.my_team = 'team_b'
+                        break
+            
+            logger.info(f"🎮 Bot {self.bot_alias} veto state initialized:")
+            logger.info(f"   Is captain: {self.is_captain}")
+            logger.info(f"   My team: {self.my_team}")
+            logger.info(f"   Current turn: {self.current_turn}")
+            logger.info(f"   Available maps: {self.available_maps}")
+            logger.info(f"   Veto strategy: {self.veto_strategy}")
+            
+            # If it's my turn and I'm captain, make a veto decision
+            if self.is_captain and self.current_turn == self.my_team:
+                await self._make_veto_decision()
+    
+    async def _handle_veto_update(self, payload: dict):
+        """Handle veto updates (map vetoed, turn changes)"""
+        logger.info(f"🎮 Bot {self.bot_alias} received veto update")
+        
+        self.available_maps = payload.get('remaining_maps', [])
+        self.vetoed_maps = payload.get('vetoed_maps', [])
+        self.current_turn = payload.get('veto_turn')
+        self.veto_deadline = payload.get('veto_deadline')
+        
+        logger.info(f"   Remaining maps: {self.available_maps}")
+        logger.info(f"   Vetoed maps: {self.vetoed_maps}")
+        logger.info(f"   Current turn: {self.current_turn}")
+        
+        # If it's my turn and I'm captain, make a veto decision
+        if self.is_captain and self.current_turn == self.my_team:
+            await self._make_veto_decision()
+    
+    async def _handle_veto_complete(self, payload: dict):
+        """Handle veto phase completion"""
+        logger.info(f"🎮 Bot {self.bot_alias} veto phase completed!")
+        logger.info(f"   Final map: {payload.get('final_map')}")
+        
+        # Reset veto state
+        self.is_captain = False
+        self.my_team = None
+        self.available_maps = []
+        self.vetoed_maps = []
+        self.current_turn = None
+        self.veto_deadline = None
+    
+    async def _make_veto_decision(self):
+        """Make a veto decision when it's the bot's turn"""
+        if not self.available_maps:
+            logger.warning(f"⚠️ Bot {self.bot_alias} no maps available to veto!")
+            return
+        
+        # Choose veto strategy based on bot personality
+        if self.veto_strategy == 'aggressive':
+            map_to_veto = self._aggressive_veto()
+        elif self.veto_strategy == 'strategic':
+            map_to_veto = self._strategic_veto()
+        else:  # random
+            map_to_veto = self._random_veto()
+        
+        logger.info(f"🗺️ Bot {self.bot_alias} vetoing map: {map_to_veto} (strategy: {self.veto_strategy})")
+        
+        # Add some realistic delay (1-3 seconds)
+        delay = random.uniform(1.0, 3.0)
+        await asyncio.sleep(delay)
+        
+        # Send veto action
+        await self._send_message('veto_map', {
+            'match_id': self.current_match_id,
+            'map_name': map_to_veto,
+            'action_type': 'ban'
+        })
+    
+    def _random_veto(self) -> str:
+        """Randomly select a map to veto"""
+        return random.choice(self.available_maps)
+    
+    def _aggressive_veto(self) -> str:
+        """Always veto the most popular/strongest maps"""
+        priority_maps = ['Haven', 'Bind', 'Ascent', 'Split', 'Icebox', 'Breeze', 'Fracture', 'Lotus', 'Pearl']
+        
+        for map_name in priority_maps:
+            if map_name in self.available_maps:
+                return map_name
+        
+        return random.choice(self.available_maps)
+    
+    def _strategic_veto(self) -> str:
+        """Strategic veto based on team preferences (placeholder for now)"""
+        # For now, just use aggressive strategy
+        # Could implement more sophisticated logic here
+        return self._aggressive_veto()
+
     async def disconnect(self):
         """Disconnect from WebSocket"""
         if self.websocket:

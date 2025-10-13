@@ -109,6 +109,12 @@ class PugSocketClient:
                 await self.on_veto_started(payload)
             elif event == "match_data":
                 await self.on_match_data(payload)
+            elif event == "veto_update":
+                await self.on_veto_update(payload)
+            elif event == "veto_complete":
+                await self.on_veto_complete(payload)
+            elif event == "veto_acknowledged":
+                await self.on_veto_acknowledged(payload)
             else:
                 print(f"Unknown event received: {event}")
         except Exception as e:
@@ -265,6 +271,40 @@ class PugSocketClient:
                 await self.match_data_callback(data)
         except Exception as e:
             print(f"Error processing 'match_data' event: {e}")
+    
+    async def on_veto_update(self, data):
+        """Handle veto update from Django."""
+        try:
+            print(f"[VETO UPDATE] Received veto update: {data}")
+            
+            # Forward to main WebSocket connection via callback
+            if hasattr(self, 'veto_update_callback'):
+                await self.veto_update_callback(data)
+        except Exception as e:
+            print(f"Error processing 'veto_update' event: {e}")
+    
+    async def on_veto_complete(self, data):
+        """Handle veto completion from Django."""
+        try:
+            final_map = data.get("final_map")
+            print(f"[VETO COMPLETE] Veto phase completed, final map: {final_map}")
+            
+            # Forward to main WebSocket connection via callback
+            if hasattr(self, 'veto_complete_callback'):
+                await self.veto_complete_callback(data)
+        except Exception as e:
+            print(f"Error processing 'veto_complete' event: {e}")
+    
+    async def on_veto_acknowledged(self, data):
+        """Handle veto acknowledgment from Django."""
+        try:
+            print(f"[VETO ACKNOWLEDGED] Veto request acknowledged: {data}")
+            
+            # Forward to main WebSocket connection via callback
+            if hasattr(self, 'veto_acknowledged_callback'):
+                await self.veto_acknowledged_callback(data)
+        except Exception as e:
+            print(f"Error processing 'veto_acknowledged' event: {e}")
 
     ### COMMANDS ###
 

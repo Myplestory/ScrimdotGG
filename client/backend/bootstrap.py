@@ -199,6 +199,12 @@ async def route_event(event: str, payload: dict, client_id: int, ws):
         
         # Match data
         'get_match_data': handle_get_match_data,
+        
+        # Veto system
+        'veto_map': handle_veto_map,
+        'veto_update': handle_veto_update,
+        'veto_complete': handle_veto_complete,
+        'veto_acknowledged': handle_veto_acknowledged,
     }
     
     handler = handlers.get(event)
@@ -344,6 +350,36 @@ async def valorant_heartbeat_loop():
                     # Broadcast to all connected clients
                     await broadcast_to_all('match_data', match_data_response)
                     print(f"[HEARTBEAT] Broadcasted match_data to {len(active_connections)} clients")
+                
+                # Check for pending veto update notifications
+                if valorant_api and hasattr(valorant_api, '_pending_veto_update_data') and valorant_api._pending_veto_update_data:
+                    print(f"[HEARTBEAT] Found pending veto update data, broadcasting...")
+                    veto_update_data = valorant_api._pending_veto_update_data
+                    valorant_api._pending_veto_update_data = None  # Clear it
+                    
+                    # Broadcast to all connected clients
+                    await broadcast_to_all('veto_update', veto_update_data)
+                    print(f"[HEARTBEAT] Broadcasted veto_update to {len(active_connections)} clients")
+                
+                # Check for pending veto complete notifications
+                if valorant_api and hasattr(valorant_api, '_pending_veto_complete_data') and valorant_api._pending_veto_complete_data:
+                    print(f"[HEARTBEAT] Found pending veto complete data, broadcasting...")
+                    veto_complete_data = valorant_api._pending_veto_complete_data
+                    valorant_api._pending_veto_complete_data = None  # Clear it
+                    
+                    # Broadcast to all connected clients
+                    await broadcast_to_all('veto_complete', veto_complete_data)
+                    print(f"[HEARTBEAT] Broadcasted veto_complete to {len(active_connections)} clients")
+                
+                # Check for pending veto acknowledged notifications
+                if valorant_api and hasattr(valorant_api, '_pending_veto_acknowledged_data') and valorant_api._pending_veto_acknowledged_data:
+                    print(f"[HEARTBEAT] Found pending veto acknowledged data, broadcasting...")
+                    veto_acknowledged_data = valorant_api._pending_veto_acknowledged_data
+                    valorant_api._pending_veto_acknowledged_data = None  # Clear it
+                    
+                    # Broadcast to all connected clients
+                    await broadcast_to_all('veto_acknowledged', veto_acknowledged_data)
+                    print(f"[HEARTBEAT] Broadcasted veto_acknowledged to {len(active_connections)} clients")
             
             # Wait 3 seconds before next check
             await asyncio.sleep(3)
@@ -1176,6 +1212,56 @@ async def handle_teams_assigned(payload: dict, client_id: int, ws):
     print(f"[PUG TEAMS] Teams assigned - Player is on {payload.get('my_team', 'unknown')}, captain: {payload.get('is_captain', False)}")
     
     await send_event(ws, 'teams_assigned', team_data)
+
+async def handle_veto_map(payload: dict, client_id: int, ws):
+    """
+    Forward veto_map events from frontend to Django backend.
+    """
+    try:
+        match_id = payload.get('match_id')
+        map_name = payload.get('map_name')
+        
+        print(f"[VETO_MAP] Forwarding veto request - Match: {match_id}, Map: {map_name}")
+        
+        # Forward to Django backend via ValorantAPI
+        if valorant_api and hasattr(valorant_api, 'pugsocket') and valorant_api.pugsocket:
+            await valorant_api.pugsocket.send_message('veto_map', payload)
+            print(f"[VETO_MAP] Successfully forwarded veto request to Django backend")
+        else:
+            print(f"[VETO_MAP] ERROR: ValorantAPI or pugsocket not available")
+            await send_error(ws, "Backend connection not available")
+            
+    except Exception as e:
+        print(f"[VETO_MAP] Error handling veto_map: {e}")
+        await send_error(ws, f"Failed to process veto request: {str(e)}")
+
+async def handle_veto_complete(payload: dict, client_id: int, ws):
+    """
+    Handle veto completion event from Django.
+    """
+    try:
+        final_map = payload.get('final_map')
+        match_id = payload.get('match_id')
+        print(f"[VETO_COMPLETE] Veto phase completed - Match: {match_id}, Final map: {final_map}")
+        
+        await send_event(ws, 'veto_complete', payload)
+    except Exception as e:
+        print(f"[VETO_COMPLETE] Error handling veto_complete: {e}")
+        await send_error(ws, f"Failed to process veto completion: {str(e)}")
+
+async def handle_veto_acknowledged(payload: dict, client_id: int, ws):
+    """
+    Handle veto acknowledgment event from Django.
+    """
+    try:
+        match_id = payload.get('match_id')
+        map_name = payload.get('map_name')
+        print(f"[VETO_ACKNOWLEDGED] Veto acknowledged - Match: {match_id}, Map: {map_name}")
+        
+        await send_event(ws, 'veto_acknowledged', payload)
+    except Exception as e:
+        print(f"[VETO_ACKNOWLEDGED] Error handling veto_acknowledged: {e}")
+        await send_error(ws, f"Failed to process veto acknowledgment: {str(e)}")
 
 async def handle_veto_update(payload: dict, client_id: int, ws):
     """
