@@ -23,9 +23,9 @@ Scrim.GG is a comprehensive matchmaking platform that provides highly engaged pl
 - Clans and team support
 - Tournament capabilities
 - Monthly elo ladders with cash rewards
-– Admin support for dispute resolution, player assistance, and fair play
+- Admin support for dispute resolution, player assistance, and fair play
 - Karma and social/matchmaking block system for community self governance
-– Forums for team recruitment, community growth, and networking for players of all skill levels
+- Forums for team recruitment, community growth, and networking for players of all skill levels
 
 
 ## Architecture
