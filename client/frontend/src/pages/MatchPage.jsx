@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { WebSocketContext } from '../contexts/WebSocketContext';
+import { useTheme } from '@mui/material/styles';
+import { tokens } from '../theme';
+import { useMode } from '../theme';
 import {
   Box,
   Container,
@@ -13,20 +16,478 @@ import {
   Card,
   CardContent,
   Divider,
-  Alert
+  Alert,
+  Avatar,
+  Stack,
+  IconButton,
+  Tooltip
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
 import TimerIcon from '@mui/icons-material/Timer';
+import PersonIcon from '@mui/icons-material/Person';
+import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import TrendingDownIcon from '@mui/icons-material/TrendingDown';
+import SportsEsportsIcon from '@mui/icons-material/SportsEsports';
+import SimpleRankGauge from '../components/SimpleRankGauge';
+
+// Compact Player Card Component
+const PlayerCard = ({ player, isCurrentUser, theme, colors, isLeftTeam = false }) => {
+  // Mock recent games data (simplified)
+  const recentGames = {
+    totalMatches: Math.floor(Math.random() * 500) + 100, // 100-600 total matches
+    winRate: Math.floor(Math.random() * 30) + 40, // 40-70% win rate
+    avgKD: (Math.random() * 1.5 + 0.5).toFixed(2), // 0.5-2.0 K/D
+  };
+
+  const cardContent = (
+    <>
+      {/* For left team: Rank first, then content, then avatar */}
+      {isLeftTeam ? (
+        <>
+          {/* Rank Gauge - Left side inner */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography variant="body2" sx={{ 
+              color: colors.grey[300], 
+              fontWeight: 600,
+              minWidth: '40px',
+              textAlign: 'right'
+            }}>
+              {player.elo || 1000}
+            </Typography>
+            <SimpleRankGauge elo={player.elo} size={32} />
+          </Box>
+          
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.25, justifyContent: 'flex-start' }}>
+              <Typography 
+                variant="subtitle1" 
+                sx={{ 
+                  color: isCurrentUser ? colors.seance[200] : colors.grey[100], 
+                  fontWeight: isCurrentUser ? 700 : 600,
+                  fontSize: '0.9rem',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  textShadow: isCurrentUser ? `0 0 8px ${colors.seance[400]}` : 'none'
+                }}
+              >
+                {player.alias}
+              </Typography>
+              {player.is_captain && (
+                <Chip
+                  label="CAPTAIN"
+                  size="small"
+                  sx={{
+                    bgcolor: colors.seance[500],
+                    color: colors.grey[100],
+                    fontWeight: 600,
+                    fontSize: '0.6rem',
+                    height: 18
+                  }}
+                />
+              )}
+              {isCurrentUser && (
+                <Chip
+                  label="YOU"
+                  size="small"
+                  sx={{
+                    bgcolor: colors.seance[400],
+                    color: colors.grey[100],
+                    fontWeight: 600,
+                    fontSize: '0.6rem',
+                    height: 18,
+                    boxShadow: `0 0 8px ${colors.seance[400]}80`
+                  }}
+                />
+              )}
+            </Box>
+            
+            <Typography variant="caption" sx={{ color: colors.grey[300], display: 'block', textAlign: 'left' }}>
+              {recentGames.totalMatches} matches • {recentGames.winRate}% WR • {recentGames.avgKD} K/D
+            </Typography>
+          </Box>
+          
+          {/* Avatar - Left side outer */}
+          <Avatar
+            sx={{
+              width: 36,
+              height: 36,
+              bgcolor: player.is_captain ? colors.seance[500] : colors.grey[600],
+              border: player.is_captain ? `2px solid ${colors.seance[300]}` : 'none'
+            }}
+          >
+            {player.is_captain ? <EmojiEventsIcon sx={{ fontSize: 18 }} /> : <PersonIcon sx={{ fontSize: 18 }} />}
+          </Avatar>
+        </>
+      ) : (
+        <>
+          {/* For right team: Avatar first, then content, then rank */}
+          <Avatar
+            sx={{
+              width: 36,
+              height: 36,
+              bgcolor: player.is_captain ? colors.seance[500] : colors.grey[600],
+              border: player.is_captain ? `2px solid ${colors.seance[300]}` : 'none'
+            }}
+          >
+            {player.is_captain ? <EmojiEventsIcon sx={{ fontSize: 18 }} /> : <PersonIcon sx={{ fontSize: 18 }} />}
+          </Avatar>
+          
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.25 }}>
+              <Typography 
+                variant="subtitle1" 
+                sx={{ 
+                  color: isCurrentUser ? colors.seance[200] : colors.grey[100], 
+                  fontWeight: isCurrentUser ? 700 : 600,
+                  fontSize: '0.9rem',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  textShadow: isCurrentUser ? `0 0 8px ${colors.seance[400]}` : 'none'
+                }}
+              >
+                {player.alias}
+              </Typography>
+              {player.is_captain && (
+                <Chip
+                  label="CAPTAIN"
+                  size="small"
+                  sx={{
+                    bgcolor: colors.seance[500],
+                    color: colors.grey[100],
+                    fontWeight: 600,
+                    fontSize: '0.6rem',
+                    height: 18
+                  }}
+                />
+              )}
+              {isCurrentUser && (
+                <Chip
+                  label="YOU"
+                  size="small"
+                  sx={{
+                    bgcolor: colors.seance[400],
+                    color: colors.grey[100],
+                    fontWeight: 600,
+                    fontSize: '0.6rem',
+                    height: 18,
+                    boxShadow: `0 0 8px ${colors.seance[400]}80`
+                  }}
+                />
+              )}
+            </Box>
+            
+            <Typography variant="caption" sx={{ color: colors.grey[300], display: 'block' }}>
+              {recentGames.totalMatches} matches • {recentGames.winRate}% WR • {recentGames.avgKD} K/D
+            </Typography>
+          </Box>
+          
+          {/* Rank Gauge - Right side outer */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography variant="body2" sx={{ 
+              color: colors.grey[300], 
+              fontWeight: 600,
+              minWidth: '40px',
+              textAlign: 'left'
+            }}>
+              {player.elo || 1000}
+            </Typography>
+            <SimpleRankGauge elo={player.elo} size={32} />
+          </Box>
+        </>
+      )}
+    </>
+  );
+
+  return (
+    <Card
+      sx={{
+        bgcolor: isCurrentUser ? `${colors.seance[500]}15` : colors.grey[900],
+        border: `2px solid ${isCurrentUser ? colors.seance[400] : colors.grey[700]}`,
+        borderRadius: '8px',
+        transition: 'all 0.2s ease',
+        boxShadow: isCurrentUser ? `0 0 12px ${colors.seance[400]}40` : 'none',
+        '&:hover': {
+          transform: 'translateY(-2px)',
+          boxShadow: isCurrentUser 
+            ? `0 4px 20px ${colors.seance[400]}60` 
+            : `0 4px 16px ${colors.primary[700]}80`,
+          border: `2px solid ${colors.seance[400]}`,
+        }
+      }}
+    >
+      <CardContent sx={{ p: 1.5 }}>
+        <Box sx={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: 1.5,
+          flexDirection: isLeftTeam ? 'row-reverse' : 'row',
+          minHeight: '48px'
+        }}>
+          {cardContent}
+        </Box>
+      </CardContent>
+    </Card>
+  );
+};
+
+// Compact Vertical Map Veto Component
+const MapVetoSection = ({ maps, vetoedMaps, currentTurn, timeLeft, onMapVeto, theme, colors, isCaptain, myTeam }) => {
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const isMyTurn = currentTurn === myTeam && isCaptain;
+
+  return (
+    <Box sx={{ width: '180px', textAlign: 'center' }}>
+      {/* Timer */}
+      <Box sx={{ mb: 2 }}>
+        <Typography variant="body1" sx={{ color: colors.seance[300], fontWeight: 600, mb: 1, fontSize: '0.9rem' }}>
+          {currentTurn ? `${currentTurn.replace('_', ' ').toUpperCase()}` : 'VETO PHASE'}
+        </Typography>
+        <Typography variant="body2" sx={{ color: colors.grey[300], mb: 1, fontSize: '0.8rem' }}>
+          is banning a map
+        </Typography>
+        {timeLeft && (
+          <Box sx={{ 
+            display: 'inline-flex', 
+            alignItems: 'center', 
+            gap: 0.5,
+            bgcolor: colors.primary[500],
+            px: 1.5,
+            py: 0.25,
+            borderRadius: '12px',
+            border: `1px solid ${colors.seance[400]}`
+          }}>
+            <TimerIcon sx={{ color: colors.seance[300], fontSize: 14 }} />
+            <Typography variant="body2" sx={{ color: colors.grey[100], fontWeight: 600, fontSize: '0.8rem' }}>
+              {formatTime(timeLeft)}
+            </Typography>
+          </Box>
+        )}
+      </Box>
+
+      {/* Maps Vertical List */}
+      <Stack spacing={0.5}>
+        {maps.map((map) => {
+          const isVetoed = vetoedMaps.includes(map);
+          return (
+            <Card
+              key={map}
+              sx={{
+                position: 'relative',
+                borderRadius: '6px',
+                overflow: 'hidden',
+                cursor: isMyTurn && !isVetoed ? 'pointer' : 'default',
+                transition: 'all 0.2s ease',
+                opacity: isVetoed ? 0.4 : 1,
+                filter: isVetoed ? 'grayscale(100%)' : 'none',
+                border: `1px solid ${isVetoed ? colors.redAccent[400] : colors.grey[700]}`,
+                '&:hover': isMyTurn && !isVetoed ? {
+                  transform: 'translateX(4px)',
+                  boxShadow: `0 2px 8px ${colors.seance[400]}40`,
+                  border: `1px solid ${colors.seance[400]}`,
+                } : {}
+              }}
+              onClick={() => isMyTurn && !isVetoed && onMapVeto(map)}
+            >
+              <Box
+                sx={{
+                  height: 32,
+                  bgcolor: colors.primary[400],
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  position: 'relative'
+                }}
+              >
+                <Typography variant="body2" sx={{ color: colors.grey[100], fontWeight: 600, fontSize: '0.8rem' }}>
+                  {map}
+                </Typography>
+                
+                {isVetoed && (
+                  <Box
+                    sx={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      bgcolor: 'rgba(0,0,0,0.6)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    <CancelIcon sx={{ color: colors.redAccent[300], fontSize: 18 }} />
+                  </Box>
+                )}
+              </Box>
+            </Card>
+          );
+        })}
+      </Stack>
+    </Box>
+  );
+};
+
+// Mock data for preview (remove in production)
+const MOCK_MATCH_DATA = {
+  match_id: "76d0a036-8c22-4206-b783-8bc5fa258c76",
+  state: "veto_phase",
+  team_a_players: [
+    {
+      puuid: "player1-52f0666e-4d7a-5b84-9e1a-a35286de3d27",
+      alias: "bakkyzzz",
+      elo: 1862,
+      mmr: 1300,
+      team: "team_a",
+      is_captain: true,
+      is_ready: false,
+      joined_pregame: false
+    },
+    {
+      puuid: "player2-uuid-here", 
+      alias: "tadomekarlz",
+      elo: 1520,
+      mmr: 1220,
+      team: "team_a",
+      is_captain: false,
+      is_ready: false,
+      joined_pregame: false
+    },
+    {
+      puuid: "player3-uuid-here",
+      alias: "DomikYTx", 
+      elo: 1531,
+      mmr: 1350,
+      team: "team_a",
+      is_captain: false,
+      is_ready: false,
+      joined_pregame: false
+    },
+    {
+      puuid: "player4-uuid-here",
+      alias: "61gn",
+      elo: 1648,
+      mmr: 1150,
+      team: "team_a",
+      is_captain: false,
+      is_ready: false,
+      joined_pregame: false
+    },
+    {
+      puuid: "player5-uuid-here",
+      alias: "R1_EDDIE",
+      elo: 1641,
+      mmr: 1420,
+      team: "team_a",
+      is_captain: false,
+      is_ready: false,
+      joined_pregame: false
+    }
+  ],
+  team_b_players: [
+    {
+      puuid: "player6-uuid-here",
+      alias: "1mpulsV",
+      elo: 1782,
+      mmr: 1310,
+      team: "team_b",
+      is_captain: true,
+      is_ready: false,
+      joined_pregame: false
+    },
+    {
+      puuid: "player7-uuid-here",
+      alias: "sairo",
+      elo: 1686,
+      mmr: 1190,
+      team: "team_b",
+      is_captain: false,
+      is_ready: false,
+      joined_pregame: false
+    },
+    {
+      puuid: "player8-uuid-here",
+      alias: "n0matter",
+      elo: 1631,
+      mmr: 1380,
+      team: "team_b",
+      is_captain: false,
+      is_ready: false,
+      joined_pregame: false
+    },
+    {
+      puuid: "player9-uuid-here",
+      alias: "adriannr",
+      elo: 1749,
+      mmr: 1240,
+      team: "team_b",
+      is_captain: false,
+      is_ready: false,
+      joined_pregame: false
+    },
+    {
+      puuid: "player10-uuid-here",
+      alias: "gennt10",
+      elo: 1375,
+      mmr: 1480,
+      team: "team_b",
+      is_captain: false,
+      is_ready: false,
+      joined_pregame: false
+    }
+  ],
+  team_a_captain: "player1-uuid-here",
+  team_b_captain: "player6-uuid-here",
+  team_a_lobbies: ["lobby-uuid-1", "lobby-uuid-2"],
+  team_b_lobbies: ["lobby-uuid-3", "lobby-uuid-4"],
+  map_pool: ["Bind", "Haven", "Split", "Ascent", "Icebox", "Breeze", "Fracture"],
+  vetoed_maps: ["Bind", "Haven"],
+  remaining_maps: ["Split", "Ascent", "Icebox", "Breeze", "Fracture"],
+  final_map: null,
+  veto_turn: "team_a",
+  veto_deadline: new Date(Date.now() + 30000).toISOString(), // 30 seconds from now
+  veto_history: [
+    {
+      action_type: "ban",
+      map_name: "Bind",
+      team: "team_a",
+      was_timeout: false,
+      sequence_number: 1
+    },
+    {
+      action_type: "ban", 
+      map_name: "Haven",
+      team: "team_b",
+      was_timeout: false,
+      sequence_number: 2
+    }
+  ],
+  side_selector: null,
+  selected_side: null,
+  match_quality: 0.85,
+  team_a_avg_mmr: 1288.0,
+  team_b_avg_mmr: 1320.0
+};
 
 export default function MatchPage() {
   const { matchId } = useParams();
   const navigate = useNavigate();
-  const { connected, sendEvent, on } = useContext(WebSocketContext);
+  const { connected, sendEvent, on, playerData } = useContext(WebSocketContext);
+  const [theme, colorMode] = useMode();
+  const colors = tokens(theme.palette.mode);
   
   // Match state
-  const [matchData, setMatchData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [matchData, setMatchData] = useState(MOCK_MATCH_DATA); // Use mock data
+  const [loading, setLoading] = useState(false); // Set to false for preview
   const [error, setError] = useState(null);
   
   // Veto state
@@ -48,7 +509,7 @@ export default function MatchPage() {
     
     console.log('[MATCH PAGE] Fetching match data for:', matchId);
     sendEvent('get_match_data', { match_id: matchId });
-  }, [connected, matchId]);
+  }, [connected, matchId, sendEvent]);
   
   // Handle match data response
   useEffect(() => {
@@ -57,21 +518,12 @@ export default function MatchPage() {
       setMatchData(data);
       setLoading(false);
       
-      // Determine my team and captain status
-      const myPuuid = localStorage.getItem('playerPuuid');
-      const teamAPlayer = data.team_a_players?.find(p => p.puuid === myPuuid);
-      const teamBPlayer = data.team_b_players?.find(p => p.puuid === myPuuid);
+      // Determine user's team and captain status
+      // Note: playerData will be available from WebSocket context
+      // This useEffect handles match data from server, team detection happens in render
       
-      if (teamAPlayer) {
-        setMyTeam('team_a');
-        setIsCaptain(data.team_a_captain === myPuuid);
-      } else if (teamBPlayer) {
-        setMyTeam('team_b');
-        setIsCaptain(data.team_b_captain === myPuuid);
-      }
-      
-      // Set veto state
-      if (data.state === 'VETO') {
+      // Set veto state if in veto phase
+      if (data.state === 'veto_phase') {
         setVetoPhase(true);
         setCurrentTurn(data.veto_turn);
         setAvailableMaps(data.remaining_maps || []);
@@ -195,12 +647,12 @@ export default function MatchPage() {
   // Handle veto action
   const handleVetoMap = (mapName) => {
     if (!isCaptain) {
-      console.warn('[VETO] Only captain can veto');
+      console.log('[VETO] Not captain, cannot veto');
       return;
     }
     
     if (currentTurn !== myTeam) {
-      console.warn('[VETO] Not your turn');
+      console.log('[VETO] Not our turn');
       return;
     }
     
@@ -234,265 +686,214 @@ export default function MatchPage() {
             Match Not Found
           </Typography>
           <Typography variant="body1" sx={{ mt: 2 }}>
-            {error || 'Unable to load match data'}
+            {error || 'The requested match could not be found.'}
           </Typography>
           <Button 
             variant="contained" 
-            sx={{ mt: 3 }}
-            onClick={() => navigate('/queue')}
+            sx={{ mt: 3 }} 
+            onClick={() => navigate('/')}
           >
-            Return to Queue
+            Return Home
           </Button>
         </Paper>
       </Container>
     );
   }
   
+  // Get current user's team and captain status
+  const currentUserPuuid = playerData?.puuid;
+  const currentUser = [...(matchData.team_a_players || []), ...(matchData.team_b_players || [])]
+    .find(p => p.puuid === currentUserPuuid);
+  const myTeamPlayers = currentUser?.team === 'team_a' ? matchData.team_a_players : matchData.team_b_players;
+  const enemyTeamPlayers = currentUser?.team === 'team_a' ? matchData.team_b_players : matchData.team_a_players;
+
   return (
-    <Container maxWidth="xl" sx={{ mt: 3, mb: 4 }}>
-      {/* Match Header */}
-      <Paper sx={{ p: 3, mb: 3, bgcolor: '#1a1a2e' }}>
-        <Grid container alignItems="center" justifyContent="space-between">
-          <Grid item>
-            <Typography variant="h4" sx={{ color: '#fff', fontWeight: 'bold' }}>
-              Match {matchId.substring(0, 8)}
+    <Container maxWidth="lg" sx={{ height: '100%', overflow: 'hidden' }}>
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100%',
+          backgroundColor: theme.palette.background.dark,
+          padding: `${theme.spacing(1)} 0 ${theme.spacing(2)} 0`,
+          overflow: 'hidden',
+          position: 'relative',
+        }}
+      >
+        {/* Match Header - Faceit Style */}
+        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', mb: 3, mt: 1 }}>
+          {/* Team A Captain */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Avatar
+              sx={{
+                width: 48,
+                height: 48,
+                bgcolor: colors.seance[500],
+                border: `2px solid ${colors.seance[300]}`
+              }}
+            >
+              <EmojiEventsIcon sx={{ fontSize: 24 }} />
+            </Avatar>
+            <Typography variant="h6" sx={{ color: colors.grey[100], fontWeight: 600 }}>
+              {matchData.team_a_players?.find(p => p.is_captain)?.alias || 'team_captain'}
             </Typography>
-            <Typography variant="body2" sx={{ color: '#aaa', mt: 0.5 }}>
-              Match Quality: {(matchData.match_quality * 100).toFixed(1)}%
-            </Typography>
-          </Grid>
-          <Grid item>
-            <Chip 
-              label={matchData.state.replace('_', ' ')}
-              color={matchData.state === 'VETO' ? 'warning' : 'info'}
-              sx={{ fontSize: '1rem', px: 2, py: 2.5 }}
-            />
-          </Grid>
-        </Grid>
-      </Paper>
-      
-      {/* Teams Display */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
-        {/* Team A */}
-        <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 3, bgcolor: '#1e3a5f' }}>
-            <Typography variant="h6" sx={{ color: '#4fc3f7', mb: 2, fontWeight: 'bold' }}>
-              Team A {myTeam === 'team_a' && '(Your Team)'}
-            </Typography>
-            <Typography variant="body2" sx={{ color: '#aaa', mb: 2 }}>
-              Avg MMR: {matchData.team_a_avg_mmr.toFixed(0)}
-            </Typography>
-            {matchData.team_a_players.map(player => (
-              <Box
-                key={player.puuid}
-                sx={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  p: 1.5,
-                  mb: 1,
-                  bgcolor: player.puuid === matchData.team_a_captain ? '#2d4a6f' : '#1a2940',
-                  borderRadius: 1,
-                  border: player.puuid === localStorage.getItem('playerPuuid') ? '2px solid #4fc3f7' : 'none'
-                }}
-              >
-                <Box>
-                  <Typography variant="body1" sx={{ color: '#fff' }}>
-                    {player.alias}
-                    {player.puuid === matchData.team_a_captain && ' ⭐'}
-                  </Typography>
-                  <Typography variant="caption" sx={{ color: '#aaa' }}>
-                    MMR: {player.mmr.toFixed(0)} • ELO: {player.elo}
-                  </Typography>
-                </Box>
-                {player.is_ready && <CheckCircleIcon sx={{ color: '#4caf50' }} />}
-              </Box>
-            ))}
-          </Paper>
-        </Grid>
-        
-        {/* Team B */}
-        <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 3, bgcolor: '#5f1e1e' }}>
-            <Typography variant="h6" sx={{ color: '#f44336', mb: 2, fontWeight: 'bold' }}>
-              Team B {myTeam === 'team_b' && '(Your Team)'}
-            </Typography>
-            <Typography variant="body2" sx={{ color: '#aaa', mb: 2 }}>
-              Avg MMR: {matchData.team_b_avg_mmr.toFixed(0)}
-            </Typography>
-            {matchData.team_b_players.map(player => (
-              <Box
-                key={player.puuid}
-                sx={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  p: 1.5,
-                  mb: 1,
-                  bgcolor: player.puuid === matchData.team_b_captain ? '#6f2d2d' : '#402020',
-                  borderRadius: 1,
-                  border: player.puuid === localStorage.getItem('playerPuuid') ? '2px solid #f44336' : 'none'
-                }}
-              >
-                <Box>
-                  <Typography variant="body1" sx={{ color: '#fff' }}>
-                    {player.alias}
-                    {player.puuid === matchData.team_b_captain && ' ⭐'}
-                  </Typography>
-                  <Typography variant="caption" sx={{ color: '#aaa' }}>
-                    MMR: {player.mmr.toFixed(0)} • ELO: {player.elo}
-                  </Typography>
-                </Box>
-                {player.is_ready && <CheckCircleIcon sx={{ color: '#4caf50' }} />}
-              </Box>
-            ))}
-          </Paper>
-        </Grid>
-      </Grid>
-      
-      {/* Veto Phase */}
-      {vetoPhase && (
-        <Paper sx={{ p: 3, mb: 3, bgcolor: '#2a2a3e' }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h5" sx={{ color: '#fff', fontWeight: 'bold' }}>
-              Map Veto Phase
-            </Typography>
-            {timeLeft !== null && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <TimerIcon sx={{ color: timeLeft <= 10 ? '#f44336' : '#fff' }} />
-                <Typography 
-                  variant="h6" 
-                  sx={{ 
-                    color: timeLeft <= 10 ? '#f44336' : '#fff',
-                    fontWeight: 'bold'
-                  }}
-                >
-                  {timeLeft}s
-                </Typography>
-              </Box>
-            )}
           </Box>
-          
-          <Alert 
-            severity={currentTurn === myTeam ? 'info' : 'warning'}
-            sx={{ mb: 3 }}
-          >
-            {currentTurn === myTeam ? (
-              isCaptain ? (
-                <strong>It's your turn to veto a map!</strong>
-              ) : (
-                <strong>Waiting for your captain to veto...</strong>
-              )
-            ) : (
-              <strong>Opponent's turn to veto</strong>
-            )}
-          </Alert>
-          
-          {/* Available Maps */}
-          <Typography variant="h6" sx={{ color: '#fff', mb: 2 }}>
-            Available Maps ({availableMaps.length} remaining)
-          </Typography>
-          <Grid container spacing={2}>
-            {availableMaps.map(mapName => (
-              <Grid item xs={6} sm={4} md={3} key={mapName}>
-                <Card
-                  sx={{
-                    bgcolor: '#1a1a2e',
-                    border: '2px solid #4fc3f7',
-                    cursor: (isCaptain && currentTurn === myTeam) ? 'pointer' : 'default',
-                    transition: 'all 0.3s',
-                    '&:hover': (isCaptain && currentTurn === myTeam) ? {
-                      bgcolor: '#252538',
-                      transform: 'scale(1.05)',
-                      borderColor: '#ff4655'
-                    } : {}
-                  }}
-                  onClick={() => {
-                    if (isCaptain && currentTurn === myTeam) {
-                      handleVetoMap(mapName);
-                    }
-                  }}
-                >
-                  <CardContent>
-                    <Typography 
-                      variant="h6" 
-                      align="center" 
-                      sx={{ color: '#fff', fontWeight: 'bold' }}
-                    >
-                      {mapName}
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-            ))}
-          </Grid>
-          
-          {/* Veto History */}
-          {vetoHistory.length > 0 && (
-            <Box sx={{ mt: 3 }}>
-              <Typography variant="h6" sx={{ color: '#fff', mb: 2 }}>
-                Veto History
+
+          {/* Match Info Center */}
+          <Box sx={{ mx: 6, textAlign: 'center', minWidth: 200 }}>
+            <Typography variant="body1" sx={{ color: colors.grey[300], fontWeight: 600, mb: 0.5 }}>
+              5v5 NA
+            </Typography>
+            <Typography variant="h5" sx={{ color: colors.seance[300], fontWeight: 700, mb: 0.5 }}>
+              {matchData.state === 'veto_phase' ? 'BAN' : 'READY'}
+            </Typography>
+            <Typography variant="body2" sx={{ color: colors.grey[400], mb: 1 }}>
+              Best of 1
+            </Typography>
+            
+            {/* Match Odds Bar */}
+            <Box sx={{ position: 'relative', width: '100%', height: 8, bgcolor: colors.grey[700], borderRadius: 1, overflow: 'hidden' }}>
+              <Box
+                sx={{
+                  position: 'absolute',
+                  left: 0,
+                  top: 0,
+                  height: '100%',
+                  width: `${((matchData.team_a_avg_mmr || 1300) / ((matchData.team_a_avg_mmr || 1300) + (matchData.team_b_avg_mmr || 1300))) * 100}%`,
+                  bgcolor: colors.seance[400],
+                  transition: 'width 0.3s ease'
+                }}
+              />
+              <Box
+                sx={{
+                  position: 'absolute',
+                  right: 0,
+                  top: 0,
+                  height: '100%',
+                  width: `${((matchData.team_b_avg_mmr || 1300) / ((matchData.team_a_avg_mmr || 1300) + (matchData.team_b_avg_mmr || 1300))) * 100}%`,
+                  bgcolor: colors.redAccent[400],
+                  transition: 'width 0.3s ease'
+                }}
+              />
+            </Box>
+            <Typography variant="caption" sx={{ color: colors.grey[500], mt: 0.5, display: 'block' }}>
+              {Math.round(((matchData.team_a_avg_mmr || 1300) / ((matchData.team_a_avg_mmr || 1300) + (matchData.team_b_avg_mmr || 1300))) * 100)}% - {Math.round(((matchData.team_b_avg_mmr || 1300) / ((matchData.team_a_avg_mmr || 1300) + (matchData.team_b_avg_mmr || 1300))) * 100)}%
+            </Typography>
+          </Box>
+
+          {/* Team B Captain */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexDirection: 'row-reverse' }}>
+            <Avatar
+              sx={{
+                width: 48,
+                height: 48,
+                bgcolor: colors.seance[500],
+                border: `2px solid ${colors.seance[300]}`
+              }}
+            >
+              <EmojiEventsIcon sx={{ fontSize: 24 }} />
+            </Avatar>
+            <Typography variant="h6" sx={{ color: colors.grey[100], fontWeight: 600 }}>
+              {matchData.team_b_players?.find(p => p.is_captain)?.alias || 'team_captain'}
+            </Typography>
+          </Box>
+        </Box>
+
+
+        {/* Main Layout: Team A - Veto - Team B */}
+        <Box sx={{ display: 'flex', gap: 3, justifyContent: 'center', alignItems: 'flex-start', mt: 1 }}>
+          {/* Team A (Left Side) */}
+          <Box sx={{ width: '380px' }}>
+            <Paper sx={{ 
+              p: 2, 
+              bgcolor: colors.grey[800],
+              borderRadius: '12px',
+              border: `1px solid ${colors.grey[600]}`,
+              position: 'relative'
+            }}>
+              
+              <Typography variant="h5" sx={{ 
+                color: colors.grey[100], 
+                fontWeight: 600, 
+                mb: 1.5
+              }}>
+                Team A
               </Typography>
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                {vetoHistory.map((veto, index) => (
-                  <Box
-                    key={index}
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 2,
-                      p: 1.5,
-                      bgcolor: veto.team === 'team_a' ? '#1e3a5f' : '#5f1e1e',
-                      borderRadius: 1
-                    }}
-                  >
-                    <Chip
-                      label={`#${veto.sequence_number}`}
-                      size="small"
-                      sx={{ bgcolor: '#333', color: '#fff' }}
-                    />
-                    <Typography sx={{ color: '#fff' }}>
-                      <strong>{veto.team === 'team_a' ? 'Team A' : 'Team B'}</strong> banned
-                    </Typography>
-                    <Chip
-                      label={veto.map_name}
-                      sx={{ bgcolor: '#ff4655', color: '#fff', fontWeight: 'bold' }}
-                    />
-                    {veto.was_timeout && (
-                      <Chip label="TIMEOUT" size="small" color="warning" />
-                    )}
-                  </Box>
+
+              <Stack spacing={0.75}>
+                {matchData.team_a_players?.map((player) => (
+                  <PlayerCard 
+                    key={player.puuid}
+                    player={player} 
+                    isCurrentUser={player.puuid === currentUserPuuid}
+                    theme={theme}
+                    colors={colors}
+                    isLeftTeam={true}
+                  />
                 ))}
-              </Box>
+              </Stack>
+            </Paper>
+          </Box>
+
+          {/* Map Veto Section - Center */}
+          {matchData.state === 'veto_phase' && (
+            <Box sx={{ display: 'flex', alignItems: 'center', minHeight: '400px' }}>
+              <MapVetoSection
+                maps={matchData.map_pool || []}
+                vetoedMaps={matchData.vetoed_maps || []}
+                currentTurn={matchData.veto_turn}
+                timeLeft={timeLeft}
+                onMapVeto={handleVetoMap}
+                theme={theme}
+                colors={colors}
+                isCaptain={isCaptain}
+                myTeam={myTeam}
+              />
             </Box>
           )}
-        </Paper>
-      )}
-      
-      {/* Final Map Selected */}
-      {matchData.final_map && !vetoPhase && (
-        <Paper sx={{ p: 4, mb: 3, bgcolor: '#1a1a2e', textAlign: 'center' }}>
-          <Typography variant="h4" sx={{ color: '#4fc3f7', mb: 2, fontWeight: 'bold' }}>
-            Map Selected
-          </Typography>
-          <Typography variant="h3" sx={{ color: '#fff', fontWeight: 'bold' }}>
-            {matchData.final_map}
-          </Typography>
-          {matchData.state === 'SIDE_SELECTION' && (
-            <Typography variant="body1" sx={{ color: '#aaa', mt: 2 }}>
-              Waiting for side selection...
-            </Typography>
-          )}
-        </Paper>
-      )}
-      
-      {/* Connection Status */}
-      {!connected && (
-        <Alert severity="error" sx={{ mb: 3 }}>
-          WebSocket disconnected. Reconnecting...
-        </Alert>
-      )}
+
+          {/* Team B (Right Side) */}
+          <Box sx={{ width: '380px' }}>
+            <Paper sx={{ 
+              p: 2, 
+              bgcolor: colors.grey[800],
+              borderRadius: '12px',
+              border: `1px solid ${colors.grey[600]}`,
+              position: 'relative'
+            }}>
+              
+              <Typography variant="h5" sx={{ 
+                color: colors.grey[100], 
+                fontWeight: 600, 
+                mb: 1.5,
+                textAlign: 'right' 
+              }}>
+                Team B
+              </Typography>
+
+              <Stack spacing={0.75}>
+                {matchData.team_b_players?.map((player) => (
+                  <PlayerCard 
+                    key={player.puuid}
+                    player={player} 
+                    isCurrentUser={player.puuid === currentUserPuuid}
+                    theme={theme}
+                    colors={colors}
+                    isLeftTeam={false}
+                  />
+                ))}
+              </Stack>
+            </Paper>
+          </Box>
+        </Box>
+        
+        {/* Connection Status */}
+        {!connected && (
+          <Alert severity="error" sx={{ mb: 3 }}>
+            WebSocket disconnected. Reconnecting...
+          </Alert>
+        )}
+      </Box>
     </Container>
   );
 }
-

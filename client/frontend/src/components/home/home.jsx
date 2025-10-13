@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Grid, Paper, Box, Typography, Link, CircularProgress  } from '@mui/material';
+import { Grid, Paper, Box, Typography, Link, CircularProgress, Button } from '@mui/material';
+import { useNavigate } from 'react-router-dom';
 import Chart from '../chart';
 import { useMode } from '../../theme';
 import PlayerInfoCard from '../home/playerinfo';
@@ -22,6 +23,7 @@ const HomeComponent = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [theme, colorMode] = useMode();
+  const navigate = useNavigate();
   
   // Use WebSocket context
   const { playerData, api, on } = useWebSocket();
@@ -110,6 +112,23 @@ const HomeComponent = () => {
             ) : (
               <Typography color="error">{error || 'No player data available'}</Typography>
             )}
+          </Paper>
+        </Grid>
+        
+        {/* Test Button for MatchPage Preview */}
+        <Grid item xs={12}>
+          <Paper sx={{ p: 2, textAlign: 'center' }}>
+            <Typography variant="h6" gutterBottom>
+              🎮 Development Preview
+            </Typography>
+            <Button 
+              variant="contained" 
+              color="secondary"
+              onClick={() => navigate('/match/test-preview')}
+              sx={{ mt: 1 }}
+            >
+              Preview MatchPage Design
+            </Button>
           </Paper>
         </Grid>
       </Grid>

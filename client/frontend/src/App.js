@@ -10,6 +10,7 @@ import LoadingScreen from './components/loadingscreen';
 import AuthenticationScreen from './pages/login';
 import LandingPage from './pages/landing';
 import MatchPage from './pages/MatchPage';
+import Layout from './pages/layout';
 
 // Routings
 import {Routes, Route, Navigate, useNavigate } from "react-router-dom"; // Make sure you are using BrowserRouter
@@ -20,6 +21,29 @@ const Logout = ({ setAuthenticated }) => {
   setAuthenticated(false); // Update the authentication state to false
   console.log("Logout callback")
   return <Navigate to="/Logout" />; // Redirect the user back to the authentication screen
+};
+
+// MatchPage wrapper to handle navigation
+const MatchPageWrapper = () => {
+  const navigate = useNavigate();
+  
+  const handleSetActiveComponent = (component) => {
+    if (component === 'home') {
+      navigate('/landingpage');
+    } else if (component === 'pug') {
+      // Navigate to landing page with pug component active
+      navigate('/landingpage', { state: { activeComponent: 'pug' } });
+    } else if (component === 'lobby') {
+      // Navigate to landing page with lobby component active
+      navigate('/landingpage', { state: { activeComponent: 'lobby' } });
+    }
+  };
+
+  return (
+    <Layout setActiveComponent={handleSetActiveComponent}>
+      <MatchPage />
+    </Layout>
+  );
 };
 
 function App() {
@@ -110,7 +134,9 @@ function App() {
                     <Route path="/" element={<Navigate to="/landingpage" replace />} />
                     <Route path="/Logout" element={<Logout setAuthenticated={setAuthenticated} />} />
                     <Route path="/landingpage" element={<LandingPage />} />
-                    <Route path="/match/:matchId" element={<MatchPage />} />
+                    <Route path="/match/:matchId" element={
+                      <MatchPageWrapper />
+                    } />
                   </Routes>
                 </Suspense>
               )}

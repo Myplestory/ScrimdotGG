@@ -12,12 +12,22 @@ import { ColorModeContext, useMode } from '../theme';
 
 
 
-const CustomListItem = ({ text, onClick }) => {
+const CustomListItem = ({ text, onClick, navigateTo }) => {
   const [theme, colorMode] = useMode();
+  const navigate = useNavigate();
+  
+  const handleClick = () => {
+    if (onClick) {
+      onClick();
+    } else if (navigateTo) {
+      navigate(navigateTo);
+    }
+  };
+  
   return (
-  <ListItemButton sx={{color:theme.palette.primary}} onClick={onClick} >
-    <ListItemText primary={text} />
-  </ListItemButton>
+    <ListItemButton sx={{color:theme.palette.primary}} onClick={handleClick} >
+      <ListItemText primary={text} />
+    </ListItemButton>
   );
 };
 
@@ -45,8 +55,8 @@ export const MainListItems = ({ setActiveComponent }) => {
         </AccordionSummary>
         <AccordionDetails>
           <List>
-            <CustomListItem text="Play" onClick={() => setActiveComponent('pug')} />
-            <CustomListItem text="Scrim" onClick={() => setActiveComponent('lobby')} />
+            <CustomListItem text="Play" onClick={() => setActiveComponent && setActiveComponent('pug')} />
+            <CustomListItem text="Scrim" onClick={() => setActiveComponent && setActiveComponent('lobby')} />
             {/* Add more options as needed */}
           </List>
       </AccordionDetails>
