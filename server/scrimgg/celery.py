@@ -33,7 +33,7 @@ app.conf.beat_schedule = {
     },
     'check-veto-timeouts': {
         'task': 'matchmaking.tasks.check_veto_timeouts',
-        'schedule': 5.0,  # Run every 5 seconds
+        'schedule': 3.0,  # Run every 5 seconds
     },
 }
 

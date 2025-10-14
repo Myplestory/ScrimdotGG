@@ -314,7 +314,8 @@ class MatchManager:
                 # Veto complete
                 match.final_map = remaining_maps[0]
                 match.state = Match.STATE_SIDE_SELECTION
-                match.side_selector = vetoing_team  # Last team to veto gets side selection
+                # The team that did NOT make the last veto gets side selection (they "won" the veto)
+                match.side_selector = 'team_b' if vetoing_team == 'team_a' else 'team_a'
                 match.side_selection_deadline = timezone.now() + timedelta(seconds=MatchManager.SIDE_SELECTION_TIMEOUT_SECONDS)
                 await sync_to_async(match.save, thread_sensitive=False)(update_fields=['vetoed_maps', 'final_map', 'state', 'side_selector', 'side_selection_deadline'])
                 
@@ -409,7 +410,8 @@ class MatchManager:
                 # Veto complete
                 match.final_map = remaining_maps[0]
                 match.state = Match.STATE_SIDE_SELECTION
-                match.side_selector = current_team
+                # The team that did NOT make the last veto gets side selection (they "won" the veto)
+                match.side_selector = 'team_b' if current_team == 'team_a' else 'team_a'
                 match.side_selection_deadline = timezone.now() + timedelta(seconds=MatchManager.SIDE_SELECTION_TIMEOUT_SECONDS)
                 await sync_to_async(match.save, thread_sensitive=False)(update_fields=['vetoed_maps', 'final_map', 'state', 'side_selector', 'side_selection_deadline'])
                 
@@ -578,7 +580,8 @@ class MatchManager:
                 # Veto complete
                 match.final_map = remaining_maps[0]
                 match.state = Match.STATE_SIDE_SELECTION
-                match.side_selector = current_team
+                # The team that did NOT make the last veto gets side selection (they "won" the veto)
+                match.side_selector = 'team_b' if current_team == 'team_a' else 'team_a'
                 match.side_selection_deadline = timezone.now() + timedelta(seconds=MatchManager.SIDE_SELECTION_TIMEOUT_SECONDS)
                 match.save(update_fields=['vetoed_maps', 'final_map', 'state', 'side_selector', 'side_selection_deadline'])
                 

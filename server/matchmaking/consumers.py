@@ -229,6 +229,8 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
                 await self.handle_get_match_data(text_data_json)
             elif action == 'veto_map':
                 await self.handle_veto_map(text_data_json)
+            elif action == 'select_side':
+                await self.handle_select_side(text_data_json)
             
             # Match execution events
             elif action == 'custom_game_created':

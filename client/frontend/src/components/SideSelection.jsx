@@ -10,6 +10,7 @@ import {
   useTheme
 } from '@mui/material';
 import { tokens } from '../theme';
+import { mapImageUrl } from '../utils/maps';
 
 const SideSelection = ({ 
   finalMap, 
@@ -23,19 +24,7 @@ const SideSelection = ({
   const theme = useTheme();
   const colors = tokens(theme.palette.mode);
 
-  // Map images mapping
-  const mapImages = {
-    'Bind': '/maps/bind.jpg',
-    'Haven': '/maps/haven.jpg', 
-    'Split': '/maps/split.jpg',
-    'Ascent': '/maps/ascent.jpg',
-    'Icebox': '/maps/icebox.jpg',
-    'Breeze': '/maps/breeze.jpg',
-    'Fracture': '/maps/fracture.jpg',
-    'Pearl': '/maps/pearl.jpg',
-    'Lotus': '/maps/lotus.jpg',
-    'Sunset': '/maps/sunset.jpg'
-  };
+  // Map image resolver is provided by utils/maps.js
 
   // Server location flags mapping
   const serverFlags = {
@@ -51,6 +40,16 @@ const SideSelection = ({
 
   const isMyTurn = currentTurn === myTeam && isCaptain;
   const canSelectSide = isMyTurn;
+  
+  // Debug logging
+  console.log('🎮 [SIDE SELECTION COMPONENT] State:', {
+    currentTurn,
+    myTeam,
+    isCaptain,
+    isMyTurn,
+    canSelectSide,
+    finalMap
+  });
 
   const handleSideSelect = (side) => {
     if (canSelectSide) {
@@ -134,7 +133,7 @@ const SideSelection = ({
         <Box sx={{ 
           position: 'relative',
           height: 120,
-          backgroundImage: `url(${mapImages[finalMap] || '/maps/default.jpg'})`,
+          backgroundImage: `url(${mapImageUrl(finalMap)})`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
           display: 'flex',
@@ -178,22 +177,23 @@ const SideSelection = ({
             py: 0.75, // Reduced height by half (was 1.5)
             px: 2,
             minHeight: 'auto',
-            backgroundColor: canSelectSide ? theme.palette.primary.main : 'transparent',
-            borderColor: theme.palette.primary.main,
-            color: canSelectSide ? colors.grey[900] : theme.palette.primary.main,
+            backgroundColor: canSelectSide ? '#ff4444' : 'transparent', // Red background when clickable
+            borderColor: '#ff4444', // Red border
+            color: canSelectSide ? colors.grey[100] : '#ff4444', // White text when clickable, red when not
             '&:hover': {
-              backgroundColor: canSelectSide ? theme.palette.primary.dark : 'transparent',
-              borderColor: theme.palette.primary.dark,
+              backgroundColor: canSelectSide ? '#cc0000' : 'rgba(255, 68, 68, 0.1)', // Darker red on hover
+              borderColor: '#cc0000',
             },
             '&:disabled': {
               borderColor: colors.grey[600],
-              color: colors.grey[600]
+              color: colors.grey[600],
+              backgroundColor: 'transparent'
             }
           }}
         >
           <Typography variant="body1" sx={{ 
             fontWeight: 'bold',
-            color: canSelectSide ? colors.grey[900] : '#ff4444' // Red for attack
+            color: 'inherit'
           }}>
             ATTACK
           </Typography>
@@ -208,36 +208,48 @@ const SideSelection = ({
             py: 0.75, // Reduced height by half (was 1.5)
             px: 2,
             minHeight: 'auto',
-            backgroundColor: canSelectSide ? theme.palette.secondary.main : 'transparent',
-            borderColor: theme.palette.secondary.main,
-            color: canSelectSide ? colors.grey[900] : theme.palette.secondary.main,
+            backgroundColor: canSelectSide ? '#4444ff' : 'transparent', // Blue background when clickable
+            borderColor: '#4444ff', // Blue border
+            color: canSelectSide ? colors.grey[100] : '#4444ff', // White text when clickable, blue when not
             '&:hover': {
-              backgroundColor: canSelectSide ? theme.palette.secondary.dark : 'transparent',
-              borderColor: theme.palette.secondary.dark,
+              backgroundColor: canSelectSide ? '#0000cc' : 'rgba(68, 68, 255, 0.1)', // Darker blue on hover
+              borderColor: '#0000cc',
             },
             '&:disabled': {
               borderColor: colors.grey[600],
-              color: colors.grey[600]
+              color: colors.grey[600],
+              backgroundColor: 'transparent'
             }
           }}
         >
           <Typography variant="body1" sx={{ 
             fontWeight: 'bold',
-            color: canSelectSide ? colors.grey[900] : '#4444ff' // Blue for defend
+            color: 'inherit'
           }}>
             DEFEND
           </Typography>
         </Button>
       </Box>
 
-      {/* Turn Indicator */}
+      {/* Team Selector Indicator */}
+      <Typography variant="body2" sx={{ 
+        color: colors.grey[300],
+        textAlign: 'center',
+        mt: 1,
+        fontWeight: canSelectSide ? 600 : 400
+      }}>
+        {currentTurn === 'team_a' ? 'Team A' : 'Team B'} select starting side
+      </Typography>
+
+      {/* Turn Indicator (only show if can't select) */}
       {!canSelectSide && (
-        <Typography variant="body2" sx={{ 
-          color: colors.grey[400],
+        <Typography variant="caption" sx={{ 
+          color: colors.grey[500],
           textAlign: 'center',
-          mt: 1
+          mt: 0.5,
+          fontSize: '0.7rem'
         }}>
-          {isCaptain ? `Waiting for ${currentTurn === 'team_a' ? 'Team B' : 'Team A'} to select side...` : 'Only captains can select sides'}
+          {isCaptain ? 'Waiting for opponent...' : 'Only captains can select sides'}
         </Typography>
       )}
     </Box>

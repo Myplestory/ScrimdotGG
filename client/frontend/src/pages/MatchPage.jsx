@@ -32,6 +32,7 @@ import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 import SportsEsportsIcon from '@mui/icons-material/SportsEsports';
 import SimpleRankGauge from '../components/SimpleRankGauge';
 import SideSelection from '../components/SideSelection';
+import PostMatchSetup from '../components/PostMatchSetup';
 
 // Compact Player Card Component
 const PlayerCard = ({ player, isCurrentUser, theme, colors, isLeftTeam = false }) => {
@@ -374,6 +375,11 @@ export default function MatchPage() {
   const [sideSelector, setSideSelector] = useState(null);
   const [selectedSide, setSelectedSide] = useState(null);
   const [sideTimeLeft, setSideTimeLeft] = useState(null);
+  // Post match setup state
+  const [postMatchSetupPhase, setPostMatchSetupPhase] = useState(false);
+  const [connectDeadline, setConnectDeadline] = useState(null);
+  const [pregameStatus, setPregameStatus] = useState('connecting'); // 'connecting' | 'joined' | 'failed'
+  const [startedAt, setStartedAt] = useState(null);
 
   // Fetch match data on component mount
   useEffect(() => {
@@ -566,6 +572,11 @@ export default function MatchPage() {
       if (payload.side_complete) {
         setSideSelectionPhase(false);
         setSideTimeLeft(null);
+        // Begin post-match setup phase with 3-minute connect window (if server doesn't supply one)
+        setPostMatchSetupPhase(true);
+        const defaultDeadline = new Date(Date.now() + 3 * 60 * 1000).toISOString();
+        setConnectDeadline(prev => prev || defaultDeadline);
+        setPregameStatus('connecting');
         console.log('🎮 [MATCH PAGE] Side selection completed, match is ready!');
       }
     });
@@ -664,6 +675,14 @@ export default function MatchPage() {
   };
 
   const handleSideSelection = (side) => {
+    console.log('[SIDE SELECTION] Attempting to select side:', side);
+    console.log('[SIDE SELECTION] Debug info:', {
+      isCaptain,
+      myTeam,
+      sideSelector,
+      canSelect: isCaptain && sideSelector === myTeam
+    });
+    
     if (!isCaptain) {
       console.log('[SIDE SELECTION] Not captain, cannot select side');
       return;
@@ -671,6 +690,7 @@ export default function MatchPage() {
     
     if (sideSelector !== myTeam) {
       console.log('[SIDE SELECTION] Not our turn to select side');
+      console.log('[SIDE SELECTION] Expected selector:', sideSelector, 'My team:', myTeam);
       return;
     }
     
@@ -922,6 +942,24 @@ export default function MatchPage() {
                 currentTurn={sideSelector}
                 onSideSelect={handleSideSelection}
                 timeLeft={sideTimeLeft}
+              />
+            </Box>
+          )}
+
+          {/* Post Match Setup Section - Center */}
+          {postMatchSetupPhase && (
+            <Box sx={{ display: 'flex', alignItems: 'center', minHeight: '400px' }}>
+              <PostMatchSetup
+                finalMap={matchData?.final_map}
+                serverLocation="US-East" // TODO: Get from match data
+                pregameStatus={pregameStatus}
+                connectDeadline={connectDeadline}
+                startedAt={startedAt}
+                onManualConnect={() => {
+                  console.log('[POST MATCH SETUP] Manual connect clicked');
+                  // TODO: emit manual connect event when backend handler is ready
+                  // sendEvent('manual_connect', { match_id: matchId });
+                }}
               />
             </Box>
           )}

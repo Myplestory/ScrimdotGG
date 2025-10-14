@@ -356,6 +356,19 @@ class PugSocketClient:
                     await self.veto_update_callback(update_data)
         except Exception as e:
             print(f"Error processing 'veto_timeout' event: {e}")
+    
+    async def on_side_selected(self, data):
+        """Handle side selection from Django."""
+        try:
+            side = data.get("side")
+            selected_by = data.get("selected_by")
+            print(f"[SIDE SELECTED] {selected_by} selected {side}")
+            
+            # Forward to main WebSocket connection via callback
+            if hasattr(self, 'side_selected_callback'):
+                await self.side_selected_callback(data)
+        except Exception as e:
+            print(f"Error processing 'side_selected' event: {e}")
 
     ### COMMANDS ###
 

@@ -193,46 +193,65 @@ class ValorantAPI(object):
                     
                     # Set up the veto_update callback to forward to main WebSocket
                     async def veto_update_callback(data):
-                        """Forward veto_update event to main WebSocket connection"""
+                        """Forward veto_update event to main WebSocket connection (IMMEDIATE)"""
                         try:
                             print(f"[VETO_UPDATE_CALLBACK] Received veto_update event: {data}")
                             
-                            # Store the veto update data temporarily
-                            api_instance._pending_veto_update_data = data
+                            # Immediately broadcast to all connected frontend clients
+                            from quart import current_app
+                            await current_app.conn_mgr.broadcast('veto_update', data)
                             
-                            print(f"[VETO_UPDATE_CALLBACK] Stored pending veto update data, will be picked up by main loop")
+                            print(f"[VETO_UPDATE_CALLBACK] Immediately broadcasted veto_update to all clients")
                         except Exception as e:
-                            print(f"[VETO_UPDATE_CALLBACK] Error storing veto_update: {e}")
+                            print(f"[VETO_UPDATE_CALLBACK] Error broadcasting veto_update: {e}")
                             import traceback
                             traceback.print_exc()
                     
                     # Set up the veto_complete callback to forward to main WebSocket
                     async def veto_complete_callback(data):
-                        """Forward veto_complete event to main WebSocket connection"""
+                        """Forward veto_complete event to main WebSocket connection (IMMEDIATE)"""
                         try:
                             print(f"[VETO_COMPLETE_CALLBACK] Received veto_complete event: {data}")
                             
-                            # Store the veto complete data temporarily
-                            api_instance._pending_veto_complete_data = data
+                            # Immediately broadcast to all connected frontend clients
+                            from quart import current_app
+                            await current_app.conn_mgr.broadcast('veto_complete', data)
                             
-                            print(f"[VETO_COMPLETE_CALLBACK] Stored pending veto complete data, will be picked up by main loop")
+                            print(f"[VETO_COMPLETE_CALLBACK] Immediately broadcasted veto_complete to all clients")
                         except Exception as e:
-                            print(f"[VETO_COMPLETE_CALLBACK] Error storing veto_complete: {e}")
+                            print(f"[VETO_COMPLETE_CALLBACK] Error broadcasting veto_complete: {e}")
                             import traceback
                             traceback.print_exc()
                     
                     # Set up the veto_acknowledged callback to forward to main WebSocket
                     async def veto_acknowledged_callback(data):
-                        """Forward veto_acknowledged event to main WebSocket connection"""
+                        """Forward veto_acknowledged event to main WebSocket connection (IMMEDIATE)"""
                         try:
                             print(f"[VETO_ACKNOWLEDGED_CALLBACK] Received veto_acknowledged event: {data}")
                             
-                            # Store the veto acknowledged data temporarily
-                            api_instance._pending_veto_acknowledged_data = data
+                            # Immediately broadcast to all connected frontend clients
+                            from quart import current_app
+                            await current_app.conn_mgr.broadcast('veto_acknowledged', data)
                             
-                            print(f"[VETO_ACKNOWLEDGED_CALLBACK] Stored pending veto acknowledged data, will be picked up by main loop")
+                            print(f"[VETO_ACKNOWLEDGED_CALLBACK] Immediately broadcasted veto_acknowledged to all clients")
                         except Exception as e:
-                            print(f"[VETO_ACKNOWLEDGED_CALLBACK] Error storing veto_acknowledged: {e}")
+                            print(f"[VETO_ACKNOWLEDGED_CALLBACK] Error broadcasting veto_acknowledged: {e}")
+                            import traceback
+                            traceback.print_exc()
+                    
+                    # Set up the side_selected callback to forward to main WebSocket
+                    async def side_selected_callback(data):
+                        """Forward side_selected event to main WebSocket connection (IMMEDIATE)"""
+                        try:
+                            print(f"[SIDE_SELECTED_CALLBACK] Received side_selected event: {data}")
+                            
+                            # Immediately broadcast to all connected frontend clients
+                            from quart import current_app
+                            await current_app.conn_mgr.broadcast('side_selected', data)
+                            
+                            print(f"[SIDE_SELECTED_CALLBACK] Immediately broadcasted side_selected to all clients")
+                        except Exception as e:
+                            print(f"[SIDE_SELECTED_CALLBACK] Error broadcasting side_selected: {e}")
                             import traceback
                             traceback.print_exc()
                     
@@ -246,6 +265,7 @@ class ValorantAPI(object):
                     self.pugsocket.veto_update_callback = veto_update_callback
                     self.pugsocket.veto_complete_callback = veto_complete_callback
                     self.pugsocket.veto_acknowledged_callback = veto_acknowledged_callback
+                    self.pugsocket.side_selected_callback = side_selected_callback
                     self._pending_match_data = None
                     self._pending_match_proposed_data = None
                     self._pending_player_accepted_data = None
