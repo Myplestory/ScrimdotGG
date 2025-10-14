@@ -619,3 +619,84 @@ class MatchManager:
                 'message': str(e)
             }
 
+    @staticmethod
+    def process_side_selection_sync(match_id: str, side: str, team: str, player_puuid: str) -> Dict:
+        """
+        Synchronous: Process side selection by a captain. Safe for Celery/tasks.
+        """
+        try:
+            match = Match.objects.get(id=match_id)
+
+            # Validate match state
+            if match.state != 'SIDE_SELECTION':
+                return {
+                    'status': 'error',
+                    'message': f'Match is not in side selection phase (current: {match.state})'
+                }
+
+            # Validate side
+            if side not in ['attack', 'defend']:
+                return {
+                    'status': 'error',
+                    'message': f'Invalid side: {side}. Must be "attack" or "defend"'
+                }
+
+            # Validate team
+            if team not in ['team_a', 'team_b']:
+                return {
+                    'status': 'error',
+                    'message': f'Invalid team: {team}'
+                }
+
+            # Check if it's this team's turn to select
+            if match.side_selector != team:
+                return {
+                    'status': 'error',
+                    'message': f'It is not {team}\'s turn to select side (current selector: {match.side_selector})'
+                }
+
+            # Validate captain
+            captain_puuid = match.team_a_captain_puuid if team == 'team_a' else match.team_b_captain_puuid
+            if player_puuid != captain_puuid:
+                return {
+                    'status': 'error',
+                    'message': 'Only the team captain can select sides'
+                }
+
+            # Update match with side selection
+            match.selected_side = side
+            match.state = 'READY'  # Move to ready state
+            match.save()
+
+            logger.info(f"Side {side} selected by {team} captain {player_puuid[:12]}... in match {match.id}")
+
+            return {
+                'status': 'success',
+                'side': side,
+                'selected_by': team,
+                'side_complete': True,
+                'match_ready': True
+            }
+
+        except Match.DoesNotExist:
+            return {
+                'status': 'error',
+                'message': f'Match {match_id} not found'
+            }
+        except Exception as e:
+            logger.error(f"Error processing side selection: {str(e)}")
+            return {
+                'status': 'error',
+                'message': str(e)
+            }
+
+    @staticmethod
+    async def process_side_selection(match: Match, side: str, team: str, player_puuid: str) -> Dict:
+        """
+        Async wrapper used by Channels: delegates to the sync implementation.
+        """
+        match_id = str(match.id)
+        return await sync_to_async(MatchManager.process_side_selection_sync, thread_sensitive=True)(
+            match_id, side, team, player_puuid
+        )
+

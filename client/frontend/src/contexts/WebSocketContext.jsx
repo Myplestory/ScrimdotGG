@@ -290,6 +290,47 @@ export const WebSocketProvider = ({ children }) => {
         }));
         break;
         
+      case 'match_data':
+        console.log('📥 [FRONTEND] Received match data:', payload);
+        setMatchData(payload);
+        // Call custom event handler if registered
+        if (eventHandlers.current['match_data']) {
+          eventHandlers.current['match_data'](payload);
+        }
+        break;
+        
+      case 'veto_update':
+        console.log('📥 [FRONTEND] Received veto update:', payload);
+        setMatchData(prev => ({
+          ...prev,
+          veto_state: {
+            ...prev?.veto_state,
+            ...payload,
+            last_update: Date.now()
+          }
+        }));
+        // Call custom event handler if registered
+        if (eventHandlers.current['veto_update']) {
+          eventHandlers.current['veto_update'](payload);
+        }
+        break;
+        
+      case 'veto_complete':
+        console.log('📥 [FRONTEND] Veto phase completed:', payload);
+        setMatchData(prev => ({
+          ...prev,
+          veto_state: {
+            ...prev?.veto_state,
+            completed: true,
+            final_map: payload.final_map
+          }
+        }));
+        // Call custom event handler if registered
+        if (eventHandlers.current['veto_complete']) {
+          eventHandlers.current['veto_complete'](payload);
+        }
+        break;
+        
       case 'error':
         console.error('❌ Server error:', payload.message);
         break;

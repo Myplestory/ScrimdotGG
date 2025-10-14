@@ -1253,6 +1253,67 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
                 'error': f'Failed to veto map: {str(e)}'
             }))
             logger.error(f"Error vetoing map: {str(e)}")
+
+    async def handle_select_side(self, data):
+        """
+        Captain selects a side (attack/defend).
+        """
+        payload = data.get('payload', {})
+        match_id = payload.get('match_id')
+        side = payload.get('side')
+        
+        if not match_id or not side:
+            await self.send(text_data=json.dumps({
+                'error': 'match_id and side are required'
+            }))
+            return
+        
+        try:
+            # Get match (use sync_to_async for compatibility)
+            from .models_match import Match
+            match = await sync_to_async(lambda: Match.objects.get(id=match_id), thread_sensitive=False)()
+            
+            # Determine which team this player is on
+            team = match.get_player_team(self.puuid)
+            
+            if not team:
+                await self.send(text_data=json.dumps({
+                    'error': 'You are not in this match'
+                }))
+                return
+            
+            # Process side selection
+            result = await MatchManager.process_side_selection(match, side, team, self.puuid)
+            
+            if result['status'] == 'success':
+                # Broadcast side selection to all players in match
+                await self.channel_layer.group_send(
+                    f"match_{match.id}",
+                    {
+                        'type': 'side_selected',
+                        'match_id': str(match.id),
+                        'side': side,
+                        'selected_by': team,
+                        'side_complete': result.get('side_complete', False)
+                    }
+                )
+                
+                await self.send(text_data=json.dumps({
+                    'event': 'side_acknowledged',
+                    'data': result
+                }))
+                
+                logger.info(f"Side {side} selected by {team} in match {match.id}")
+            else:
+                await self.send(text_data=json.dumps({
+                    'error': result.get('message')
+                }))
+                
+        except Exception as e:
+            logger.error(f"Error processing side selection for {match_id}: {str(e)}")
+            await self.send(text_data=json.dumps({
+                'error': f"Failed to process side selection: {str(e)}"
+            }))
         
     # -------------------- Lobby Chat WebSocket Messages --------------------        
         
@@ -1675,6 +1736,22 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
                 'match_id': event['match_id'],
                 'final_map': event['final_map'],
                 'side_selector': event.get('side_selector')
+            }
+        }))
+    
+    async def side_selected(self, event):
+        """
+        Handle side selected event - broadcast to all players in match.
+        """
+        logger.info(f"Side selected event received: {event}")
+        
+        await self.send(text_data=json.dumps({
+            'event': 'side_selected',
+            'data': {
+                'match_id': event['match_id'],
+                'side': event['side'],
+                'selected_by': event['selected_by'],
+                'side_complete': event['side_complete']
             }
         }))
     

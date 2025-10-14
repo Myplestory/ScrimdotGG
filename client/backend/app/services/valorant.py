@@ -16,6 +16,11 @@ class ValorantService:
     def __init__(self):
         self.api = ValorantAPI()
     
+    @property
+    def pugsocket(self):
+        """Expose pugsocket for pending events."""
+        return self.api.pugsocket
+    
     async def check_status(self):
         """Check if Valorant is running."""
         try:

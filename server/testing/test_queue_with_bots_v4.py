@@ -58,6 +58,8 @@ class BotWebSocketClient:
         self.connected = False
         self.in_queue = False
         self.match_found = False
+        self.match_confirmed = False
+        self.veto_complete = False
         
         # Veto-related state
         self.current_match_id = None
@@ -135,17 +137,23 @@ class BotWebSocketClient:
             })
             
         elif event == 'match_confirmed':
+            self.match_confirmed = True
             self.current_match_id = payload.get('match_id')
             logger.info(f"✅ Bot {self.bot_alias} match confirmed! Match ID: {self.current_match_id[:8] if self.current_match_id else 'Unknown'}")
             
+            # Request match data to join match group and receive veto updates
+            await self._send_message('get_match_data', {
+                'match_id': self.current_match_id
+            })
+        
         elif event == 'match_data':
             # Handle match data (veto phase initialization)
             await self._handle_match_data(payload)
-            
+
         elif event == 'veto_update':
             # Handle veto updates (map vetoed, turn changes)
             await self._handle_veto_update(payload)
-            
+        
         elif event == 'veto_complete':
             # Handle veto phase completion
             await self._handle_veto_complete(payload)
@@ -243,22 +251,35 @@ class BotWebSocketClient:
             # Determine if this bot is captain
             team_a_players = payload.get('team_a_players', [])
             team_b_players = payload.get('team_b_players', [])
-            
-            # Check if bot is captain in either team
+            logger.info(f"🎮 Team A : {team_a_players}")
+            logger.info(f"🎮 Team B : {team_b_players}")
+            # First, find which team this bot is on
             self.is_captain = False
             self.my_team = None
             
+            # Check team A
             for player in team_a_players:
-                if player.get('puuid') == self.bot_puuid and player.get('is_captain'):
-                    self.is_captain = True
+                if player.get('puuid') == self.bot_puuid:
                     self.my_team = 'team_a'
+                    x = player.get('puuid')
+                    y = player.get('is_captain')
+                    logger.info(f"🎮 Bot {self.bot_alias} puuid grabbed : {x} ")
+                    logger.info(f"🎮 Bot {self.bot_alias} is assigned captain? {y} ")
+                    if player.get('is_captain'):
+                        self.is_captain = True
                     break
             
-            if not self.is_captain:
+            # Check team B if not found in team A
+            if self.my_team is None:
                 for player in team_b_players:
-                    if player.get('puuid') == self.bot_puuid and player.get('is_captain'):
-                        self.is_captain = True
+                    if player.get('puuid') == self.bot_puuid:
                         self.my_team = 'team_b'
+                        x = player.get('puuid')
+                        y = player.get('is_captain')
+                        logger.info(f"🎮 Bot {self.bot_alias} puuid grabbed : {x} ")
+                        logger.info(f"🎮 Bot {self.bot_alias} is assigned captain? {y} ")
+                        if player.get('is_captain'):
+                            self.is_captain = True
                         break
             
             logger.info(f"🎮 Bot {self.bot_alias} veto state initialized:")
@@ -276,21 +297,42 @@ class BotWebSocketClient:
         """Handle veto updates (map vetoed, turn changes)"""
         logger.info(f"🎮 Bot {self.bot_alias} received veto update")
         
+        # Check if we've initialized veto state yet (received match_data)
+        if self.my_team is None:
+            logger.warning(f"⚠️ Bot {self.bot_alias} received veto_update but my_team is None - match_data not received yet!")
+            logger.warning(f"   Requesting match data again...")
+            # Request match data again
+            if self.current_match_id:
+                await self._send_message('get_match_data', {'match_id': self.current_match_id})
+            return
+        
+        # Update available maps
         self.available_maps = payload.get('remaining_maps', [])
-        self.vetoed_maps = payload.get('vetoed_maps', [])
-        self.current_turn = payload.get('veto_turn')
-        self.veto_deadline = payload.get('veto_deadline')
+        
+        # Update vetoed maps - add the newly vetoed map
+        map_name = payload.get('map_name')
+        if map_name and map_name not in self.vetoed_maps:
+            self.vetoed_maps.append(map_name)
+        
+        # Handle both 'veto_turn' (from match_data) and 'next_turn' (from veto_update)
+        self.current_turn = payload.get('veto_turn') or payload.get('next_turn')
+        self.veto_deadline = payload.get('deadline') or payload.get('veto_deadline')
         
         logger.info(f"   Remaining maps: {self.available_maps}")
         logger.info(f"   Vetoed maps: {self.vetoed_maps}")
         logger.info(f"   Current turn: {self.current_turn}")
+        logger.info(f"   Is captain: {self.is_captain}, My team: {self.my_team}")
         
         # If it's my turn and I'm captain, make a veto decision
         if self.is_captain and self.current_turn == self.my_team:
+            logger.info(f"🎯 Bot {self.bot_alias} - IT'S MY TURN! Making veto decision...")
             await self._make_veto_decision()
+        else:
+            logger.info(f"   Not my turn (is_captain={self.is_captain}, current_turn={self.current_turn}, my_team={self.my_team})")
     
     async def _handle_veto_complete(self, payload: dict):
         """Handle veto phase completion"""
+        self.veto_complete = True
         logger.info(f"🎮 Bot {self.bot_alias} veto phase completed!")
         logger.info(f"   Final map: {payload.get('final_map')}")
         
@@ -322,11 +364,10 @@ class BotWebSocketClient:
         delay = random.uniform(1.0, 3.0)
         await asyncio.sleep(delay)
         
-        # Send veto action
+        # Send veto action (server accepts both 'map' and 'map_name')
         await self._send_message('veto_map', {
             'match_id': self.current_match_id,
-            'map_name': map_to_veto,
-            'action_type': 'ban'
+            'map_name': map_to_veto
         })
     
     def _random_veto(self) -> str:
@@ -432,10 +473,8 @@ async def get_your_player_info():
     def find_player():
         # Look for your specific player first (evisc#erate)
         you = Player.objects.filter(username__icontains='evisc').first()
-        
         if you:
             return you
-            
         # If not found, find any non-bot, non-sim, non-test players
         you = Player.objects.exclude(
             username__icontains='bot'
@@ -488,6 +527,36 @@ async def wait_for_match_or_timeout(bot_clients: List[BotWebSocketClient], timeo
         if int(elapsed) % 10 == 0 and int(elapsed) > 0:
             remaining = timeout_seconds - int(elapsed)
             print(f"   ⏳ Still waiting... ({remaining}s remaining)")
+        
+        await asyncio.sleep(1)
+
+
+async def wait_for_veto_completion(bot_clients: List[BotWebSocketClient], timeout_seconds: int = 300):
+    """Wait for veto phase to complete across all bots"""
+    print(f"\n[4/4] Waiting for veto phase completion (timeout: {timeout_seconds}s)...")
+    
+    start_time = asyncio.get_event_loop().time()
+    
+    while True:
+        current_time = asyncio.get_event_loop().time()
+        elapsed = current_time - start_time
+        
+        if elapsed >= timeout_seconds:
+            print(f"   ⏰ Veto timeout reached ({timeout_seconds}s)")
+            return False
+        
+        # Check if veto is complete (at least one bot should have veto_complete)
+        veto_complete_count = sum(1 for bot in bot_clients if bot.veto_complete)
+        
+        if veto_complete_count > 0:
+            print(f"   ✅ Veto phase completed! ({veto_complete_count} bots confirmed)")
+            return True
+        
+        # Show progress every 5 seconds
+        if int(elapsed) % 5 == 0 and int(elapsed) > 0:
+            remaining = timeout_seconds - int(elapsed)
+            confirmed = sum(1 for bot in bot_clients if bot.match_confirmed)
+            print(f"   ⏳ Waiting for veto... {confirmed}/{len(bot_clients)} bots confirmed match ({remaining}s remaining)")
         
         await asyncio.sleep(1)
 
@@ -567,9 +636,19 @@ async def main():
             print("   💡 Check your client - you should see the match confirmation")
             print("   💡 Accept the match to proceed to veto phase")
             
-            # Keep bots alive for a bit longer for veto testing
-            print("\n   ⏳ Keeping bots alive for veto testing (60s)...")
-            await asyncio.sleep(60)
+            # Wait for veto phase to complete (with extended timeout)
+            print("\n   ⏳ Waiting for veto phase to complete...")
+            veto_completed = await wait_for_veto_completion(bot_clients, timeout_seconds=300)
+            
+            if veto_completed:
+                print("\n   ✅ Veto phase completed successfully!")
+                print("   💡 Bots will disconnect in 10 seconds...")
+                await asyncio.sleep(10)
+            else:
+                print("\n   ⚠️  Veto phase did not complete within timeout")
+                print("   💡 Check Celery worker logs for auto-veto activity")
+                print("   💡 Bots will disconnect in 10 seconds...")
+                await asyncio.sleep(10)
             
         else:
             print("\n⏰ No match found within timeout period")

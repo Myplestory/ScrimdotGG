@@ -124,6 +124,7 @@ class ConnectionManager:
         """Forward pending events from ValorantAPI to frontend clients."""
         pending_events = [
             ('_pending_match_data', 'pug_match_found'),
+            ('_pending_match_proposed_data', 'match_acceptance_required'),
             ('_pending_player_accepted_data', 'player_accepted'),
             ('_pending_match_ready_data', 'match_ready'),
             ('_pending_match_confirmed_data', 'match_confirmed'),
@@ -135,6 +136,7 @@ class ConnectionManager:
         ]
         
         for attr_name, event_name in pending_events:
+            # Access pending events from api (ValorantAPI instance)
             data = getattr(valorant_service.api, attr_name, None)
             if data:
                 setattr(valorant_service.api, attr_name, None)

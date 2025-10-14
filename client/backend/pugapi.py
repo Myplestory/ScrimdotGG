@@ -103,6 +103,8 @@ class PugSocketClient:
                 await self.on_direct_message(payload)
             elif event == "match_found":
                 await self.on_match_found(payload)
+            elif event == "match_proposed":
+                await self.on_match_proposed(payload)
             elif event == "match_confirmed":
                 await self.on_match_confirmed(payload)
             elif event == "veto_started":
@@ -115,6 +117,8 @@ class PugSocketClient:
                 await self.on_veto_complete(payload)
             elif event == "veto_acknowledged":
                 await self.on_veto_acknowledged(payload)
+            elif event == "veto_timeout":
+                await self.on_veto_timeout(payload)
             else:
                 print(f"Unknown event received: {event}")
         except Exception as e:
@@ -232,6 +236,20 @@ class PugSocketClient:
         except Exception as e:
             print(f"Error processing 'match_found' event: {e}")
     
+    async def on_match_proposed(self, data):
+        """Handle match proposed event (acceptance required)."""
+        try:
+            match_id = data.get("match_id")
+            timeout_seconds = data.get("timeout_seconds", 30)
+            
+            print(f"[MATCH PROPOSED] Match ID: {match_id}, Timeout: {timeout_seconds}s")
+            
+            # Forward to main WebSocket connection via callback
+            if hasattr(self, 'match_proposed_callback'):
+                await self.match_proposed_callback(data)
+        except Exception as e:
+            print(f"Error processing 'match_proposed' event: {e}")
+    
     async def on_match_confirmed(self, data):
         """Handle match confirmed event."""
         try:
@@ -305,6 +323,39 @@ class PugSocketClient:
                 await self.veto_acknowledged_callback(data)
         except Exception as e:
             print(f"Error processing 'veto_acknowledged' event: {e}")
+    
+    async def on_veto_timeout(self, data):
+        """Handle veto timeout (auto-veto) from Django."""
+        try:
+            auto_vetoed_map = data.get("auto_vetoed_map")
+            veto_complete = data.get("veto_complete", False)
+            final_map = data.get("final_map")
+            
+            print(f"[VETO TIMEOUT] Auto-vetoed: {auto_vetoed_map}, Complete: {veto_complete}, Final: {final_map}")
+            
+            # Treat timeout as a veto_update or veto_complete
+            if veto_complete:
+                # Forward as veto_complete
+                complete_data = {
+                    'match_id': data.get('match_id'),
+                    'final_map': final_map
+                }
+                if hasattr(self, 'veto_complete_callback'):
+                    await self.veto_complete_callback(complete_data)
+            else:
+                # Forward as veto_update
+                update_data = {
+                    'match_id': data.get('match_id'),
+                    'map_name': auto_vetoed_map,
+                    'vetoed_by': 'timeout',
+                    'next_turn': data.get('next_turn'),
+                    'remaining_maps': data.get('remaining_maps', []),
+                    'deadline': data.get('deadline')
+                }
+                if hasattr(self, 'veto_update_callback'):
+                    await self.veto_update_callback(update_data)
+        except Exception as e:
+            print(f"Error processing 'veto_timeout' event: {e}")
 
     ### COMMANDS ###
 

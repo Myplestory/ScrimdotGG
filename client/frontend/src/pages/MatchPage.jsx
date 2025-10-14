@@ -31,6 +31,7 @@ import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 import SportsEsportsIcon from '@mui/icons-material/SportsEsports';
 import SimpleRankGauge from '../components/SimpleRankGauge';
+import SideSelection from '../components/SideSelection';
 
 // Compact Player Card Component
 const PlayerCard = ({ player, isCurrentUser, theme, colors, isLeftTeam = false }) => {
@@ -367,6 +368,12 @@ export default function MatchPage() {
   const [vetoedMaps, setVetoedMaps] = useState([]);
   const [vetoHistory, setVetoHistory] = useState([]);
   const [vetoDeadline, setVetoDeadline] = useState(null);
+  
+  // Side selection state
+  const [sideSelectionPhase, setSideSelectionPhase] = useState(false);
+  const [sideSelector, setSideSelector] = useState(null);
+  const [selectedSide, setSelectedSide] = useState(null);
+  const [sideTimeLeft, setSideTimeLeft] = useState(null);
 
   // Fetch match data on component mount
   useEffect(() => {
@@ -477,6 +484,14 @@ export default function MatchPage() {
         setVetoedMaps(payload.vetoed_maps || []);
         setVetoHistory(payload.veto_history || []);
         setVetoDeadline(payload.veto_deadline);
+      } else if (payload.state === 'SIDE_SELECTION') {
+        console.log('🎮 [MATCH PAGE] SIDE SELECTION PHASE DETECTED - Initializing side selection component');
+        console.log('   Final map:', payload.final_map);
+        console.log('   Side selector:', payload.side_selector);
+        
+        setSideSelectionPhase(true);
+        setSideSelector(payload.side_selector);
+        setSelectedSide(payload.selected_side);
       } else {
         console.log('🎮 [MATCH PAGE] Match state:', payload.state, '- Veto component not initialized');
       }
@@ -485,32 +500,74 @@ export default function MatchPage() {
     const unsubscribeVetoUpdate = on('veto_update', (payload) => {
       console.log('📥 [MATCH PAGE] Veto update received:', payload);
       
+      // Update vetoed maps list - add the newly vetoed map
+      const newVetoedMaps = [...(vetoedMaps || [])];
+      if (payload.map_name && !newVetoedMaps.includes(payload.map_name)) {
+        newVetoedMaps.push(payload.map_name);
+      }
+      
       // Update veto state
       setAvailableMaps(payload.remaining_maps || []);
-      setVetoedMaps(payload.vetoed_maps || []);
+      setVetoedMaps(newVetoedMaps);
       setVetoHistory(payload.veto_history || []);
-      setCurrentTurn(payload.veto_turn);
-      setVetoDeadline(payload.veto_deadline);
+      // Handle both 'veto_turn' (from match_data) and 'next_turn' (from veto_update)
+      setCurrentTurn(payload.next_turn || payload.veto_turn);
+      setVetoDeadline(payload.deadline || payload.veto_deadline);
       
       // Update match data
       setMatchData(prev => ({
         ...prev,
         remaining_maps: payload.remaining_maps,
-        vetoed_maps: payload.vetoed_maps,
-        veto_history: payload.veto_history,
-        veto_turn: payload.veto_turn,
-        veto_deadline: payload.veto_deadline
+        vetoed_maps: newVetoedMaps,
+        veto_history: payload.veto_history || [],
+        veto_turn: payload.next_turn || payload.veto_turn,
+        veto_deadline: payload.deadline || payload.veto_deadline
       }));
+      
+      console.log('✅ [MATCH PAGE] Veto state updated:', {
+        currentTurn: payload.next_turn || payload.veto_turn,
+        availableMaps: payload.remaining_maps,
+        vetoedMaps: newVetoedMaps,
+        myTeam,
+        isCaptain,
+        isMyTurn: (payload.next_turn || payload.veto_turn) === myTeam && isCaptain
+      });
     });
 
     const unsubscribeVetoComplete = on('veto_complete', (payload) => {
       console.log('📥 [MATCH PAGE] Veto phase completed:', payload);
       setVetoPhase(false);
+      setSideSelectionPhase(true);
+      setSideSelector(payload.side_selector);
+      setSideTimeLeft(15);
       setMatchData(prev => ({
         ...prev,
         state: 'SIDE_SELECTION',
-        final_map: payload.final_map
+        final_map: payload.final_map,
+        side_selector: payload.side_selector
       }));
+      
+      console.log('🎮 [MATCH PAGE] Transitioning to side selection phase:', {
+        finalMap: payload.final_map,
+        sideSelector: payload.side_selector
+      });
+    });
+
+    const unsubscribeSideSelected = on('side_selected', (payload) => {
+      console.log('📥 [MATCH PAGE] Side selected:', payload);
+      
+      setSelectedSide(payload.side);
+      setMatchData(prev => ({
+        ...prev,
+        selected_side: payload.side,
+        state: payload.side_complete ? 'READY' : 'SIDE_SELECTION'
+      }));
+      
+      if (payload.side_complete) {
+        setSideSelectionPhase(false);
+        setSideTimeLeft(null);
+        console.log('🎮 [MATCH PAGE] Side selection completed, match is ready!');
+      }
     });
 
     const unsubscribeError = on('error', (payload) => {
@@ -523,6 +580,7 @@ export default function MatchPage() {
       if (typeof unsubscribeMatchData === 'function') unsubscribeMatchData();
       if (typeof unsubscribeVetoUpdate === 'function') unsubscribeVetoUpdate();
       if (typeof unsubscribeVetoComplete === 'function') unsubscribeVetoComplete();
+      if (typeof unsubscribeSideSelected === 'function') unsubscribeSideSelected();
       if (typeof unsubscribeError === 'function') unsubscribeError();
     };
   }, [on]);
@@ -552,6 +610,24 @@ export default function MatchPage() {
     
     return () => clearInterval(interval);
   }, [vetoDeadline]);
+
+  // Side selection countdown (fallback 15s if server deadline isn't provided yet)
+  useEffect(() => {
+    if (!sideSelectionPhase) return;
+    // If server provides a deadline later, we can replace this with sync logic similar to veto
+    if (sideTimeLeft === null) setSideTimeLeft(15);
+    const interval = setInterval(() => {
+      setSideTimeLeft(prev => {
+        if (prev === null) return null;
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [sideSelectionPhase]);
   
   // Update captain status when match data changes
   useEffect(() => {
@@ -584,6 +660,24 @@ export default function MatchPage() {
     sendEvent('veto_map', {
       match_id: matchId,
       map_name: mapName
+    });
+  };
+
+  const handleSideSelection = (side) => {
+    if (!isCaptain) {
+      console.log('[SIDE SELECTION] Not captain, cannot select side');
+      return;
+    }
+    
+    if (sideSelector !== myTeam) {
+      console.log('[SIDE SELECTION] Not our turn to select side');
+      return;
+    }
+    
+    console.log('[SIDE SELECTION] Selecting side:', side);
+    sendEvent('select_side', {
+      match_id: matchId,
+      side: side
     });
   };
   
@@ -813,6 +907,21 @@ export default function MatchPage() {
                 colors={colors}
                 isCaptain={isCaptain}
                 myTeam={myTeam}
+              />
+            </Box>
+          )}
+
+          {/* Side Selection Section - Center */}
+          {sideSelectionPhase && (
+            <Box sx={{ display: 'flex', alignItems: 'center', minHeight: '400px' }}>
+              <SideSelection
+                finalMap={matchData?.final_map}
+                serverLocation="US-East" // TODO: Get from match data
+                isCaptain={isCaptain}
+                myTeam={myTeam}
+                currentTurn={sideSelector}
+                onSideSelect={handleSideSelection}
+                timeLeft={sideTimeLeft}
               />
             </Box>
           )}

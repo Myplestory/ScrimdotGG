@@ -65,3 +65,26 @@ async def handle_veto_acknowledged(payload: dict, client_id: int, ws, mgr):
         print(f"[VETO_ACKNOWLEDGED] Error handling veto_acknowledged: {e}")
         await mgr.send(ws, 'error', {'message': f"Failed to process veto acknowledgment: {str(e)}"})
 
+
+@on("select_side")
+async def handle_select_side(payload: dict, client_id: int, ws, mgr):
+    """Forward select_side events from frontend to Django backend."""
+    try:
+        match_id = payload.get('match_id')
+        side = payload.get('side')
+        
+        print(f"[SELECT_SIDE] Forwarding side selection - Match: {match_id}, Side: {side}")
+        
+        valorant_service = current_app.valorant
+        
+        # Forward to Django backend via ValorantAPI
+        if valorant_service and hasattr(valorant_service.api, 'pugsocket') and valorant_service.api.pugsocket:
+            await valorant_service.api.pugsocket.send_message('select_side', payload)
+            print(f"[SELECT_SIDE] Successfully forwarded side selection to Django backend")
+        else:
+            print(f"[SELECT_SIDE] ERROR: ValorantAPI or pugsocket not available")
+            await mgr.send(ws, 'error', {'message': "Backend connection not available"})
+            
+    except Exception as e:
+        print(f"[SELECT_SIDE] Error handling select_side: {e}")
+        await mgr.send(ws, 'error', {'message': f"Failed to process side selection: {str(e)}"})

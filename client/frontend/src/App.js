@@ -68,7 +68,7 @@ function App() {
       
       // Wait a bit for electronAPI to be available, then fade in window
       setTimeout(() => {
-        console.log('🔍 Checking for electronAPI...', window.electronAPI);
+        console.log('🔍 Checking for electronAPI...', typeof window.electronAPI);
         if (window.electronAPI && window.electronAPI.fadeInWindow) {
           console.log('✅ Fading in window...');
           window.electronAPI.fadeInWindow();

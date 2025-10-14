@@ -101,6 +101,21 @@ class ValorantAPI(object):
                             import traceback
                             traceback.print_exc()
                     
+                    # Set up the match_proposed callback to forward to main WebSocket
+                    async def match_proposed_callback(data):
+                        """Forward match_proposed event to main WebSocket connection"""
+                        try:
+                            print(f"[MATCH_PROPOSED_CALLBACK] Received match_proposed event: {data}")
+                            
+                            # Store the match proposed data temporarily
+                            api_instance._pending_match_proposed_data = data
+                            
+                            print(f"[MATCH_PROPOSED_CALLBACK] Stored pending match proposed data, will be picked up by main loop")
+                        except Exception as e:
+                            print(f"[MATCH_PROPOSED_CALLBACK] Error storing match_proposed: {e}")
+                            import traceback
+                            traceback.print_exc()
+                    
                     # Set up the player_accepted callback to forward to main WebSocket
                     async def player_accepted_callback(data):
                         """Forward player_accepted event to main WebSocket connection"""
@@ -222,6 +237,7 @@ class ValorantAPI(object):
                             traceback.print_exc()
                     
                     self.pugsocket.match_found_callback = match_found_callback
+                    self.pugsocket.match_proposed_callback = match_proposed_callback
                     self.pugsocket.player_accepted_callback = player_accepted_callback
                     self.pugsocket.match_ready_callback = match_ready_callback
                     self.pugsocket.match_confirmed_callback = match_confirmed_callback
@@ -231,6 +247,7 @@ class ValorantAPI(object):
                     self.pugsocket.veto_complete_callback = veto_complete_callback
                     self.pugsocket.veto_acknowledged_callback = veto_acknowledged_callback
                     self._pending_match_data = None
+                    self._pending_match_proposed_data = None
                     self._pending_player_accepted_data = None
                     self._pending_match_ready_data = None
                     self._pending_match_confirmed_data = None

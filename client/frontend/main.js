@@ -191,24 +191,18 @@ function createWindow() {
   }
 
   // Enhanced cleanup function that only kills backend processes
-  function forceKillBackendProcesses() {
+  function forceKillBackendProcesses(callback) {
     console.log(`🛑 Force killing backend Python processes...`);
     
     if (process.platform === 'win32') {
-      // Kill only processes running run.py (more selective)
-      exec(`taskkill /f /fi "WINDOWTITLE eq run*" /im python.exe`, (error, stdout, stderr) => {
-        if (error) {
-          // Also try killing by command line containing run.py
-          exec(`wmic process where "commandline like '%run.py%'" delete`, (error2, stdout2, stderr2) => {
-            if (error2 && !error2.message.includes('No Instance(s) Available')) {
-              console.error(`❌ Error killing backend processes: ${error2.message}`);
-            } else {
-              console.log(`✅ Backend processes cleaned up`);
-            }
-          });
+      // Kill processes by command line containing run.py
+      exec(`wmic process where "commandline like '%run.py%'" delete`, (error, stdout, stderr) => {
+        if (error && !error.message.includes('No Instance(s) Available')) {
+          console.error(`❌ Error killing backend processes: ${error.message}`);
         } else {
-          console.log(`✅ Backend processes killed successfully`);
+          console.log(`✅ Backend processes cleaned up`);
         }
+        if (callback) callback();
       });
     } else {
       // Unix-like: Kill processes running run.py
@@ -218,6 +212,7 @@ function createWindow() {
         } else {
           console.log(`✅ Backend processes killed successfully`);
         }
+        if (callback) callback();
       });
     }
   }
@@ -227,28 +222,43 @@ function createWindow() {
       // Try specific process first, then fallback to all Python processes
       killPythonBackend();
       setTimeout(() => {
-        forceKillBackendProcesses();
-        app.quit();
+        forceKillBackendProcesses(() => {
+          // Wait a bit more to ensure processes are fully terminated
+          setTimeout(() => {
+            console.log('✅ Cleanup complete, quitting app...');
+            app.quit();
+          }, 500);
+        });
       }, 1000); // Wait 1 second for initial kill to complete
     }
   });
   
+  // Track if we've already run cleanup
+  let isQuitting = false;
+  
   // Also kill backend when app is quitting
   app.on('before-quit', (event) => {
-    // Prevent immediate quit, allow cleanup to complete
-    event.preventDefault();
-    
-    // Try specific process first
-    killPythonBackend();
-    
-    // Force kill backend processes after a short delay
-    setTimeout(() => {
-      forceKillBackendProcesses();
-      // Now allow the app to quit
+    if (!isQuitting) {
+      // Prevent immediate quit on first call, allow cleanup to complete
+      event.preventDefault();
+      isQuitting = true;
+      
+      console.log('🛑 App quitting, cleaning up Python backend...');
+      
+      // Try specific process first
+      killPythonBackend();
+      
+      // Force kill backend processes and wait for completion
       setTimeout(() => {
-        app.exit(0);
-      }, 500);
-    }, 1000);
+        forceKillBackendProcesses(() => {
+          // Wait a bit more to ensure processes are fully terminated
+          setTimeout(() => {
+            console.log('✅ Cleanup complete, exiting...');
+            app.exit(0);
+          }, 500);
+        });
+      }, 1000);
+    }
   });
 
 app.on('activate', () => {
