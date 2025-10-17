@@ -161,75 +161,74 @@ const SideSelection = ({
         </Box>
       </Card>
 
-      {/* Side Selection Buttons */}
-      <Box sx={{ 
-        display: 'flex', 
-        gap: 2, 
-        width: '100%',
-        justifyContent: 'center'
-      }}>
-        <Button
-          variant={canSelectSide ? "contained" : "outlined"}
-          onClick={() => handleSideSelect('attack')}
-          disabled={!canSelectSide}
-          sx={{
-            flex: 1,
-            py: 0.75, // Reduced height by half (was 1.5)
-            px: 2,
-            minHeight: 'auto',
-            backgroundColor: canSelectSide ? '#ff4444' : 'transparent', // Red background when clickable
-            borderColor: '#ff4444', // Red border
-            color: canSelectSide ? colors.grey[100] : '#ff4444', // White text when clickable, red when not
-            '&:hover': {
-              backgroundColor: canSelectSide ? '#cc0000' : 'rgba(255, 68, 68, 0.1)', // Darker red on hover
-              borderColor: '#cc0000',
-            },
-            '&:disabled': {
-              borderColor: colors.grey[600],
-              color: colors.grey[600],
-              backgroundColor: 'transparent'
-            }
-          }}
-        >
-          <Typography variant="body1" sx={{ 
-            fontWeight: 'bold',
-            color: 'inherit'
-          }}>
-            ATTACK
-          </Typography>
-        </Button>
+      {/* Side Selection Buttons - Only show for team that can select */}
+      {canSelectSide ? (
+        <Box sx={{ 
+          display: 'flex', 
+          gap: 2, 
+          width: '100%',
+          justifyContent: 'center'
+        }}>
+          <Button
+            variant="contained"
+            onClick={() => handleSideSelect('attack')}
+            sx={{
+              flex: 1,
+              py: 0.75,
+              px: 2,
+              minHeight: 'auto',
+              backgroundColor: '#ff4444',
+              borderColor: '#ff4444',
+              color: colors.grey[100],
+              '&:hover': {
+                backgroundColor: '#cc0000',
+                borderColor: '#cc0000',
+              }
+            }}
+          >
+            <Typography variant="body1" sx={{ 
+              fontWeight: 'bold',
+              color: 'inherit'
+            }}>
+              ATTACK
+            </Typography>
+          </Button>
 
-        <Button
-          variant={canSelectSide ? "contained" : "outlined"}
-          onClick={() => handleSideSelect('defend')}
-          disabled={!canSelectSide}
-          sx={{
-            flex: 1,
-            py: 0.75, // Reduced height by half (was 1.5)
-            px: 2,
-            minHeight: 'auto',
-            backgroundColor: canSelectSide ? '#4444ff' : 'transparent', // Blue background when clickable
-            borderColor: '#4444ff', // Blue border
-            color: canSelectSide ? colors.grey[100] : '#4444ff', // White text when clickable, blue when not
-            '&:hover': {
-              backgroundColor: canSelectSide ? '#0000cc' : 'rgba(68, 68, 255, 0.1)', // Darker blue on hover
-              borderColor: '#0000cc',
-            },
-            '&:disabled': {
-              borderColor: colors.grey[600],
-              color: colors.grey[600],
-              backgroundColor: 'transparent'
-            }
-          }}
-        >
-          <Typography variant="body1" sx={{ 
-            fontWeight: 'bold',
-            color: 'inherit'
-          }}>
-            DEFEND
-          </Typography>
-        </Button>
-      </Box>
+          <Button
+            variant="contained"
+            onClick={() => handleSideSelect('defend')}
+            sx={{
+              flex: 1,
+              py: 0.75,
+              px: 2,
+              minHeight: 'auto',
+              backgroundColor: '#4444ff',
+              borderColor: '#4444ff',
+              color: colors.grey[100],
+              '&:hover': {
+                backgroundColor: '#0000cc',
+                borderColor: '#0000cc',
+              }
+            }}
+          >
+            <Typography variant="body1" sx={{ 
+              fontWeight: 'bold',
+              color: 'inherit'
+            }}>
+              DEFEND
+            </Typography>
+          </Button>
+        </Box>
+      ) : (
+        <Typography variant="body2" sx={{ 
+          color: colors.grey[400],
+          textAlign: 'center',
+          mt: 2,
+          fontStyle: 'italic'
+        }}>
+          {isCaptain ? 'Waiting for opponent to select...' : 'Waiting for captain to select...'}
+        </Typography>
+      )}
 
       {/* Team Selector Indicator */}
       <Typography variant="body2" sx={{ 
@@ -238,20 +237,8 @@ const SideSelection = ({
         mt: 1,
         fontWeight: canSelectSide ? 600 : 400
       }}>
-        {currentTurn === 'team_a' ? 'Team A' : 'Team B'} select starting side
+        {currentTurn === 'team_a' ? 'Team A' : 'Team B'} selecting starting side
       </Typography>
-
-      {/* Turn Indicator (only show if can't select) */}
-      {!canSelectSide && (
-        <Typography variant="caption" sx={{ 
-          color: colors.grey[500],
-          textAlign: 'center',
-          mt: 0.5,
-          fontSize: '0.7rem'
-        }}>
-          {isCaptain ? 'Waiting for opponent...' : 'Only captains can select sides'}
-        </Typography>
-      )}
     </Box>
   );
 };

@@ -20,7 +20,7 @@ class Match(models.Model):
     # Match states
     STATE_CONFIRMED = 'CONFIRMED'       # All players accepted, ready for veto
     STATE_SERVER_VETO = 'SERVER_VETO'   # Server veto in progress
-    STATE_VETO = 'VETO'                 # Map veto in progress
+    STATE_MAP_VETO = 'VETO'                 # Map veto in progress
     STATE_SIDE_SELECTION = 'SIDE_SELECTION'  # Side selection in progress
     STATE_CREATING = 'CREATING'         # Custom game being created
     STATE_READY = 'READY'               # Waiting for all players to join
@@ -31,7 +31,7 @@ class Match(models.Model):
     STATE_CHOICES = [
         (STATE_CONFIRMED, 'All players accepted'),
         (STATE_SERVER_VETO, 'Server veto in progress'),
-        (STATE_VETO, 'Map veto in progress'),
+        (STATE_MAP_VETO, 'Map veto in progress'),
         (STATE_SIDE_SELECTION, 'Side selection in progress'),
         (STATE_CREATING, 'Custom game being created'),
         (STATE_READY, 'Ready to start'),

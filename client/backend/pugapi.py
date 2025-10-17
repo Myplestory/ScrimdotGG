@@ -114,8 +114,8 @@ class PugSocketClient:
                 await self.on_match_proposed(payload)
             elif event == "match_confirmed":
                 await self.on_match_confirmed(payload)
-            elif event == "veto_started":
-                await self.on_veto_started(payload)
+            elif event == "map_veto_started":
+                await self.on_map_veto_started(payload)
             elif event == "match_data":
                 await self.on_match_data(payload)
             elif event == "veto_update":
@@ -124,8 +124,20 @@ class PugSocketClient:
                 await self.on_veto_complete(payload)
             elif event == "veto_acknowledged":
                 await self.on_veto_acknowledged(payload)
-            elif event == "veto_timeout":
-                await self.on_veto_timeout(payload)
+            elif event == "map_veto_timeout":
+                await self.on_map_veto_timeout(payload)
+            elif event == "server_veto_started":
+                await self.on_server_veto_started(payload)
+            elif event == "server_veto_update":
+                await self.on_server_veto_update(payload)
+            elif event == "server_vetoed":
+                await self.on_server_vetoed(payload)
+            elif event == "server_veto_complete":
+                await self.on_server_veto_complete(payload)
+            elif event == "server_veto_acknowledged":
+                await self.on_server_veto_acknowledged(payload)
+            elif event == "server_veto_timeout":
+                await self.on_server_veto_timeout(payload)
             elif event == "side_selected":
                 await self.on_side_selected(payload)
             elif event == "side_acknowledged":
@@ -277,17 +289,17 @@ class PugSocketClient:
         except Exception as e:
             print(f"Error processing 'match_confirmed' event: {e}")
     
-    async def on_veto_started(self, data):
-        """Handle veto started event."""
+    async def on_map_veto_started(self, data):
+        """Handle map veto started event."""
         try:
             match_id = data.get("match_id")
-            print(f"[VETO STARTED] Match ID: {match_id}")
+            print(f"[MAP VETO STARTED] Match ID: {match_id}")
             
             # Forward to main WebSocket connection via callback
-            if hasattr(self, 'veto_started_callback'):
-                await self.veto_started_callback(data)
+            if hasattr(self, 'map_veto_started_callback'):
+                await self.map_veto_started_callback(data)
         except Exception as e:
-            print(f"Error processing 'veto_started' event: {e}")
+            print(f"Error processing 'map_veto_started' event: {e}")
     
     async def on_match_data(self, data):
         """Handle match data response from Django."""
@@ -335,14 +347,14 @@ class PugSocketClient:
         except Exception as e:
             print(f"Error processing 'veto_acknowledged' event: {e}")
     
-    async def on_veto_timeout(self, data):
-        """Handle veto timeout (auto-veto) from Django."""
+    async def on_map_veto_timeout(self, data):
+        """Handle map veto timeout (auto-veto) from Django."""
         try:
             auto_vetoed_map = data.get("auto_vetoed_map")
             veto_complete = data.get("veto_complete", False)
             final_map = data.get("final_map")
             
-            print(f"[VETO TIMEOUT] Auto-vetoed: {auto_vetoed_map}, Complete: {veto_complete}, Final: {final_map}")
+            print(f"[MAP VETO TIMEOUT] Auto-vetoed: {auto_vetoed_map}, Complete: {veto_complete}, Final: {final_map}")
             
             # Treat timeout as a veto_update or veto_complete
             if veto_complete:
@@ -366,7 +378,105 @@ class PugSocketClient:
                 if hasattr(self, 'veto_update_callback'):
                     await self.veto_update_callback(update_data)
         except Exception as e:
-            print(f"Error processing 'veto_timeout' event: {e}")
+            print(f"Error processing 'map_veto_timeout' event: {e}")
+    
+    async def on_server_veto_started(self, data):
+        """Handle server veto started from Django."""
+        try:
+            match_id = data.get("match_id")
+            current_turn = data.get("current_turn")
+            available_servers = data.get("available_servers", [])
+            print(f"[SERVER VETO STARTED] Match: {match_id}, Turn: {current_turn}, Servers: {available_servers}")
+            
+            # Forward to main WebSocket connection via callback
+            if hasattr(self, 'server_veto_started_callback'):
+                await self.server_veto_started_callback(data)
+        except Exception as e:
+            print(f"Error processing 'server_veto_started' event: {e}")
+    
+    async def on_server_veto_update(self, data):
+        """Handle server veto update from Django."""
+        try:
+            print(f"[SERVER VETO UPDATE] Received server veto update: {data}")
+            
+            # Forward to main WebSocket connection via callback
+            if hasattr(self, 'server_veto_update_callback'):
+                await self.server_veto_update_callback(data)
+        except Exception as e:
+            print(f"Error processing 'server_veto_update' event: {e}")
+    
+    async def on_server_vetoed(self, data):
+        """Handle server vetoed from Django (same as server_veto_update but from channel layer)."""
+        try:
+            server_name = data.get("server_name")
+            vetoed_by = data.get("vetoed_by")
+            print(f"[SERVER VETOED] Server {server_name} vetoed by {vetoed_by}")
+            
+            # Forward to main WebSocket connection via callback
+            if hasattr(self, 'server_veto_update_callback'):
+                await self.server_veto_update_callback(data)
+        except Exception as e:
+            print(f"Error processing 'server_vetoed' event: {e}")
+    
+    async def on_server_veto_complete(self, data):
+        """Handle server veto completion from Django."""
+        try:
+            final_server = data.get("final_server")
+            match_id = data.get("match_id")
+            print(f"[SERVER VETO COMPLETE] Server veto phase completed - Match: {match_id}, Final server: {final_server}")
+            
+            # Forward to main WebSocket connection via callback
+            if hasattr(self, 'server_veto_complete_callback'):
+                await self.server_veto_complete_callback(data)
+        except Exception as e:
+            print(f"Error processing 'server_veto_complete' event: {e}")
+    
+    async def on_server_veto_acknowledged(self, data):
+        """Handle server veto acknowledgment from Django."""
+        try:
+            print(f"[SERVER VETO ACKNOWLEDGED] Server veto request acknowledged: {data}")
+            
+            # Forward to main WebSocket connection via callback
+            if hasattr(self, 'server_veto_acknowledged_callback'):
+                await self.server_veto_acknowledged_callback(data)
+        except Exception as e:
+            print(f"Error processing 'server_veto_acknowledged' event: {e}")
+    
+    async def on_server_veto_timeout(self, data):
+        """Handle server veto timeout (auto-veto) from Django."""
+        try:
+            auto_vetoed_server = data.get("auto_vetoed_server")
+            server_veto_complete = data.get("server_veto_complete", False)
+            final_server = data.get("final_server")
+            
+            print(f"[SERVER VETO TIMEOUT] Auto-vetoed: {auto_vetoed_server}, Complete: {server_veto_complete}, Final: {final_server}")
+            
+            # Treat timeout as a server_veto_update or server_veto_complete
+            if server_veto_complete:
+                # Forward as server_veto_complete
+                complete_data = {
+                    'match_id': data.get('match_id'),
+                    'final_server': final_server,
+                    'current_turn': data.get('current_turn'),
+                    'available_maps': data.get('available_maps', []),
+                    'veto_deadline': data.get('veto_deadline')
+                }
+                if hasattr(self, 'server_veto_complete_callback'):
+                    await self.server_veto_complete_callback(complete_data)
+            else:
+                # Forward as server_veto_update
+                update_data = {
+                    'match_id': data.get('match_id'),
+                    'server_name': auto_vetoed_server,
+                    'vetoed_by': 'timeout',
+                    'next_turn': data.get('next_turn'),
+                    'remaining_servers': data.get('remaining_servers', []),
+                    'deadline': data.get('deadline')
+                }
+                if hasattr(self, 'server_veto_update_callback'):
+                    await self.server_veto_update_callback(update_data)
+        except Exception as e:
+            print(f"Error processing 'server_veto_timeout' event: {e}")
     
     async def on_side_selected(self, data):
         """Handle side selection from Django."""

@@ -1134,6 +1134,28 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
                 'veto_deadline': event['veto_deadline']
             }
         }))
+    
+    async def server_veto_timeout(self, event):
+        """
+        Server veto timeout - a team took too long, auto-veto occurred.
+        """
+        await self.send(text_data=json.dumps({
+            'event': 'server_veto_timeout',
+            'payload': {
+                'match_id': event['match_id'],
+                'timed_out_team': event.get('timed_out_team'),
+                'auto_vetoed_server': event.get('auto_vetoed_server'),
+                'next_turn': event.get('next_turn'),
+                'remaining_servers': event.get('remaining_servers', []),
+                'deadline': event.get('deadline'),
+                'server_veto_complete': event.get('server_veto_complete', False),
+                'final_server': event.get('final_server'),
+                'map_veto_started': event.get('map_veto_started', False),
+                'current_turn': event.get('current_turn'),
+                'available_maps': event.get('available_maps', []),
+                'veto_deadline': event.get('veto_deadline')
+            }
+        }))
 
     async def map_vetoed(self, event):
         """
@@ -1151,12 +1173,12 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
             }
         }))
     
-    async def veto_timeout(self, event):
+    async def map_veto_timeout(self, event):
         """
         Veto timeout occurred - auto-veto.
         """
         await self.send(text_data=json.dumps({
-            'event': 'veto_timeout',
+            'event': 'map_veto_timeout',
             'payload': {
                 'match_id': event['match_id'],
                 'auto_vetoed_map': event['auto_vetoed_map'],
@@ -1165,6 +1187,20 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
                 'remaining_maps': event.get('remaining_maps', []),
                 'deadline': event.get('deadline'),
                 'final_map': event.get('final_map')
+            }
+        }))
+    
+    async def side_selection_timeout(self, event):
+        """
+        Side selection timeout occurred - auto-select side.
+        """
+        await self.send(text_data=json.dumps({
+            'event': 'side_selection_timeout',
+            'payload': {
+                'match_id': event['match_id'],
+                'auto_selected_side': event.get('auto_selected_side'),
+                'side_selection_complete': event.get('side_selection_complete', False),
+                'match_ready': event.get('match_ready', False)
             }
         }))
     
@@ -1327,7 +1363,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
                 return
             
             # Process veto
-            result = await MatchManager.process_veto(match, map_name, team, self.puuid)
+            result = await MatchManager.process_map_veto(match, map_name, team, self.puuid)
             
             if result['status'] == 'success':
                 # Broadcast veto to all players in match

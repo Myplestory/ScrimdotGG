@@ -401,7 +401,7 @@ def health_check(self):
 
 
 @shared_task(bind=True, name='matchmaking.tasks.check_veto_timeouts')
-def check_veto_timeouts(self):
+def check_map_veto_timeouts(self):
     """
     Check for matches with expired deadlines and auto-handle.
     Handles server veto, map veto, and side selection timeouts.
@@ -421,7 +421,7 @@ def check_veto_timeouts(self):
                 state=Match.STATE_SERVER_VETO,
                 server_veto_deadline__lt=timezone.now()
             ) | models.Q(
-                state=Match.STATE_VETO,
+                state=Match.STATE_MAP_VETO,
                 veto_deadline__lt=timezone.now()
             ) | models.Q(
                 state=Match.STATE_SIDE_SELECTION,
@@ -450,10 +450,10 @@ def check_veto_timeouts(self):
                     # Server veto timeout
                     result = MatchManager.handle_server_veto_timeout_sync(match.id)
                     event_type = 'server_veto_timeout'
-                elif match.state == Match.STATE_VETO:
+                elif match.state == Match.STATE_MAP_VETO:
                     # Map veto timeout
                     result = MatchManager.handle_map_veto_timeout_sync(match.id)
-                    event_type = 'veto_timeout'
+                    event_type = 'map_veto_timeout'
                 elif match.state == Match.STATE_SIDE_SELECTION:
                     # Side selection timeout
                     result = MatchManager.handle_side_selection_timeout_sync(match.id)

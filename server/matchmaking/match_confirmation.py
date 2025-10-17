@@ -662,19 +662,21 @@ class MatchConfirmationManager:
             veto_result = await MatchManager.start_server_veto(match)
             
             if veto_result['status'] == 'success':
-                # Broadcast server veto started
-                await channel_layer.group_send(
-                    f"match_{match.id}",
-                    {
-                        'type': 'server_veto_started',
-                        'match_id': str(match.id),
-                        'current_turn': veto_result['current_turn'],
-                        'available_servers': veto_result['available_servers'],
-                        'deadline': veto_result['deadline']
-                    }
-                )
+                # Broadcast server veto started to each player individually
+                # (since they haven't joined the match group yet)
+                for player_puuid in all_players:
+                    await channel_layer.group_send(
+                        f"player_{player_puuid}",
+                        {
+                            'type': 'server_veto_started',
+                            'match_id': str(match.id),
+                            'current_turn': veto_result['current_turn'],
+                            'available_servers': veto_result['available_servers'],
+                            'deadline': veto_result['deadline']
+                        }
+                    )
                 
-                logger.info(f"Veto started for match {match.id}")
+                logger.info(f"Server veto started for match {match.id}, notified {len(all_players)} players")
             
             # Clean up match confirmation data
             await MatchConfirmationManager.cleanup_match(match_id)

@@ -610,6 +610,9 @@ export default function MatchPage() {
         setAvailableServers(payload.server_pool || []);
         setVetoedServers(payload.vetoed_servers || []);
         setServerVetoDeadline(payload.server_veto_deadline);
+        // Clear map veto state since we're in server veto phase
+        setVetoPhase(false);
+        setVetoDeadline(null);
       } else if (payload.state === 'VETO') {
         console.log('🎮 [MATCH PAGE] MAP VETO PHASE DETECTED - Initializing map veto component');
         console.log('   Veto turn:', payload.veto_turn);
@@ -623,6 +626,9 @@ export default function MatchPage() {
         setVetoedMaps(payload.vetoed_maps || []);
         setVetoHistory(payload.veto_history || []);
         setVetoDeadline(payload.veto_deadline);
+        // Clear server veto state since we're in map veto phase
+        setServerVetoPhase(false);
+        setServerVetoDeadline(null);
       } else if (payload.state === 'SIDE_SELECTION') {
         console.log('🎮 [MATCH PAGE] SIDE SELECTION PHASE DETECTED - Initializing side selection component');
         console.log('   Final map:', payload.final_map);
@@ -676,6 +682,7 @@ export default function MatchPage() {
     const unsubscribeVetoComplete = on('veto_complete', (payload) => {
       console.log('📥 [MATCH PAGE] Map veto phase completed:', payload);
       setVetoPhase(false);
+      setVetoDeadline(null); // Clear map veto deadline
       setSideSelectionPhase(true);
       setSideSelector(payload.side_selector);
       setSideTimeLeft(30);
@@ -692,6 +699,57 @@ export default function MatchPage() {
       });
     });
 
+    const unsubscribeMapVetoTimeout = on('map_veto_timeout', (payload) => {
+      console.log('📥 [MATCH PAGE] Map veto timeout occurred:', payload);
+      
+      const autoVetoedMap = payload.auto_vetoed_map;
+      const isComplete = payload.veto_complete;
+      
+      if (isComplete) {
+        // Veto phase completed due to timeout
+        console.log('🎮 [MATCH PAGE] Map veto completed via timeout, final map:', payload.final_map);
+        setVetoPhase(false);
+        setVetoDeadline(null); // Clear map veto deadline
+        setSideSelectionPhase(true);
+        setSideSelector(payload.side_selector);
+        setSideTimeLeft(30);
+        setMatchData(prev => ({
+          ...prev,
+          state: 'SIDE_SELECTION',
+          final_map: payload.final_map,
+          side_selector: payload.side_selector
+        }));
+      } else {
+        // Auto-veto occurred, update state
+        console.log('🎮 [MATCH PAGE] Auto-vetoed map due to timeout:', autoVetoedMap);
+        
+        const newVetoedMaps = [...(vetoedMaps || [])];
+        if (autoVetoedMap && !newVetoedMaps.includes(autoVetoedMap)) {
+          newVetoedMaps.push(autoVetoedMap);
+        }
+        
+        setAvailableMaps(payload.remaining_maps || []);
+        setVetoedMaps(newVetoedMaps);
+        setCurrentTurn(payload.next_turn);
+        setVetoDeadline(payload.deadline);
+        
+        setMatchData(prev => ({
+          ...prev,
+          map_pool: payload.remaining_maps,
+          vetoed_maps: newVetoedMaps,
+          veto_turn: payload.next_turn,
+          veto_deadline: payload.deadline
+        }));
+        
+        console.log('✅ [MATCH PAGE] Map veto state updated after timeout:', {
+          autoVetoedMap,
+          currentTurn: payload.next_turn,
+          availableMaps: payload.remaining_maps,
+          vetoedMaps: newVetoedMaps
+        });
+      }
+    });
+
     // Server veto event handlers
     const unsubscribeServerVetoStarted = on('server_veto_started', (payload) => {
       console.log('📥 [MATCH PAGE] Server veto phase started:', payload);
@@ -702,6 +760,9 @@ export default function MatchPage() {
       setAvailableServers(payload.available_servers || []);
       setVetoedServers([]);
       setServerVetoDeadline(payload.deadline);
+      // Clear map veto state
+      setVetoPhase(false);
+      setVetoDeadline(null);
       
       // Update match data
       setMatchData(prev => ({
@@ -796,6 +857,7 @@ export default function MatchPage() {
     const unsubscribeServerVetoComplete = on('server_veto_complete', (payload) => {
       console.log('📥 [MATCH PAGE] Server veto phase completed:', payload);
       setServerVetoPhase(false);
+      setServerVetoDeadline(null); // Clear server veto deadline
       setVetoPhase(true);
       setCurrentTurn(payload.current_turn);
       setAvailableMaps(payload.available_maps || []);
@@ -816,6 +878,69 @@ export default function MatchPage() {
         availableMaps: payload.available_maps,
         currentTurn: payload.current_turn
       });
+    });
+
+    const unsubscribeServerVetoTimeout = on('server_veto_timeout', (payload) => {
+      console.log('📥 [MATCH PAGE] Server veto timeout occurred:', payload);
+      
+      const autoVetoedServer = payload.auto_vetoed_server;
+      const isComplete = payload.server_veto_complete;
+      const mapVetoStarted = payload.map_veto_started;
+      
+      if (isComplete && mapVetoStarted) {
+        // Server veto completed due to timeout, transition to map veto
+        console.log('🎮 [MATCH PAGE] Server veto completed via timeout, starting map veto');
+        console.log('   Final server:', payload.final_server);
+        console.log('   Available maps:', payload.available_maps);
+        
+        setServerVetoPhase(false);
+        setServerVetoDeadline(null); // Clear server veto deadline
+        setVetoPhase(true);
+        setCurrentTurn(payload.current_turn);
+        setAvailableMaps(payload.available_maps || []);
+        setVetoedMaps([]);
+        setVetoHistory([]);
+        setVetoDeadline(payload.veto_deadline);
+        
+        setMatchData(prev => ({
+          ...prev,
+          state: 'VETO',
+          final_server: payload.final_server,
+          map_pool: payload.available_maps,
+          veto_turn: payload.current_turn,
+          veto_deadline: payload.veto_deadline
+        }));
+        
+        console.log('✅ [MATCH PAGE] Transitioned to map veto phase after server veto timeout');
+      } else {
+        // Auto-veto occurred, but server veto continues
+        console.log('🎮 [MATCH PAGE] Auto-vetoed server due to timeout:', autoVetoedServer);
+        
+        const newVetoedServers = [...(vetoedServers || [])];
+        if (autoVetoedServer && !newVetoedServers.includes(autoVetoedServer)) {
+          newVetoedServers.push(autoVetoedServer);
+        }
+        
+        setAvailableServers(payload.remaining_servers || []);
+        setVetoedServers(newVetoedServers);
+        setServerVetoTurn(payload.next_turn);
+        setServerVetoDeadline(payload.deadline);
+        
+        setMatchData(prev => ({
+          ...prev,
+          server_pool: payload.remaining_servers,
+          vetoed_servers: newVetoedServers,
+          server_veto_turn: payload.next_turn,
+          server_veto_deadline: payload.deadline
+        }));
+        
+        console.log('✅ [MATCH PAGE] Server veto state updated after timeout:', {
+          autoVetoedServer,
+          currentTurn: payload.next_turn,
+          availableServers: payload.remaining_servers,
+          vetoedServers: newVetoedServers
+        });
+      }
     });
 
     const unsubscribeSideSelected = on('side_selected', (payload) => {
@@ -850,10 +975,12 @@ export default function MatchPage() {
       if (typeof unsubscribeMatchData === 'function') unsubscribeMatchData();
       if (typeof unsubscribeVetoUpdate === 'function') unsubscribeVetoUpdate();
       if (typeof unsubscribeVetoComplete === 'function') unsubscribeVetoComplete();
+      if (typeof unsubscribeMapVetoTimeout === 'function') unsubscribeMapVetoTimeout();
       if (typeof unsubscribeServerVetoStarted === 'function') unsubscribeServerVetoStarted();
       if (typeof unsubscribeServerVetoUpdate === 'function') unsubscribeServerVetoUpdate();
       if (typeof unsubscribeServerVetoed === 'function') unsubscribeServerVetoed();
       if (typeof unsubscribeServerVetoComplete === 'function') unsubscribeServerVetoComplete();
+      if (typeof unsubscribeServerVetoTimeout === 'function') unsubscribeServerVetoTimeout();
       if (typeof unsubscribeSideSelected === 'function') unsubscribeSideSelected();
       if (typeof unsubscribeError === 'function') unsubscribeError();
     };
@@ -945,17 +1072,38 @@ export default function MatchPage() {
   
   // Handle server veto action
   const handleServerVetoAction = (serverName) => {
+    console.log('[SERVER VETO] Attempting veto:', {
+      serverName,
+      isCaptain,
+      myTeam,
+      serverVetoTurn,
+      playerData,
+      matchId
+    });
+    
     if (!isCaptain) {
-      console.log('[SERVER VETO] Not captain, cannot veto');
+      console.error('[SERVER VETO] ❌ Not captain, cannot veto', {
+        isCaptain,
+        playerData,
+        matchData: matchData ? {
+          team_a_captain: matchData.team_a_captain,
+          team_b_captain: matchData.team_b_captain
+        } : null
+      });
+      alert('You are not the captain! Only captains can veto.');
       return;
     }
     
     if (serverVetoTurn !== myTeam) {
-      console.log('[SERVER VETO] Not our turn');
+      console.warn('[SERVER VETO] ⚠️  Not our turn', {
+        serverVetoTurn,
+        myTeam
+      });
+      alert(`It's not your team's turn! Current turn: ${serverVetoTurn}`);
       return;
     }
     
-    console.log('[SERVER VETO] Vetoing server:', serverName);
+    console.log('[SERVER VETO] ✅ Vetoing server:', serverName);
     sendEvent('veto_server', {
       match_id: matchId,
       server_name: serverName
@@ -964,17 +1112,38 @@ export default function MatchPage() {
 
   // Handle map veto action
   const handleVetoMapAction = (mapName) => {
+    console.log('[MAP VETO] Attempting veto:', {
+      mapName,
+      isCaptain,
+      myTeam,
+      currentTurn,
+      playerData,
+      matchId
+    });
+    
     if (!isCaptain) {
-      console.log('[MAP VETO] Not captain, cannot veto');
+      console.error('[MAP VETO] ❌ Not captain, cannot veto', {
+        isCaptain,
+        playerData,
+        matchData: matchData ? {
+          team_a_captain: matchData.team_a_captain,
+          team_b_captain: matchData.team_b_captain
+        } : null
+      });
+      alert('You are not the captain! Only captains can veto.');
       return;
     }
     
     if (currentTurn !== myTeam) {
-      console.log('[MAP VETO] Not our turn');
+      console.warn('[MAP VETO] ⚠️  Not our turn', {
+        currentTurn,
+        myTeam
+      });
+      alert(`It's not your team's turn! Current turn: ${currentTurn}`);
       return;
     }
     
-    console.log('[MAP VETO] Vetoing map:', mapName);
+    console.log('[MAP VETO] ✅ Vetoing map:', mapName);
     sendEvent('veto_map', {
       match_id: matchId,
       map_name: mapName
@@ -1001,7 +1170,7 @@ export default function MatchPage() {
       return;
     }
     
-    console.log('[SIDE SELECTION] Selecting side:', side);
+    console.log('[SIDE SELECTION] ✅ Selecting side:', side);
     sendEvent('select_side', {
       match_id: matchId,
       side: side

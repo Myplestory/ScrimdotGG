@@ -173,7 +173,7 @@ class BotWebSocketClient:
             # Handle veto updates (map vetoed, turn changes)
             await self._handle_veto_update(payload)
         
-        elif event == 'veto_timeout':
+        elif event == 'map_veto_timeout':
             # Handle veto timeout (auto-veto occurred)
             await self._handle_veto_timeout(payload)
         
@@ -181,9 +181,9 @@ class BotWebSocketClient:
             # Handle map vetoed event
             await self._handle_map_vetoed(payload)
         
-        elif event == 'veto_started':
-            # Handle veto phase started
-            await self._handle_veto_started(payload)
+        elif event == 'map_veto_started':
+            # Handle map veto phase started
+            await self._handle_map_veto_started(payload)
         
         elif event == 'server_veto_started':
             # Handle server veto phase started
@@ -200,6 +200,10 @@ class BotWebSocketClient:
         elif event == 'server_veto_complete':
             # Handle server veto phase completion
             await self._handle_server_veto_complete(payload)
+        
+        elif event == 'server_veto_timeout':
+            # Handle server veto timeout
+            await self._handle_server_veto_timeout(payload)
         
         elif event == 'veto_complete':
             # Handle veto phase completion
@@ -515,28 +519,6 @@ class BotWebSocketClient:
         else:
             logger.info(f"   Not my turn (is_captain={self.is_captain}, current_turn={self.current_turn}, my_team={self.my_team})")
     
-    async def _handle_veto_started(self, payload: dict):
-        """Handle veto phase started"""
-        match_id = payload.get('match_id')
-        current_turn = payload.get('current_turn')
-        available_maps = payload.get('available_maps', [])
-        
-        logger.info(f"Bot {self.bot_alias} received veto started event")
-        logger.info(f"   Match ID: {match_id[:8] if match_id else 'Unknown'}")
-        logger.info(f"   Current turn: {current_turn}")
-        logger.info(f"   Available maps: {available_maps}")
-        
-        # Update state
-        self.current_turn = current_turn
-        self.available_maps = available_maps
-        
-        # If it's my turn and I'm captain, make a veto decision
-        if self.is_captain and self.current_turn == self.my_team:
-            logger.info(f"Bot {self.bot_alias} - IT'S MY TURN! Making veto decision...")
-            await self._make_veto_decision()
-        else:
-            logger.info(f"   Not my turn (is_captain={self.is_captain}, current_turn={self.current_turn}, my_team={self.my_team})")
-
     async def _handle_veto_complete(self, payload: dict):
         """Handle veto phase completion"""
         self.veto_complete = True
@@ -599,7 +581,7 @@ class BotWebSocketClient:
             logger.info(f"   Not my turn (is_captain={self.is_captain}, current_turn={self.server_veto_turn}, my_team={self.my_team})")
     
     async def _handle_server_veto_complete(self, payload: dict):
-        """Handle server veto phase completion"""
+        """Handle server veto phase completion and transition to map veto"""
         logger.info(f"Bot {self.bot_alias} server veto phase completed!")
         logger.info(f"   Final server: {payload.get('final_server')}")
         
@@ -608,6 +590,100 @@ class BotWebSocketClient:
         self.vetoed_servers = []
         self.server_veto_turn = None
         self.server_veto_deadline = None
+        
+        # Initialize map veto state from payload
+        self.current_turn = payload.get('current_turn')
+        self.available_maps = payload.get('available_maps', [])
+        self.veto_deadline = payload.get('veto_deadline')
+        self.vetoed_maps = []
+        
+        logger.info(f"Bot {self.bot_alias} map veto phase starting!")
+        logger.info(f"   Current turn: {self.current_turn}")
+        logger.info(f"   Available maps: {self.available_maps}")
+        logger.info(f"   Is captain: {self.is_captain}, My team: {self.my_team}")
+        
+        # If it's my turn and I'm captain, make a map veto decision
+        if self.is_captain and self.current_turn == self.my_team:
+            logger.info(f"Bot {self.bot_alias} - IT'S MY TURN! Making map veto decision...")
+            await self._make_veto_decision()
+        else:
+            logger.info(f"   Not my turn (is_captain={self.is_captain}, current_turn={self.current_turn}, my_team={self.my_team})")
+    
+    async def _handle_server_veto_timeout(self, payload: dict):
+        """Handle server veto timeout - a team took too long"""
+        timed_out_team = payload.get('timed_out_team')
+        auto_vetoed_server = payload.get('auto_vetoed_server')
+        server_veto_complete = payload.get('server_veto_complete', False)
+        
+        logger.info(f"Bot {self.bot_alias} server veto TIMEOUT occurred!")
+        logger.info(f"   Timed out team: {timed_out_team}")
+        logger.info(f"   Auto-vetoed server: {auto_vetoed_server}")
+        logger.info(f"   Server veto complete: {server_veto_complete}")
+        
+        if server_veto_complete:
+            # Server veto phase is done, moving to map veto
+            final_server = payload.get('final_server')
+            logger.info(f"   Final server: {final_server}")
+            
+            # Reset server veto state
+            self.available_servers = []
+            self.vetoed_servers = []
+            self.server_veto_turn = None
+            self.server_veto_deadline = None
+            
+            # Initialize map veto state from payload
+            self.current_turn = payload.get('current_turn')
+            self.available_maps = payload.get('available_maps', [])
+            self.veto_deadline = payload.get('veto_deadline')
+            self.vetoed_maps = []
+            
+            logger.info(f"Bot {self.bot_alias} map veto phase starting (after server veto timeout)!")
+            logger.info(f"   Current turn: {self.current_turn}")
+            logger.info(f"   Available maps: {self.available_maps}")
+            logger.info(f"   Is captain: {self.is_captain}, My team: {self.my_team}")
+            
+            # If it's my turn and I'm captain, make a map veto decision
+            if self.is_captain and self.current_turn == self.my_team:
+                logger.info(f"Bot {self.bot_alias} - IT'S MY TURN! Making map veto decision...")
+                await self._make_veto_decision()
+            else:
+                logger.info(f"   Not my turn (is_captain={self.is_captain}, current_turn={self.current_turn}, my_team={self.my_team})")
+        else:
+            # Update state for next turn
+            self.available_servers = payload.get('remaining_servers', [])
+            self.server_veto_turn = payload.get('next_turn')
+            self.server_veto_deadline = payload.get('deadline')
+            
+            if auto_vetoed_server and auto_vetoed_server not in self.vetoed_servers:
+                self.vetoed_servers.append(auto_vetoed_server)
+            
+            # If it's now my turn after timeout, make a veto
+            if self.is_captain and self.server_veto_turn == self.my_team:
+                logger.info(f"   It's now my turn after timeout, making server veto decision...")
+                await self._handle_server_veto_action()
+    
+    async def _handle_map_veto_started(self, payload: dict):
+        """Handle map veto phase started"""
+        logger.info(f"Bot {self.bot_alias} map veto phase started!")
+        
+        match_id = payload.get('match_id')
+        current_turn = payload.get('current_turn')
+        available_maps = payload.get('available_maps', [])
+        
+        logger.info(f"   Match ID: {match_id}")
+        logger.info(f"   Current turn: {current_turn}")
+        logger.info(f"   Available maps: {available_maps}")
+        
+        # Update map veto state
+        self.available_maps = available_maps
+        self.veto_turn = current_turn
+        
+        # If it's my turn and I'm captain, make a map veto decision
+        if self.is_captain and self.veto_turn == self.my_team:
+            logger.info(f"Bot {self.bot_alias} - IT'S MY TURN! Making map veto decision...")
+            await self._handle_map_veto_action()
+        else:
+            logger.info(f"   Not my turn (is_captain={self.is_captain}, current_turn={self.veto_turn}, my_team={self.my_team})")
     
     async def _handle_server_vetoed(self, payload: dict):
         """Handle server vetoed event"""

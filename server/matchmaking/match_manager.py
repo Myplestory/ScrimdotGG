@@ -324,8 +324,11 @@ class MatchManager:
             if len(remaining_servers) == 1:
                 # Server veto complete - move to map veto
                 match.final_server = remaining_servers[0]
-                match.state = Match.STATE_VETO
-                match.map_pool = MatchManager.AVAILABLE_MAPS.copy()
+                match.state = Match.STATE_MAP_VETO
+                # Keep existing map_pool (common maps from matchmaking)
+                # Only initialize if not already set (defensive programming)
+                if not match.map_pool:
+                    match.map_pool = MatchManager.AVAILABLE_MAPS.copy()
                 match.vetoed_maps = []
                 match.veto_turn = 'team_b' if vetoing_team == 'team_a' else 'team_a'  # Other team starts map veto
                 match.veto_deadline = timezone.now() + timedelta(seconds=MatchManager.VETO_TIMEOUT_SECONDS)
@@ -339,7 +342,7 @@ class MatchManager:
                     'map_veto_started': True,
                     'current_turn': match.veto_turn,
                     'available_maps': match.map_pool,
-                    'deadline': match.veto_deadline.isoformat()
+                    'veto_deadline': match.veto_deadline.isoformat()
                 }
             else:
                 # Continue server veto
@@ -380,7 +383,7 @@ class MatchManager:
         """
         try:
             # Validation
-            if match.state != Match.STATE_VETO:
+            if match.state != Match.STATE_MAP_VETO:
                 return {
                     'status': 'error',
                     'message': 'Match is not in veto phase'
@@ -476,7 +479,7 @@ class MatchManager:
             }
     
     @staticmethod
-    async def handle_veto_timeout(match_id) -> Dict:
+    async def handle_map_veto_timeout(match_id) -> Dict:
         """
         Handle timeout for veto action.
         Auto-veto a random available map.
@@ -491,8 +494,8 @@ class MatchManager:
             # Fetch match in async context
             match = await sync_to_async(lambda: Match.objects.get(id=match_id), thread_sensitive=False)()
             
-            if match.state != Match.STATE_VETO:
-                return {'status': 'error', 'message': 'Not in veto phase'}
+            if match.state != Match.STATE_MAP_VETO:
+                return {'status': 'error', 'message': 'Not in map veto phase'}
             
             # Get available maps
             remaining_maps = match.get_remaining_maps()
@@ -706,8 +709,11 @@ class MatchManager:
             if len(remaining_servers) == 1:
                 # Server veto complete - move to map veto
                 match.final_server = remaining_servers[0]
-                match.state = Match.STATE_VETO
-                match.map_pool = MatchManager.AVAILABLE_MAPS.copy()
+                match.state = Match.STATE_MAP_VETO
+                # Keep existing map_pool (common maps from matchmaking)
+                # Only initialize if not already set (defensive programming)
+                if not match.map_pool:
+                    match.map_pool = MatchManager.AVAILABLE_MAPS.copy()
                 match.vetoed_maps = []
                 match.veto_turn = 'team_b' if current_team == 'team_a' else 'team_a'
                 match.veto_deadline = timezone.now() + timedelta(seconds=MatchManager.VETO_TIMEOUT_SECONDS)
@@ -722,7 +728,7 @@ class MatchManager:
                     'map_veto_started': True,
                     'current_turn': match.veto_turn,
                     'available_maps': match.map_pool,
-                    'deadline': match.veto_deadline.isoformat()
+                    'veto_deadline': match.veto_deadline.isoformat()
                 }
             else:
                 # Continue server veto
@@ -775,7 +781,7 @@ class MatchManager:
             # Fetch match (direct ORM call - Celery best practice)
             match = Match.objects.get(id=match_id)
             
-            if match.state != Match.STATE_VETO:
+            if match.state != Match.STATE_MAP_VETO:
                 return {'status': 'error', 'message': 'Not in veto phase'}
             
             # Get available maps

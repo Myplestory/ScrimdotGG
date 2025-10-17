@@ -13,19 +13,22 @@ async def handle_accept_match(payload: dict, client_id: int, ws, mgr):
     """Accept a found match."""
     match_id = payload.get('match_id')
     if not match_id:
+        logger.warning(f"[ACCEPT_MATCH] No match ID provided")
         await mgr.send(ws, 'error', {'message': "No match ID provided"})
         return
     
-    logger.info(f"Accepting match {match_id}")
+    puuid = mgr.state[client_id].get('puuid')
+    logger.info(f"[ACCEPT_MATCH] Player {puuid[:8] if puuid else 'Unknown'}... accepting match {match_id[:8]}...")
     
     valorant_service = current_app.valorant
     # Send acceptance to Django server
     await valorant_service.api.pugsocket.send_message('accept_match', {
         'match_id': match_id,
-        'puuid': mgr.state[client_id]['puuid']
+        'puuid': puuid
     })
     
     mgr.state[client_id]['match_id'] = match_id
+    logger.info(f"[ACCEPT_MATCH] Successfully sent acceptance to Django, notifying frontend")
     
     await mgr.send(ws, 'match_accepted', {
         'match_id': match_id
@@ -37,15 +40,19 @@ async def handle_decline_match(payload: dict, client_id: int, ws, mgr):
     """Decline a found match."""
     match_id = payload.get('match_id')
     if not match_id:
+        logger.warning(f"[DECLINE_MATCH] No match ID provided")
         return
     
-    logger.info(f"Declining match {match_id}")
+    puuid = mgr.state[client_id].get('puuid')
+    logger.info(f"[DECLINE_MATCH] Player {puuid[:8] if puuid else 'Unknown'}... declining match {match_id[:8]}...")
     
     valorant_service = current_app.valorant
     await valorant_service.api.pugsocket.send_message('decline_match', {
         'match_id': match_id,
-        'puuid': mgr.state[client_id]['puuid']
+        'puuid': puuid
     })
+    
+    logger.info(f"[DECLINE_MATCH] Successfully sent decline to Django")
 
 
 @on("match_started")
@@ -54,11 +61,13 @@ async def handle_match_started(payload: dict, client_id: int, ws, mgr):
     Handle match start event from Django server.
     Sets user as in-game and stops heartbeat.
     """
-    logger.info(f"Match started for client {client_id}")
+    match_id = payload.get('match_id')
+    logger.info(f"[MATCH_STARTED] Match {match_id[:8] if match_id else 'Unknown'}... started for client {client_id}")
     
     mgr.state[client_id]['in_game'] = True
-    mgr.state[client_id]['match_id'] = payload.get('match_id')
+    mgr.state[client_id]['match_id'] = match_id
     
+    logger.info(f"[MATCH_STARTED] Client {client_id} now in-game, notifying frontend")
     await mgr.send(ws, 'match_started', payload)
 
 
@@ -89,7 +98,8 @@ async def handle_match_starting(payload: dict, client_id: int, ws, mgr):
     server = payload.get('server')
     team = payload.get('team')
     
-    logger.info(f"Match {match_id} starting - Constructor: {is_constructor}")
+    logger.info(f"[MATCH_STARTING] Match {match_id[:8] if match_id else 'Unknown'}... starting")
+    logger.info(f"[MATCH_STARTING] Constructor: {is_constructor}, Map: {map_name}, Server: {server}, Team: {team}")
     
     # Stop heartbeat - user entering game
     mgr.state[client_id]['in_game'] = True
@@ -105,9 +115,11 @@ async def handle_match_starting(payload: dict, client_id: int, ws, mgr):
     
     if is_constructor:
         # This client needs to create the custom game
-        logger.info(f"Creating custom game for match {match_id}")
+        logger.info(f"[MATCH_STARTING] This client is CONSTRUCTOR - creating custom game")
         valorant_service = current_app.valorant
         asyncio.create_task(create_custom_game(valorant_service, match_id, map_name, server, client_id))
+    else:
+        logger.info(f"[MATCH_STARTING] This client is NOT constructor - waiting for join instruction")
 
 
 async def create_custom_game(valorant_service, match_id: str, map_name: str, server: str, client_id: int):

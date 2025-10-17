@@ -132,7 +132,7 @@ class ConnectionManager:
             ('_pending_player_accepted_data', 'player_accepted'),
             ('_pending_match_ready_data', 'match_ready'),
             ('_pending_match_confirmed_data', 'match_confirmed'),
-            ('_pending_veto_started_data', 'veto_started'),
+            ('_pending_map_veto_started_data', 'map_veto_started'),
             ('_pending_match_data_response', 'match_data'),
             # Removed: veto_update, veto_complete, veto_acknowledged, side_selected (now immediate)
         ]
