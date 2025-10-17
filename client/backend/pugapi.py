@@ -41,8 +41,15 @@ class PugSocketClient:
         while self.connected:
             try:
                 await asyncio.sleep(30)  # Check every 30 seconds
-                if self.websocket and not self.websocket.closed:
-                    print("[PUGAPI] WebSocket connection is alive")
+                if self.websocket:
+                    # Try to ping the connection to check if it's alive
+                    try:
+                        await self.websocket.ping()
+                        print("[PUGAPI] WebSocket connection is alive")
+                    except Exception:
+                        print("[PUGAPI] WebSocket connection is dead!")
+                        self.connected = False
+                        break
                 else:
                     print("[PUGAPI] WebSocket connection is dead!")
                     self.connected = False
@@ -82,7 +89,7 @@ class PugSocketClient:
             data = json.loads(message)
             print(f"[PUGAPI] Received message: {data}")
             event = data.get("event")
-            payload = data.get("data")
+            payload = data.get("payload")
             print(f"[PUGAPI] Event: {event}, Payload: {payload}")
             # Route the message to the correct handler
             if event == "lobby_info":
@@ -119,6 +126,10 @@ class PugSocketClient:
                 await self.on_veto_acknowledged(payload)
             elif event == "veto_timeout":
                 await self.on_veto_timeout(payload)
+            elif event == "side_selected":
+                await self.on_side_selected(payload)
+            elif event == "side_acknowledged":
+                await self.on_side_acknowledged(payload)
             else:
                 print(f"Unknown event received: {event}")
         except Exception as e:
@@ -369,6 +380,22 @@ class PugSocketClient:
                 await self.side_selected_callback(data)
         except Exception as e:
             print(f"Error processing 'side_selected' event: {e}")
+
+    async def on_side_acknowledged(self, data):
+        """Handle side selection acknowledgment from Django."""
+        try:
+            status = data.get("status")
+            side = data.get("side")
+            selected_by = data.get("selected_by")
+            side_complete = data.get("side_complete", False)
+            match_ready = data.get("match_ready", False)
+            print(f"[SIDE ACKNOWLEDGED] {selected_by} selected {side}, complete: {side_complete}, ready: {match_ready}")
+            
+            # Forward to main WebSocket connection via callback
+            if hasattr(self, 'side_acknowledged_callback'):
+                await self.side_acknowledged_callback(data)
+        except Exception as e:
+            print(f"Error processing 'side_acknowledged' event: {e}")
 
     ### COMMANDS ###
 

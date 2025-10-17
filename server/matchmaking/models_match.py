@@ -19,6 +19,7 @@ class Match(models.Model):
     
     # Match states
     STATE_CONFIRMED = 'CONFIRMED'       # All players accepted, ready for veto
+    STATE_SERVER_VETO = 'SERVER_VETO'   # Server veto in progress
     STATE_VETO = 'VETO'                 # Map veto in progress
     STATE_SIDE_SELECTION = 'SIDE_SELECTION'  # Side selection in progress
     STATE_CREATING = 'CREATING'         # Custom game being created
@@ -29,6 +30,7 @@ class Match(models.Model):
     
     STATE_CHOICES = [
         (STATE_CONFIRMED, 'All players accepted'),
+        (STATE_SERVER_VETO, 'Server veto in progress'),
         (STATE_VETO, 'Map veto in progress'),
         (STATE_SIDE_SELECTION, 'Side selection in progress'),
         (STATE_CREATING, 'Custom game being created'),
@@ -56,6 +58,17 @@ class Match(models.Model):
     # Captains
     team_a_captain_puuid = models.CharField(max_length=100)
     team_b_captain_puuid = models.CharField(max_length=100)
+    
+    # Server veto data
+    server_pool = models.JSONField(default=list, help_text="Available servers for veto")
+    vetoed_servers = models.JSONField(default=list, help_text="List of vetoed server names")
+    server_veto_history = models.JSONField(default=list, help_text="History of server veto actions")
+    final_server = models.CharField(max_length=20, null=True, blank=True)
+    
+    # Server veto turn tracking
+    server_veto_turn = models.CharField(max_length=10, null=True, blank=True, help_text="'team_a' or 'team_b'")
+    server_veto_deadline = models.DateTimeField(null=True, blank=True, db_index=True)
+    server_veto_started_at = models.DateTimeField(null=True, blank=True)
     
     # Map veto data
     map_pool = models.JSONField(help_text="Available maps for veto")
@@ -206,18 +219,20 @@ class VetoAction(models.Model):
     ACTION_BAN = 'BAN'
     ACTION_PICK = 'PICK'
     ACTION_TIMEOUT = 'TIMEOUT'
+    ACTION_SERVER_VETO = 'SERVER_VETO'
     
     ACTION_CHOICES = [
         (ACTION_BAN, 'Map banned'),
         (ACTION_PICK, 'Map picked'),
         (ACTION_TIMEOUT, 'Timeout auto-action'),
+        (ACTION_SERVER_VETO, 'Server vetoed'),
     ]
     
     # Relationships
     match = models.ForeignKey(Match, on_delete=models.CASCADE, related_name='veto_actions')
     
     # Action details
-    action_type = models.CharField(max_length=10, choices=ACTION_CHOICES)
+    action_type = models.CharField(max_length=15, choices=ACTION_CHOICES)
     map_name = models.CharField(max_length=50)
     team = models.CharField(max_length=10, help_text="'team_a' or 'team_b'")
     player_puuid = models.CharField(max_length=100, null=True, blank=True)

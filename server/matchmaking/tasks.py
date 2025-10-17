@@ -403,61 +403,98 @@ def health_check(self):
 @shared_task(bind=True, name='matchmaking.tasks.check_veto_timeouts')
 def check_veto_timeouts(self):
     """
-    Check for matches with expired veto deadlines and auto-veto.
+    Check for matches with expired deadlines and auto-handle.
+    Handles server veto, map veto, and side selection timeouts.
     Runs every 5 seconds.
     
     SYNC TASK: Uses direct ORM calls following Celery best practices.
     """
     from django.utils import timezone
+    from django.db import models
     
     try:
-        logger.debug("Checking for veto timeouts...")
+        logger.debug("Checking for expired deadlines...")
         
-        # Find matches in veto phase with expired deadlines (direct ORM query)
+        # Find matches with expired deadlines
         expired_matches = list(Match.objects.filter(
-            state=Match.STATE_VETO,
-            veto_deadline__lt=timezone.now()
+            models.Q(
+                state=Match.STATE_SERVER_VETO,
+                server_veto_deadline__lt=timezone.now()
+            ) | models.Q(
+                state=Match.STATE_VETO,
+                veto_deadline__lt=timezone.now()
+            ) | models.Q(
+                state=Match.STATE_SIDE_SELECTION,
+                side_selection_deadline__lt=timezone.now()
+            )
         ))
         
         count = len(expired_matches)
         
         if count == 0:
-            logger.debug("No expired veto deadlines found")
+            logger.debug("No expired deadlines found")
             return {
                 'status': 'success',
                 'expired_count': 0
             }
         
-        logger.info(f"Found {count} match(es) with expired veto deadline")
+        logger.info(f"Found {count} match(es) with expired deadlines")
         
         processed = 0
         for match in expired_matches:
             try:
-                logger.info(f"Processing timeout for match {match.id}")
+                logger.info(f"Processing timeout for match {match.id} (state: {match.state})")
                 
-                # Handle timeout (auto-veto) - SYNC, pass match ID
-                result = MatchManager.handle_veto_timeout_sync(match.id)
+                # Handle timeout based on match state
+                if match.state == Match.STATE_SERVER_VETO:
+                    # Server veto timeout
+                    result = MatchManager.handle_server_veto_timeout_sync(match.id)
+                    event_type = 'server_veto_timeout'
+                elif match.state == Match.STATE_VETO:
+                    # Map veto timeout
+                    result = MatchManager.handle_map_veto_timeout_sync(match.id)
+                    event_type = 'veto_timeout'
+                elif match.state == Match.STATE_SIDE_SELECTION:
+                    # Side selection timeout
+                    result = MatchManager.handle_side_selection_timeout_sync(match.id)
+                    event_type = 'side_selection_timeout'
+                else:
+                    logger.warning(f"Match {match.id} in unexpected state for timeout: {match.state}")
+                    continue
                 
                 if result['status'] == 'success':
                     processed += 1
                     
-                    # Broadcast timeout event to all players (SYNC→ASYNC bridge)
+                    # Broadcast timeout event to all players
                     channel_layer = get_channel_layer()
                     async_to_sync(channel_layer.group_send)(
                         f"match_{match.id}",
                         {
-                            'type': 'veto_timeout',
+                            'type': event_type,
                             'match_id': str(match.id),
+                            # Server veto fields
+                            'auto_vetoed_server': result.get('auto_vetoed_server'),
+                            'server_veto_complete': result.get('server_veto_complete', False),
+                            'final_server': result.get('final_server'),
+                            'map_veto_started': result.get('map_veto_started', False),
+                            # Map veto fields
                             'auto_vetoed_map': result.get('auto_vetoed_map'),
                             'veto_complete': result.get('veto_complete', False),
+                            'final_map': result.get('final_map'),
+                            'side_selector': result.get('side_selector'),
+                            # Side selection fields
+                            'auto_selected_side': result.get('auto_selected_side'),
+                            'side_selection_complete': result.get('side_selection_complete', False),
+                            'match_ready': result.get('match_ready', False),
+                            # Common fields
                             'next_turn': result.get('next_turn'),
+                            'remaining_servers': result.get('remaining_servers', []),
                             'remaining_maps': result.get('remaining_maps', []),
                             'deadline': result.get('deadline'),
-                            'final_map': result.get('final_map'),
                         }
                     )
                     
-                    logger.info(f"Match {match.id}: Timeout handled successfully")
+                    logger.info(f"Match {match.id}: {event_type} handled successfully")
                 else:
                     logger.error(f"Match {match.id}: Timeout handling failed - {result.get('message')}")
                     
@@ -466,7 +503,7 @@ def check_veto_timeouts(self):
                 import traceback
                 logger.error(traceback.format_exc())
         
-        logger.info(f"Processed {processed}/{count} veto timeouts")
+        logger.info(f"Processed {processed}/{count} timeouts")
         
         return {
             'status': 'success',

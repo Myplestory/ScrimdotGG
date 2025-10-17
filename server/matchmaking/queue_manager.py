@@ -761,10 +761,20 @@ class QueueManager:
                 current_time = timezone.now().timestamp()
                 
                 # Get all lobbies in queue
-                lobby_entries = redis_conn.zrange(queue_key, 0, -1, withscores=True)
+                lobby_entries = redis_conn.zrange(queue_key, 0, -1)
                 
-                for lobby_id_bytes, queue_time in lobby_entries:
+                for lobby_id_bytes in lobby_entries:
                     lobby_id = lobby_id_bytes.decode('utf-8') if isinstance(lobby_id_bytes, bytes) else lobby_id_bytes
+                    
+                    # Get the actual queue time for this lobby
+                    queue_time_key = QueueManager.QUEUE_TIME_KEY_TEMPLATE.format(lobby_id=lobby_id)
+                    queue_time_str = redis_conn.get(queue_time_key)
+                    
+                    if not queue_time_str:
+                        # No queue time found, consider it expired
+                        queue_time = 0
+                    else:
+                        queue_time = float(queue_time_str)
                     
                     # Check if lobby is expired (> 1 hour in queue)
                     if current_time - queue_time > QueueManager.QUEUE_TTL:

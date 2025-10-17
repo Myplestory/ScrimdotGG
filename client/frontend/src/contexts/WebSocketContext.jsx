@@ -52,7 +52,7 @@ export const WebSocketProvider = ({ children }) => {
   const eventHandlers = useRef({});
   const reconnectAttempts = useRef(0);
   const reconnectTimeout = useRef(null);
-  const maxReconnectAttempts = 5;
+  const maxReconnectAttempts = 10; // Increased from 5 to 10 for better resilience
   const WS_URL = 'ws://localhost:5888/ws';
 
   // Connect to WebSocket
@@ -70,6 +70,20 @@ export const WebSocketProvider = ({ children }) => {
       setConnected(true);
       setReconnecting(false);
       setSocket(ws);
+      
+      // Show success notification if this was a reconnection
+      if (reconnectAttempts.current > 0) {
+        console.log(`✅ Successfully reconnected after ${reconnectAttempts.current} attempts`);
+        if (window.showNotification) {
+          window.showNotification({
+            type: 'success',
+            title: 'Reconnected',
+            message: 'Connection to server restored',
+            duration: 3000
+          });
+        }
+      }
+      
       reconnectAttempts.current = 0;
       
       // Send connected event to backend
@@ -88,6 +102,16 @@ export const WebSocketProvider = ({ children }) => {
         console.log(`🔄 Reconnecting in ${delay}ms (attempt ${reconnectAttempts.current + 1}/${maxReconnectAttempts})...`);
         setReconnecting(true);
         
+        // Show user notification about reconnection
+        if (window.showNotification) {
+          window.showNotification({
+            type: 'warning',
+            title: 'Connection Lost',
+            message: `Reconnecting... (${reconnectAttempts.current + 1}/${maxReconnectAttempts})`,
+            duration: delay
+          });
+        }
+        
         reconnectTimeout.current = setTimeout(() => {
           reconnectAttempts.current++;
           connectWebSocket();
@@ -95,6 +119,16 @@ export const WebSocketProvider = ({ children }) => {
       } else if (reconnectAttempts.current >= maxReconnectAttempts) {
         console.error('❌ Max reconnection attempts reached');
         setReconnecting(false);
+        
+        // Show user notification about failed reconnection
+        if (window.showNotification) {
+          window.showNotification({
+            type: 'error',
+            title: 'Connection Failed',
+            message: 'Unable to reconnect to server. Please refresh the page.',
+            duration: 0 // Persistent notification
+          });
+        }
       } else {
         // Clean close, don't reconnect
         console.log('✅ WebSocket closed cleanly, not reconnecting');
@@ -429,7 +463,22 @@ export const WebSocketProvider = ({ children }) => {
     checkQueueEligibility,
     
     // Manual reconnect
-    reconnect: connectWebSocket,
+    reconnect: () => {
+      // Reset reconnection attempts for manual reconnect
+      reconnectAttempts.current = 0;
+      setReconnecting(false);
+      connectWebSocket();
+    },
+    
+    // Reset reconnection state
+    resetReconnection: () => {
+      reconnectAttempts.current = 0;
+      setReconnecting(false);
+      if (reconnectTimeout.current) {
+        clearTimeout(reconnectTimeout.current);
+        reconnectTimeout.current = null;
+      }
+    },
   };
 
   return (

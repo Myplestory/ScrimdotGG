@@ -1,5 +1,16 @@
 """
 Simple cleanup script for bot players
+
+This script cleans up:
+- Bot/test players and lobbies
+- ALL Match instances (including READY state matches)
+- Redis queue entries and match confirmations
+
+READY State Matches:
+- These are matches where side selection has completed
+- They are waiting for match execution to start
+- A constructor would be assigned to create the custom game
+- If left uncleaned, they can cause issues with new matches
 """
 import os
 import sys
@@ -107,30 +118,79 @@ else:
 
 # Clean up ALL Match instances (not just bot matches)
 print("\nCleaning up ALL Match instances...")
-all_matches = Match.objects.all()
-match_count = all_matches.count()
+try:
+    all_matches = Match.objects.all()
+    match_count = all_matches.count()
 
-if match_count > 0:
-    print(f"Found {match_count} total match(es) in database")
+    if match_count > 0:
+        print(f"Found {match_count} total match(es) in database")
+        
+        # Group matches by state for better reporting
+        matches_by_state = {}
+        for match in all_matches:
+            state = match.state
+            if state not in matches_by_state:
+                matches_by_state[state] = []
+            matches_by_state[state].append(match)
+        
+        # Show match details by state
+        for state, matches in matches_by_state.items():
+            print(f"  - {len(matches)} match(es) in state '{state}':")
+            for match in matches:
+                print(f"    • Match {match.id}: created={match.created_at}")
+                
+                # Safely access fields that might not exist yet
+                try:
+                    final_map = match.final_map
+                    print(f"      - Final map: {final_map}")
+                except AttributeError:
+                    print(f"      - Final map: (field not available)")
+                
+                if state == 'READY':
+                    try:
+                        constructor = match.constructor_puuid
+                        side = match.selected_side
+                        server = getattr(match, 'final_server', None) or getattr(match, 'server_region', None)
+                        print(f"      - Constructor: {constructor}")
+                        print(f"      - Side: {side}")
+                        print(f"      - Server: {server}")
+                    except AttributeError as e:
+                        print(f"      - Additional fields: (not available - {e})")
     
-    # Show match details before deletion
-    for match in all_matches:
-        print(f"  - Match {match.id}: state={match.state}, created={match.created_at}")
+        # Delete related MatchPlayer and VetoAction records first
+        match_ids = list(all_matches.values_list('id', flat=True))
+        veto_count = VetoAction.objects.filter(match_id__in=match_ids).count()
+        player_count_in_matches = MatchPlayer.objects.filter(match_id__in=match_ids).count()
+        
+        VetoAction.objects.filter(match_id__in=match_ids).delete()
+        MatchPlayer.objects.filter(match_id__in=match_ids).delete()
+        all_matches.delete()
+        
+        print(f"  ✅ Deleted {match_count} Match instances")
+        print(f"  ✅ Deleted {player_count_in_matches} MatchPlayer records")
+        print(f"  ✅ Deleted {veto_count} VetoAction records")
+        
+        # Special note for READY state matches
+        if 'READY' in matches_by_state:
+            ready_count = len(matches_by_state['READY'])
+            print(f"  ⚠️  {ready_count} match(es) were in 'READY' state (side selection complete, waiting for match execution)")
+    else:
+        print("  No matches found in database")
+        
+except Exception as e:
+    print(f"  Error accessing matches: {e}")
+    print("  This might be due to pending database migrations.")
+    print("  Run: python manage.py migrate")
     
-    # Delete related MatchPlayer and VetoAction records first
-    match_ids = list(all_matches.values_list('id', flat=True))
-    veto_count = VetoAction.objects.filter(match_id__in=match_ids).count()
-    player_count_in_matches = MatchPlayer.objects.filter(match_id__in=match_ids).count()
-    
-    VetoAction.objects.filter(match_id__in=match_ids).delete()
-    MatchPlayer.objects.filter(match_id__in=match_ids).delete()
-    all_matches.delete()
-    
-    print(f"  ✅ Deleted {match_count} Match instances")
-    print(f"  ✅ Deleted {player_count_in_matches} MatchPlayer records")
-    print(f"  ✅ Deleted {veto_count} VetoAction records")
-else:
-    print("No matches found in database")
+    # Try to delete matches using raw SQL as fallback
+    try:
+        from django.db import connection
+        with connection.cursor() as cursor:
+            cursor.execute("DELETE FROM matchmaking_match")
+            deleted_count = cursor.rowcount
+            print(f"  Fallback: Deleted {deleted_count} match(es) using raw SQL")
+    except Exception as fallback_error:
+        print(f"  Fallback deletion also failed: {fallback_error}")
 
 # Build a query to find all bot/test players (both old and new format)
 player_query = Q()
@@ -161,6 +221,11 @@ print(f"  - Matches:        {match_count}")
 if match_count > 0:
     print(f"    • MatchPlayers: {player_count_in_matches}")
     print(f"    • VetoActions:  {veto_count}")
+    # Show state breakdown
+    if 'matches_by_state' in locals():
+        print(f"    • Match States:")
+        for state, matches in matches_by_state.items():
+            print(f"      - {state}: {len(matches)} match(es)")
 print(f"\nRedis:")
 print(f"  - Queue lobbies:          {removed_from_queue + orphaned_count}")
 print(f"    • With DB entries:      {removed_from_queue}")
@@ -171,5 +236,9 @@ print(f"[NOTE] WebSocket Cleanup:")
 print(f"  - Bot connections auto-close when test script exits")
 print(f"  - If crashed: connections timeout naturally (30-60s)")
 print(f"  - Or restart Daphne to force close all connections")
+print(f"\n[NOTE] READY State Matches:")
+print(f"  - These were matches where side selection completed")
+print(f"  - They were waiting for match execution to start")
+print(f"  - Constructor would have been assigned to create custom game")
 print(f"{'='*60}")
-print(f"\n✅ Cleanup complete! System is clean for next test.\n")
+print(f"\n[SUCCESS] Cleanup complete! System is clean for next test.\n")

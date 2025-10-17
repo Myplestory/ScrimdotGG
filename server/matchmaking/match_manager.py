@@ -29,7 +29,10 @@ class MatchManager:
     
     # Veto timing constants
     VETO_TIMEOUT_SECONDS = 30
-    SIDE_SELECTION_TIMEOUT_SECONDS = 15
+    
+    # Available servers and maps
+    AVAILABLE_SERVERS = ['na-central', 'na-west', 'eu-west', 'ap-southeast', 'ap-northeast', 'eu-central']
+    AVAILABLE_MAPS = ['Bind', 'Haven', 'Split', 'Ascent', 'Icebox', 'Breeze', 'Fracture', 'Pearl', 'Lotus', 'Sunset']
     
     @staticmethod
     async def create_match_from_confirmation(match_confirmation_id: str) -> Optional[Match]:
@@ -89,6 +92,7 @@ class MatchManager:
                 team_a_captain_puuid=team_a_captain['puuid'],
                 team_b_captain_puuid=team_b_captain['puuid'],
                 map_pool=map_pool,
+                server_pool=server_pool,  # Store common servers from matchmaking
                 server_region=server_region,
                 match_quality=match_data.get('match_quality', 0.0),
                 team_a_avg_mmr=team_a_avg_mmr,
@@ -206,9 +210,9 @@ class MatchManager:
         logger.info(f"Created {len(match_players)} MatchPlayer entries for match {match.id}")
     
     @staticmethod
-    async def start_veto(match: Match) -> Dict:
+    async def start_server_veto(match: Match) -> Dict:
         """
-        Initialize the map veto phase.
+        Initialize the server veto phase.
         
         Higher MMR team bans first.
         
@@ -216,27 +220,32 @@ class MatchManager:
             match: Match instance
             
         Returns:
-            Dict with veto start data
+            Dict with server veto start data
         """
         try:
             # Determine which team bans first (higher MMR)
             starting_team = 'team_a' if match.team_a_avg_mmr >= match.team_b_avg_mmr else 'team_b'
             
-            # Update match state
-            match.state = Match.STATE_VETO
-            match.veto_turn = starting_team
-            match.veto_started_at = timezone.now()
-            match.veto_deadline = timezone.now() + timedelta(seconds=MatchManager.VETO_TIMEOUT_SECONDS)
-            await sync_to_async(match.save, thread_sensitive=False)(update_fields=['state', 'veto_turn', 'veto_started_at', 'veto_deadline'])
+            # Update match state for server veto
+            match.state = Match.STATE_SERVER_VETO
+            # Use the server pool from matchmaking (common servers between all players)
+            # If no server pool was set during matchmaking, fall back to all available servers
+            if not match.server_pool:
+                match.server_pool = MatchManager.AVAILABLE_SERVERS.copy()
+            match.vetoed_servers = []
+            match.server_veto_turn = starting_team
+            match.server_veto_started_at = timezone.now()
+            match.server_veto_deadline = timezone.now() + timedelta(seconds=MatchManager.VETO_TIMEOUT_SECONDS)
+            await sync_to_async(match.save, thread_sensitive=False)(update_fields=['state', 'server_pool', 'vetoed_servers', 'server_veto_turn', 'server_veto_started_at', 'server_veto_deadline'])
             
-            logger.info(f"Match {match.id}: Veto started, {starting_team} bans first")
+            logger.info(f"Match {match.id}: Server veto started, {starting_team} bans first")
             
             return {
                 'status': 'success',
                 'match_id': str(match.id),
                 'current_turn': starting_team,
-                'available_maps': match.map_pool,
-                'deadline': match.veto_deadline.isoformat(),
+                'available_servers': match.server_pool,
+                'deadline': match.server_veto_deadline.isoformat(),
             }
             
         except Exception as e:
@@ -247,7 +256,116 @@ class MatchManager:
             }
     
     @staticmethod
-    async def process_veto(match: Match, map_name: str, vetoing_team: str, player_puuid: str) -> Dict:
+    async def process_server_veto(match: Match, server_name: str, vetoing_team: str, player_puuid: str) -> Dict:
+        """
+        Process a server veto action.
+        
+        Args:
+            match: Match instance
+            server_name: Name of server being vetoed
+            vetoing_team: 'team_a' or 'team_b'
+            player_puuid: PUUID of player making veto
+            
+        Returns:
+            Dict with server veto result
+        """
+        try:
+            # Validation
+            if match.state != Match.STATE_SERVER_VETO:
+                return {
+                    'status': 'error',
+                    'message': 'Match is not in server veto phase'
+                }
+            
+            if match.server_veto_turn != vetoing_team:
+                return {
+                    'status': 'error',
+                    'message': 'Not your turn to veto'
+                }
+            
+            if server_name not in match.server_pool or server_name in match.vetoed_servers:
+                return {
+                    'status': 'error',
+                    'message': 'Invalid server selection'
+                }
+            
+            # Check if player is captain of their team
+            if vetoing_team == 'team_a' and player_puuid != match.team_a_captain_puuid:
+                return {
+                    'status': 'error',
+                    'message': 'Only team captain can veto'
+                }
+            if vetoing_team == 'team_b' and player_puuid != match.team_b_captain_puuid:
+                return {
+                    'status': 'error',
+                    'message': 'Only team captain can veto'
+                }
+            
+            # Add to vetoed list
+            match.vetoed_servers.append(server_name)
+            
+            # Record server veto action
+            sequence_number = len(match.vetoed_servers)
+            await sync_to_async(VetoAction.objects.create, thread_sensitive=False)(
+                match=match,
+                action_type=VetoAction.ACTION_SERVER_VETO,
+                map_name=server_name,  # Reuse map_name field for server
+                team=vetoing_team,
+                player_puuid=player_puuid,
+                sequence_number=sequence_number,
+                was_timeout=False
+            )
+            
+            logger.info(f"Match {match.id}: {vetoing_team} vetoed server {server_name}")
+            
+            # Check if server veto complete
+            remaining_servers = [s for s in match.server_pool if s not in match.vetoed_servers]
+            
+            if len(remaining_servers) == 1:
+                # Server veto complete - move to map veto
+                match.final_server = remaining_servers[0]
+                match.state = Match.STATE_VETO
+                match.map_pool = MatchManager.AVAILABLE_MAPS.copy()
+                match.vetoed_maps = []
+                match.veto_turn = 'team_b' if vetoing_team == 'team_a' else 'team_a'  # Other team starts map veto
+                match.veto_deadline = timezone.now() + timedelta(seconds=MatchManager.VETO_TIMEOUT_SECONDS)
+                await sync_to_async(match.save, thread_sensitive=False)(update_fields=['vetoed_servers', 'final_server', 'state', 'map_pool', 'vetoed_maps', 'veto_turn', 'veto_deadline'])
+                
+                return {
+                    'status': 'success',
+                    'server_veto_complete': True,
+                    'vetoed_server': server_name,
+                    'final_server': match.final_server,
+                    'map_veto_started': True,
+                    'current_turn': match.veto_turn,
+                    'available_maps': match.map_pool,
+                    'deadline': match.veto_deadline.isoformat()
+                }
+            else:
+                # Continue server veto
+                next_turn = 'team_b' if vetoing_team == 'team_a' else 'team_a'
+                match.server_veto_turn = next_turn
+                match.server_veto_deadline = timezone.now() + timedelta(seconds=MatchManager.VETO_TIMEOUT_SECONDS)
+                await sync_to_async(match.save, thread_sensitive=False)(update_fields=['vetoed_servers', 'server_veto_turn', 'server_veto_deadline'])
+                
+                return {
+                    'status': 'success',
+                    'server_veto_complete': False,
+                    'vetoed_server': server_name,
+                    'next_turn': next_turn,
+                    'remaining_servers': remaining_servers,
+                    'deadline': match.server_veto_deadline.isoformat()
+                }
+                
+        except Exception as e:
+            logger.error(f"Error processing server veto for match {match.id}: {str(e)}")
+            return {
+                'status': 'error',
+                'message': str(e)
+            }
+
+    @staticmethod
+    async def process_map_veto(match: Match, map_name: str, vetoing_team: str, player_puuid: str) -> Dict:
         """
         Process a map veto action.
         
@@ -258,7 +376,7 @@ class MatchManager:
             player_puuid: PUUID of player making veto
             
         Returns:
-            Dict with veto result
+            Dict with map veto result
         """
         try:
             # Validation
@@ -316,7 +434,7 @@ class MatchManager:
                 match.state = Match.STATE_SIDE_SELECTION
                 # The team that did NOT make the last veto gets side selection (they "won" the veto)
                 match.side_selector = 'team_b' if vetoing_team == 'team_a' else 'team_a'
-                match.side_selection_deadline = timezone.now() + timedelta(seconds=MatchManager.SIDE_SELECTION_TIMEOUT_SECONDS)
+                match.side_selection_deadline = timezone.now() + timedelta(seconds=MatchManager.VETO_TIMEOUT_SECONDS)
                 await sync_to_async(match.save, thread_sensitive=False)(update_fields=['vetoed_maps', 'final_map', 'state', 'side_selector', 'side_selection_deadline'])
                 
                 logger.info(f"Match {match.id}: Veto complete, final map is {match.final_map}")
@@ -412,7 +530,7 @@ class MatchManager:
                 match.state = Match.STATE_SIDE_SELECTION
                 # The team that did NOT make the last veto gets side selection (they "won" the veto)
                 match.side_selector = 'team_b' if current_team == 'team_a' else 'team_a'
-                match.side_selection_deadline = timezone.now() + timedelta(seconds=MatchManager.SIDE_SELECTION_TIMEOUT_SECONDS)
+                match.side_selection_deadline = timezone.now() + timedelta(seconds=MatchManager.VETO_TIMEOUT_SECONDS)
                 await sync_to_async(match.save, thread_sensitive=False)(update_fields=['vetoed_maps', 'final_map', 'state', 'side_selector', 'side_selection_deadline'])
                 
                 return {
@@ -497,6 +615,13 @@ class MatchManager:
                 'team_b_captain': match.team_b_captain_puuid,
                 'team_a_lobbies': match.team_a_lobbies,  # Lobby IDs for party information
                 'team_b_lobbies': match.team_b_lobbies,  # Lobby IDs for party information
+                # Server veto fields
+                'server_pool': match.server_pool,
+                'vetoed_servers': match.vetoed_servers,
+                'server_veto_turn': match.server_veto_turn,
+                'server_veto_deadline': match.server_veto_deadline.isoformat() if match.server_veto_deadline else None,
+                'final_server': match.final_server,
+                # Map veto fields
                 'map_pool': match.map_pool,
                 'vetoed_maps': match.vetoed_maps,
                 'remaining_maps': match.get_remaining_maps(),
@@ -504,8 +629,10 @@ class MatchManager:
                 'veto_turn': match.veto_turn,
                 'veto_deadline': match.veto_deadline.isoformat() if match.veto_deadline else None,
                 'veto_history': veto_history,
+                # Side selection fields
                 'side_selector': match.side_selector,
                 'selected_side': match.selected_side,
+                # Match metadata
                 'match_quality': match.match_quality,
                 'team_a_avg_mmr': match.team_a_avg_mmr,
                 'team_b_avg_mmr': match.team_b_avg_mmr,
@@ -523,7 +650,112 @@ class MatchManager:
     # ============================================================================
     
     @staticmethod
-    def handle_veto_timeout_sync(match_id) -> Dict:
+    def handle_server_veto_timeout_sync(match_id) -> Dict:
+        """
+        Handle timeout for server veto action - SYNC version for Celery tasks.
+        Auto-veto a random available server.
+        
+        Args:
+            match_id: Match ID (UUID or string)
+            
+        Returns:
+            Dict with timeout result
+        """
+        from django.utils import timezone
+        from datetime import timedelta
+        from channels.layers import get_channel_layer
+        from asgiref.sync import async_to_sync
+        
+        try:
+            # Fetch match (direct ORM call - Celery best practice)
+            match = Match.objects.get(id=match_id)
+            
+            if match.state != Match.STATE_SERVER_VETO:
+                return {'status': 'error', 'message': 'Not in server veto phase'}
+            
+            # Get available servers
+            remaining_servers = [s for s in match.server_pool if s not in match.vetoed_servers]
+            
+            if not remaining_servers:
+                return {'status': 'error', 'message': 'No servers available'}
+            
+            # Auto-select random server
+            auto_server = random.choice(remaining_servers)
+            current_team = match.server_veto_turn
+            
+            # Add to vetoed list
+            match.vetoed_servers.append(auto_server)
+            
+            # Record timeout veto
+            sequence_number = len(match.vetoed_servers)
+            VetoAction.objects.create(
+                match=match,
+                action_type=VetoAction.ACTION_TIMEOUT,
+                map_name=auto_server,  # Reuse map_name field
+                team=current_team,
+                player_puuid=None,
+                sequence_number=sequence_number,
+                was_timeout=True
+            )
+            
+            logger.warning(f"Match {match.id}: {current_team} timed out, auto-vetoed server {auto_server}")
+            
+            # Check if server veto complete
+            remaining_servers = [s for s in match.server_pool if s not in match.vetoed_servers]
+            
+            if len(remaining_servers) == 1:
+                # Server veto complete - move to map veto
+                match.final_server = remaining_servers[0]
+                match.state = Match.STATE_VETO
+                match.map_pool = MatchManager.AVAILABLE_MAPS.copy()
+                match.vetoed_maps = []
+                match.veto_turn = 'team_b' if current_team == 'team_a' else 'team_a'
+                match.veto_deadline = timezone.now() + timedelta(seconds=MatchManager.VETO_TIMEOUT_SECONDS)
+                match.save(update_fields=['vetoed_servers', 'final_server', 'state', 'map_pool', 'vetoed_maps', 'veto_turn', 'veto_deadline'])
+                
+                return {
+                    'status': 'success',
+                    'was_timeout': True,
+                    'server_veto_complete': True,
+                    'auto_vetoed_server': auto_server,
+                    'final_server': match.final_server,
+                    'map_veto_started': True,
+                    'current_turn': match.veto_turn,
+                    'available_maps': match.map_pool,
+                    'deadline': match.veto_deadline.isoformat()
+                }
+            else:
+                # Continue server veto
+                next_turn = 'team_b' if current_team == 'team_a' else 'team_a'
+                match.server_veto_turn = next_turn
+                match.server_veto_deadline = timezone.now() + timedelta(seconds=MatchManager.VETO_TIMEOUT_SECONDS)
+                match.save(update_fields=['vetoed_servers', 'server_veto_turn', 'server_veto_deadline'])
+                
+                return {
+                    'status': 'success',
+                    'was_timeout': True,
+                    'server_veto_complete': False,
+                    'auto_vetoed_server': auto_server,
+                    'next_turn': next_turn,
+                    'remaining_servers': remaining_servers,
+                    'deadline': match.server_veto_deadline.isoformat()
+                }
+                
+        except Match.DoesNotExist:
+            logger.error(f"Match {match_id} not found")
+            return {
+                'status': 'error',
+                'message': f'Match {match_id} not found'
+            }
+        except Exception as e:
+            logger.error(f"Error handling server veto timeout for match {match_id}: {str(e)}")
+            return {
+                'status': 'error',
+                'message': str(e)
+            }
+
+    @staticmethod
+    def handle_map_veto_timeout_sync(match_id) -> Dict:
         """
         Handle timeout for veto action - SYNC version for Celery tasks.
         Auto-veto a random available map.
@@ -582,7 +814,7 @@ class MatchManager:
                 match.state = Match.STATE_SIDE_SELECTION
                 # The team that did NOT make the last veto gets side selection (they "won" the veto)
                 match.side_selector = 'team_b' if current_team == 'team_a' else 'team_a'
-                match.side_selection_deadline = timezone.now() + timedelta(seconds=MatchManager.SIDE_SELECTION_TIMEOUT_SECONDS)
+                match.side_selection_deadline = timezone.now() + timedelta(seconds=MatchManager.VETO_TIMEOUT_SECONDS)
                 match.save(update_fields=['vetoed_maps', 'final_map', 'state', 'side_selector', 'side_selection_deadline'])
                 
                 return {
@@ -617,6 +849,53 @@ class MatchManager:
             }
         except Exception as e:
             logger.error(f"Error handling veto timeout for match {match_id}: {str(e)}")
+            return {
+                'status': 'error',
+                'message': str(e)
+            }
+
+    @staticmethod
+    def handle_side_selection_timeout_sync(match_id: str) -> Dict:
+        """
+        Handle timeout for side selection - SYNC version for Celery tasks.
+        Auto-select a random side.
+        
+        Args:
+            match_id: Match ID (UUID or string)
+            
+        Returns:
+            Dict with timeout result
+        """
+        try:
+            match = Match.objects.get(id=match_id)
+            
+            if match.state != Match.STATE_SIDE_SELECTION:
+                return {'status': 'error', 'message': 'Not in side selection phase'}
+            
+            # Auto-select random side
+            auto_side = random.choice(['attack', 'defend'])
+            match.selected_side = auto_side
+            match.state = Match.STATE_READY
+            match.save()
+            
+            logger.warning(f"Match {match.id}: Side selection timed out, auto-selected {auto_side}")
+            
+            return {
+                'status': 'success',
+                'was_timeout': True,
+                'side_selection_complete': True,
+                'auto_selected_side': auto_side,
+                'match_ready': True
+            }
+            
+        except Match.DoesNotExist:
+            logger.error(f"Match {match_id} not found")
+            return {
+                'status': 'error',
+                'message': f'Match {match_id} not found'
+            }
+        except Exception as e:
+            logger.error(f"Error handling side selection timeout for match {match_id}: {str(e)}")
             return {
                 'status': 'error',
                 'message': str(e)
@@ -672,6 +951,20 @@ class MatchManager:
             match.save()
 
             logger.info(f"Side {side} selected by {team} captain {player_puuid[:12]}... in match {match.id}")
+
+            # Trigger match execution (following same pattern as veto completion)
+            logger.info(f"Match {match.id} is ready - starting match execution")
+            
+            # Import the match execution manager
+            from .match_execution import MatchExecutionManager
+            
+            # Start the match execution process
+            execution_result = MatchExecutionManager.initiate_match_start(str(match.id))
+            
+            if execution_result.get('status') == 'success':
+                logger.info(f"Match {match.id} execution started successfully")
+            else:
+                logger.error(f"Failed to start match execution for {match.id}: {execution_result.get('message', 'Unknown error')}")
 
             return {
                 'status': 'success',

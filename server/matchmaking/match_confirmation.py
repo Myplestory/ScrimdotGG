@@ -659,17 +659,17 @@ class MatchConfirmationManager:
             logger.info(f"Match confirmed broadcast sent to {len(all_players)} players")
             
             # Start veto phase
-            veto_result = await MatchManager.start_veto(match)
+            veto_result = await MatchManager.start_server_veto(match)
             
             if veto_result['status'] == 'success':
-                # Broadcast veto started
+                # Broadcast server veto started
                 await channel_layer.group_send(
                     f"match_{match.id}",
                     {
-                        'type': 'veto_started',
+                        'type': 'server_veto_started',
                         'match_id': str(match.id),
                         'current_turn': veto_result['current_turn'],
-                        'available_maps': veto_result['available_maps'],
+                        'available_servers': veto_result['available_servers'],
                         'deadline': veto_result['deadline']
                     }
                 )

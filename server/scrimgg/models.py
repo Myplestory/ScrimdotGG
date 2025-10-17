@@ -138,6 +138,10 @@ class Match(models.Model):
     team_b_data = models.JSONField(default=dict)  # Team B player data
     last_updated = models.DateTimeField(auto_now=True)
     
+    # Join tracking for custom games
+    joined_players = models.JSONField(default=list)  # List of PUUIDs who have joined the custom game
+    join_timeout_at = models.DateTimeField(null=True, blank=True)  # When join phase times out
+    
     def __str__(self):
         return f"Match {self.id} - {self.status} - {self.team_a_score}:{self.team_b_score}"
 

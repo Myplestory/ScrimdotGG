@@ -2,6 +2,9 @@ import requests, os, json, time, asyncio
 from valclient import Client
 from datetime import datetime
 from pugapi import PugSocketClient
+from app.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 folder_name = 'data'
@@ -21,7 +24,7 @@ class ValorantAPI(object):
                 data = json.load(file)
                 self.args = data
         except Exception as e:
-            print(f"An error occurred while reading the JSON file: {e}")
+            logger.error(f"An error occurred while reading the JSON file: {e}")
     
     ### LOGIN ###
     async def login(self, region):
@@ -255,6 +258,22 @@ class ValorantAPI(object):
                             import traceback
                             traceback.print_exc()
                     
+                    # Set up the side_acknowledged callback to forward to main WebSocket
+                    async def side_acknowledged_callback(data):
+                        """Forward side_acknowledged event to main WebSocket connection (IMMEDIATE)"""
+                        try:
+                            print(f"[SIDE_ACKNOWLEDGED_CALLBACK] Received side_acknowledged event: {data}")
+                            
+                            # Immediately broadcast to all connected frontend clients
+                            from quart import current_app
+                            await current_app.conn_mgr.broadcast('side_acknowledged', data)
+                            
+                            print(f"[SIDE_ACKNOWLEDGED_CALLBACK] Immediately broadcasted side_acknowledged to all clients")
+                        except Exception as e:
+                            print(f"[SIDE_ACKNOWLEDGED_CALLBACK] Error broadcasting side_acknowledged: {e}")
+                            import traceback
+                            traceback.print_exc()
+                    
                     self.pugsocket.match_found_callback = match_found_callback
                     self.pugsocket.match_proposed_callback = match_proposed_callback
                     self.pugsocket.player_accepted_callback = player_accepted_callback
@@ -266,6 +285,7 @@ class ValorantAPI(object):
                     self.pugsocket.veto_complete_callback = veto_complete_callback
                     self.pugsocket.veto_acknowledged_callback = veto_acknowledged_callback
                     self.pugsocket.side_selected_callback = side_selected_callback
+                    self.pugsocket.side_acknowledged_callback = side_acknowledged_callback
                     self._pending_match_data = None
                     self._pending_match_proposed_data = None
                     self._pending_player_accepted_data = None
@@ -455,9 +475,6 @@ class ValorantAPI(object):
         
         This runs in background without blocking main thread.
         """
-        import logging
-        logger = logging.getLogger(__name__)
-        
         logger.info(f"Starting match monitoring for {match_id}")
         
         last_score = {'team_a': 0, 'team_b': 0, 'round': 0}

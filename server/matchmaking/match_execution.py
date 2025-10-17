@@ -46,6 +46,13 @@ class MatchExecutionManager:
             
             match = await sync_to_async(get_match)()
             
+            # Verify we have both final_map and final_server
+            if not match.final_map:
+                return {'status': 'error', 'message': 'No final map selected'}
+            
+            if not match.final_server:
+                return {'status': 'error', 'message': 'No final server selected'}
+            
             # Select constructor (highest ELO player from team_a)
             constructor = await MatchExecutionManager._select_constructor(match)
             
@@ -149,8 +156,8 @@ class MatchExecutionManager:
                     'match_id': str(match.id),
                     'constructor_puuid': constructor['puuid'],
                     'is_constructor': (puuid == constructor['puuid']),
-                    'map': match.selected_map,
-                    'server': match.game_server,
+                    'map': match.final_map,
+                    'server': match.final_server,
                     'team': team
                 }
             )
@@ -175,11 +182,18 @@ class MatchExecutionManager:
             Dict with status
         """
         try:
+            from datetime import datetime, timedelta
+            
             Match = apps.get_model('scrimgg', 'Match')
             
             def update_match():
                 match = Match.objects.get(id=match_id)
                 match.pregame_id = pregame_id
+                match.constructor_puuid = constructor_puuid
+                # Set join timeout (3 minutes from now)
+                match.join_timeout_at = datetime.now() + timedelta(minutes=3)
+                # Clear any existing joined players
+                match.joined_players = []
                 # Status remains 'starting' until all players join
                 match.save()
                 return match
@@ -188,6 +202,9 @@ class MatchExecutionManager:
             
             # Broadcast to all non-constructor players to join
             await MatchExecutionManager._broadcast_join_custom_game(match, pregame_id, constructor_puuid)
+            
+            # Start join timeout task
+            asyncio.create_task(MatchExecutionManager._join_timeout_task(match_id))
             
             logger.info(f"Custom game created for match {match_id}: {pregame_id}")
             
@@ -239,6 +256,80 @@ class MatchExecutionManager:
             )
         
         logger.info(f"Broadcast join_custom_game to {len(all_players)-1} players")
+    
+    
+    @staticmethod
+    async def _join_timeout_task(match_id: str):
+        """
+        Background task that waits for join timeout and cancels match if needed.
+        
+        Args:
+            match_id: UUID of the match
+        """
+        try:
+            from datetime import datetime
+            import asyncio
+            from channels.layers import get_channel_layer
+            
+            Match = apps.get_model('scrimgg', 'Match')
+            
+            # Wait for the timeout period
+            await asyncio.sleep(180)  # 3 minutes
+            
+            def check_timeout():
+                try:
+                    match = Match.objects.get(id=match_id)
+                    return match
+                except Match.DoesNotExist:
+                    return None
+            
+            match = await sync_to_async(check_timeout)()
+            
+            if not match:
+                logger.info(f"Match {match_id} no longer exists - timeout task ending")
+                return
+            
+            # Check if match is still in starting state and timeout has passed
+            if (match.status == 'starting' and 
+                match.join_timeout_at and 
+                datetime.now() >= match.join_timeout_at):
+                
+                logger.warning(f"Match {match_id} timed out waiting for players to join")
+                
+                # Cancel the match
+                def cancel_match():
+                    match.status = 'cancelled'
+                    match.save()
+                    return match
+                
+                await sync_to_async(cancel_match)()
+                
+                # Notify all players that match was cancelled
+                channel_layer = get_channel_layer()
+                
+                # Get all players
+                team_a_players = match.team_a_data.get('players', [])
+                team_b_players = match.team_b_data.get('players', [])
+                all_players = []
+                all_players.extend([p['puuid'] for p in team_a_players])
+                all_players.extend([p['puuid'] for p in team_b_players])
+                
+                for puuid in all_players:
+                    await channel_layer.group_send(
+                        f"player_{puuid}",
+                        {
+                            'type': 'match_cancelled',
+                            'match_id': str(match_id),
+                            'reason': 'join_timeout'
+                        }
+                    )
+                
+                logger.info(f"Notified {len(all_players)} players that match {match_id} was cancelled")
+            
+        except Exception as e:
+            logger.error(f"Error in join timeout task for match {match_id}: {str(e)}")
+            import traceback
+            traceback.print_exc()
     
     
     @staticmethod
@@ -298,8 +389,8 @@ class MatchExecutionManager:
                 'type': 'match_in_progress',
                 'match_id': str(match.id),
                 'coregame_id': match.coregame_id,
-                'map': match.selected_map,
-                'server': match.game_server
+                'map': match.final_map,
+                'server': match.final_server
             }
         )
         

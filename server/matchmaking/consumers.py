@@ -35,11 +35,11 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
             if lobby:
                 self.lobby_group_name = f"lobby_{lobby.id}"
                 await self.channel_layer.group_add(self.lobby_group_name, self.channel_name)
-                print(f"WebSocket added to lobby group: {self.lobby_group_name}")
+                logger.info(f"WebSocket added to lobby group: {self.lobby_group_name}")
         except Exception as e:
-            print(f"Error during WebSocket connect: {e}")
+            logger.error(f"Error during WebSocket connect: {e}")
         await self.accept()
-        print(f"WebSocket connected: PUUID = {self.puuid}")
+        logger.info(f"WebSocket connected: PUUID = {self.puuid[:12]}...")
 
     async def disconnect(self, close_code):
         """
@@ -51,13 +51,13 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
             if hasattr(self, 'puuid') and self.puuid:
                 await self._cleanup_user_lobby()
         except Exception as e:
-            print(f"Error during lobby cleanup on disconnect: {e}")
+            logger.error(f"Error during lobby cleanup on disconnect: {e}")
         finally:
             # Always remove from WebSocket groups
             await self.channel_layer.group_discard(self.player_group_name, self.channel_name)
             if hasattr(self, 'lobby_group_name') and self.lobby_group_name:
                 await self.channel_layer.group_discard(self.lobby_group_name, self.channel_name)
-            print(f"WebSocket disconnected: PUUID = {self.puuid}")
+            logger.info(f"WebSocket disconnected: PUUID = {self.puuid[:12]}...")
     
     async def _cleanup_user_lobby(self):
         """
@@ -92,17 +92,17 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
                 # Check if this is a solo lobby or a party
                 if lobby_size == 1:
                     # Solo lobby - destroy it
-                    print(f"[DISCONNECT] User {player.alias} is solo lobby leader, destroying lobby {lobby.id}")
+                    logger.info(f"User {player.alias} is solo lobby leader, destroying lobby {lobby.id}")
                     
                     # Remove lobby from queue if it's queued
                     from .queue_manager import QueueManager
                     queue_result = await QueueManager.leave_queue(str(lobby.id), self.puuid, 'pug')
                     if queue_result.get('status') == 'success':
-                        print(f"[DISCONNECT] Removed lobby {lobby.id} from queue")
+                        logger.info(f"Removed lobby {lobby.id} from queue")
                     
                     # Destroy the lobby
                     await sync_to_async(lobby.delete)()
-                    print(f"[DISCONNECT] Destroyed lobby {lobby_id}")
+                    logger.info(f"Destroyed lobby {lobby_id}")
                     
                     # Broadcast lobby destruction
                     await self.channel_layer.group_send(
@@ -115,7 +115,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
                     )
                 else:
                     # Party lobby - transfer leadership
-                    print(f"[DISCONNECT] User {player.alias} is party leader ({lobby_size} players), transferring leadership")
+                    logger.info(f"User {player.alias} is party leader ({lobby_size} players), transferring leadership")
                     
                     def transfer_leadership():
                         # Get all players except the disconnecting leader
@@ -128,7 +128,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
                             lobby.players.remove(player)
                             lobby.size = lobby.players.count()
                             lobby.save()
-                            print(f"[DISCONNECT] Leadership transferred to {new_leader.alias}")
+                            logger.info(f"Leadership transferred to {new_leader.alias}")
                             return new_leader
                         else:
                             # No remaining players, destroy lobby
@@ -165,7 +165,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
                             }
                         )
             else:
-                print(f"[DISCONNECT] User {player.alias} is not lobby leader, leaving lobby {lobby.id}")
+                logger.info(f"User {player.alias} is not lobby leader, leaving lobby {lobby.id}")
                 # Just remove player from lobby (don't destroy it)
                 def remove_player_from_lobby():
                     lobby.players.remove(player)
@@ -188,9 +188,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
                 )
                 
         except Exception as e:
-            print(f"Error in _cleanup_user_lobby: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.exception(f"Error in _cleanup_user_lobby: {e}")
 
     async def receive(self, text_data):
         """
@@ -227,6 +225,8 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
             # Match page events
             elif action == 'get_match_data':
                 await self.handle_get_match_data(text_data_json)
+            elif action == 'veto_server':
+                await self.handle_veto_server(text_data_json)
             elif action == 'veto_map':
                 await self.handle_veto_map(text_data_json)
             elif action == 'select_side':
@@ -237,6 +237,8 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
                 await self.handle_custom_game_created(text_data_json)
             elif action == 'player_joined_game':
                 await self.handle_player_joined_game(text_data_json)
+            elif action == 'player_join_failed':
+                await self.handle_player_join_failed(text_data_json)
             elif action == 'match_started':
                 await self.handle_match_started(text_data_json)
             elif action == 'match_score_update':
@@ -279,25 +281,25 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         player_id = payload.get('puuid')
         if not player_id:
             await self.send(text_data=json.dumps({"error": "PUUID is required."}))
-            print("Error: PUUID is required.")
+            logger.warning("get_player_model called without PUUID")
             return
         try:
             player = await sync_to_async(Player.objects.get)(puuid=player_id)
-            print(f"Fetched Player: PK={player.pk}, PUUID={player.puuid}")
+            logger.debug(f"Fetched Player: PK={player.pk}, PUUID={player.puuid[:12]}...")
             def serialize_player(player_instance):
                 from scrimgg.serializers import PlayerSerializer
                 return PlayerSerializer(player_instance).data
             serialized_player = await sync_to_async(serialize_player)(player)
             await self.send(text_data=json.dumps({
                 "event": "player_model",
-                "data": serialized_player
+                "payload": serialized_player
             }))
         except Player.DoesNotExist:
             await self.send(text_data=json.dumps({"error": "Player not found."}))
-            print(f"Error: Player with PUUID={player_id} not found.")
+            logger.warning(f"Player with PUUID={player_id[:12]}... not found")
         except Exception as e:
             await self.send(text_data=json.dumps({"error": f"Unexpected error: {str(e)}"}))
-            print(f"Unexpected error while fetching player: {str(e)}")
+            logger.error(f"Unexpected error while fetching player: {str(e)}")
 
     async def create_lobby(self, data):
         """
@@ -327,7 +329,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
                 # Send lobby data to client
                 await self.send(text_data=json.dumps({
                     "event": "lobby_created",
-                    "data": lobby_data
+                    "payload": lobby_data
                 }))
                 
                 # Broadcast lobby creation to lobby group
@@ -382,7 +384,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
                 # Send confirmation to inviter
                 await self.send(text_data=json.dumps({
                     "event": "player_invited",
-                    "data": lobby_data
+                    "payload": lobby_data
                 }))
                 
                 logger.info(f"Player {player_puuid} invited to lobby {lobby_id}")
@@ -449,7 +451,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
                 
                 await self.send(text_data=json.dumps({
                     "event": "player_kicked",
-                    "data": result
+                    "payload": result
                 }))
                 
                 logger.info(f"Player {player_puuid} kicked from lobby {lobby_id}")
@@ -509,7 +511,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
                 # Confirm to leaving player
                 await self.send(text_data=json.dumps({
                     "event": "left_lobby",
-                    "data": result
+                    "payload": result
                 }))
                 
                 logger.info(f"Player {player_puuid} left lobby {lobby_id}")
@@ -560,7 +562,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
                 
                 await self.send(text_data=json.dumps({
                     "event": "preferences_updated",
-                    "data": lobby_data
+                    "payload": lobby_data
                 }))
                 
                 logger.info(f"Lobby {lobby_id} preferences updated")
@@ -593,7 +595,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
             if not validation_result['can_queue']:
                 await self.send(text_data=json.dumps({
                     "event": "queue_blocked",
-                    "data": {
+                    "payload": {
                         "message": "Cannot queue: some players are in active matches",
                         "blocked_players": validation_result['blocked_players'],
                         "reasons": validation_result['reasons'],
@@ -618,7 +620,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
                 
                 await self.send(text_data=json.dumps({
                     "event": "joined_queue",
-                    "data": result
+                    "payload": result
                 }))
                 
                 logger.info(f"Lobby {lobby_id} joined matchmaking queue")
@@ -661,7 +663,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
                 
                 await self.send(text_data=json.dumps({
                     "event": "left_queue",
-                    "data": result
+                    "payload": result
                 }))
                 
                 logger.info(f"Lobby {lobby_id} left matchmaking queue")
@@ -746,7 +748,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
                 
                 await self.send(text_data=json.dumps({
                     "event": "match_accepted",
-                    "data": safe_result
+                    "payload": safe_result
                 }))
                 
                 logger.info(f"Player {player_puuid} accepted match {match_confirmation_id}")
@@ -790,7 +792,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
                 
                 await self.send(text_data=json.dumps({
                     "event": "match_declined",
-                    "data": result
+                    "payload": result
                 }))
                 
                 logger.info(f"Player {player_puuid} declined match {match_confirmation_id}")
@@ -821,7 +823,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
             
             await self.send(text_data=json.dumps({
                 "event": "queue_status",
-                "data": result
+                "payload": result
             }))
             
         except Exception as e:
@@ -843,7 +845,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
                 
                 await self.send(text_data=json.dumps({
                     "event": "queue_eligibility",
-                    "data": {
+                    "payload": {
                         "type": "lobby",
                         "lobby_id": lobby_id,
                         "can_queue": result['can_queue'],
@@ -859,7 +861,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
                 
                 await self.send(text_data=json.dumps({
                     "event": "queue_eligibility", 
-                    "data": {
+                    "payload": {
                         "type": "player",
                         "player_puuid": player_puuid,
                         "can_queue": result['can_queue'],
@@ -888,7 +890,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         """
         await self.send(text_data=json.dumps({
             'event': 'lobby_updated',
-            'data': event['lobby']
+            'payload': event['lobby']
         }))
     
     async def player_joined_lobby(self, event):
@@ -897,7 +899,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         """
         await self.send(text_data=json.dumps({
             'event': 'player_joined_lobby',
-            'data': {
+            'payload': {
                 'lobby': event['lobby'],
                 'player_puuid': event['player_puuid']
             }
@@ -909,7 +911,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         """
         await self.send(text_data=json.dumps({
             'event': 'player_left_lobby',
-            'data': {
+            'payload': {
                 'lobby': event['lobby'],
                 'player_puuid': event['player_puuid'],
                 'reason': event.get('reason', 'left')
@@ -922,7 +924,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         """
         await self.send(text_data=json.dumps({
             'event': 'kicked_from_lobby',
-            'data': {
+            'payload': {
                 'lobby_id': event['lobby_id'],
                 'message': event['message']
             }
@@ -934,7 +936,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         """
         await self.send(text_data=json.dumps({
             'event': 'lobby_disbanded',
-            'data': {
+            'payload': {
                 'reason': event['reason']
             }
         }))
@@ -945,7 +947,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         """
         await self.send(text_data=json.dumps({
             'event': 'lobby_preferences_updated',
-            'data': event['lobby']
+            'payload': event['lobby']
         }))
 
     async def match_ready(self, event):
@@ -954,7 +956,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         """
         await self.send(text_data=json.dumps({
             'event': 'match_ready',
-            'data': {
+            'payload': {
                 'match_id': event.get('match_id'),
                 'message': event['message'],
             }
@@ -966,7 +968,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         """
         await self.send(text_data=json.dumps({
             'event': 'player_accepted',
-            'data': {
+            'payload': {
                 'accepted_count': event["accepted_count"],
                 'total_players': event.get("total_players", 10),
                 'timeout_seconds': event.get("timeout_seconds", 30)
@@ -1003,7 +1005,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         
         await self.send(text_data=json.dumps({
             'event': 'match_found',
-            'data': {
+            'payload': {
                 'match_id': event['match_confirmation_id'],  # Client expects match_id
                 'match_confirmation_id': event['match_confirmation_id'],
                 'opponent_lobby': event.get('opponent_lobby'),
@@ -1040,7 +1042,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         """
         await self.send(text_data=json.dumps({
             'event': 'player_accepted',
-            'data': {
+            'payload': {
                 'accepted_count': event.get('accepted_count', 0),
                 'total_players': event.get('total_players', 10),
                 'timeout_seconds': event.get('timeout_seconds', 30)
@@ -1053,7 +1055,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         """
         await self.send(text_data=json.dumps({
             'event': 'match_ready',
-            'data': {
+            'payload': {
                 'match_id': event.get('match_id'),
                 'message': event.get('message', 'Match is ready!')
             }
@@ -1067,7 +1069,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         """
         await self.send(text_data=json.dumps({
             'event': 'match_confirmed',
-            'data': {
+            'payload': {
                 'match_id': event['match_id'],
                 'team': event.get('team'),
                 'redirect_url': f"/match/{event['match_id']}"
@@ -1080,7 +1082,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         """
         await self.send(text_data=json.dumps({
             'event': 'veto_started',
-            'data': {
+            'payload': {
                 'match_id': event['match_id'],
                 'current_turn': event['current_turn'],
                 'available_maps': event['available_maps'],
@@ -1088,13 +1090,58 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
             }
         }))
     
+    async def server_veto_started(self, event):
+        """
+        Server veto phase has begun.
+        """
+        await self.send(text_data=json.dumps({
+            'event': 'server_veto_started',
+            'payload': {
+                'match_id': event['match_id'],
+                'current_turn': event['current_turn'],
+                'available_servers': event['available_servers'],
+                'deadline': event['deadline']
+            }
+        }))
+    
+    async def server_vetoed(self, event):
+        """
+        A server was vetoed.
+        """
+        await self.send(text_data=json.dumps({
+            'event': 'server_veto_update',
+            'payload': {
+                'match_id': event['match_id'],
+                'server_name': event['server_name'],
+                'vetoed_by': event['vetoed_by'],
+                'next_turn': event.get('next_turn'),
+                'remaining_servers': event['remaining_servers'],
+                'deadline': event.get('deadline')
+            }
+        }))
+    
+    async def server_veto_complete(self, event):
+        """
+        Server veto phase completed - transition to map veto.
+        """
+        await self.send(text_data=json.dumps({
+            'event': 'server_veto_complete',
+            'payload': {
+                'match_id': event['match_id'],
+                'final_server': event['final_server'],
+                'current_turn': event['current_turn'],
+                'available_maps': event['available_maps'],
+                'veto_deadline': event['veto_deadline']
+            }
+        }))
+
     async def map_vetoed(self, event):
         """
         A map was vetoed.
         """
         await self.send(text_data=json.dumps({
             'event': 'map_vetoed',
-            'data': {
+            'payload': {
                 'match_id': event['match_id'],
                 'map': event['map_name'],
                 'vetoed_by': event['vetoed_by'],
@@ -1110,7 +1157,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         """
         await self.send(text_data=json.dumps({
             'event': 'veto_timeout',
-            'data': {
+            'payload': {
                 'match_id': event['match_id'],
                 'auto_vetoed_map': event['auto_vetoed_map'],
                 'veto_complete': event.get('veto_complete', False),
@@ -1127,7 +1174,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         """
         await self.send(text_data=json.dumps({
             'event': 'veto_complete',
-            'data': {
+            'payload': {
                 'match_id': event['match_id'],
                 'final_map': event['final_map'],
                 'side_selector': event.get('side_selector')
@@ -1162,7 +1209,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
                 
                 await self.send(text_data=json.dumps({
                     'event': 'match_data',
-                    'data': match_data
+                    'payload': match_data
                 }))
             else:
                 await self.send(text_data=json.dumps({
@@ -1175,6 +1222,82 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
             }))
             logger.error(f"Error getting match data: {str(e)}")
     
+    async def handle_veto_server(self, data):
+        """
+        Captain vetoes a server.
+        """
+        payload = data.get('payload', {})
+        match_id = payload.get('match_id')
+        server_name = payload.get('server_name')
+        
+        if not match_id or not server_name:
+            await self.send(text_data=json.dumps({
+                'error': 'match_id and server_name are required'
+            }))
+            return
+        
+        try:
+            # Get match (use sync_to_async for compatibility)
+            from .models_match import Match
+            match = await sync_to_async(lambda: Match.objects.get(id=match_id), thread_sensitive=False)()
+            
+            # Determine which team this player is on
+            team = match.get_player_team(self.puuid)
+            if not team:
+                await self.send(text_data=json.dumps({
+                    'error': 'Player not found in match'
+                }))
+                return
+            
+            # Process server veto
+            result = await MatchManager.process_server_veto(match, server_name, team, self.puuid)
+            
+            if result['status'] == 'success':
+                # Broadcast server veto update to all players in match
+                await self.channel_layer.group_send(
+                    f"match_{match.id}",
+                    {
+                        'type': 'server_vetoed',
+                        'match_id': str(match.id),
+                        'server_name': server_name,
+                        'vetoed_by': team,
+                        'next_turn': result.get('next_turn'),
+                        'remaining_servers': result.get('remaining_servers', []),
+                        'deadline': result.get('deadline')
+                    }
+                )
+                
+                # If server veto is complete, transition to map veto
+                if result.get('server_veto_complete'):
+                    await self.channel_layer.group_send(
+                        f"match_{match.id}",
+                        {
+                            'type': 'server_veto_complete',
+                            'match_id': str(match.id),
+                            'final_server': result.get('final_server'),
+                            'current_turn': result.get('current_turn'),
+                            'available_maps': result.get('available_maps', []),
+                            'veto_deadline': result.get('veto_deadline')
+                        }
+                    )
+                
+                await self.send(text_data=json.dumps({
+                    'event': 'server_veto_acknowledged',
+                    'payload': result
+                }))
+                
+                logger.info(f"Server {server_name} vetoed by {team} captain {self.puuid[:12]}... in match {match.id}")
+            else:
+                await self.send(text_data=json.dumps({
+                    'error': result.get('message')
+                }))
+                
+        except Exception as e:
+            await self.send(text_data=json.dumps({
+                'error': f'Failed to veto server: {str(e)}'
+            }))
+            logger.error(f"Error vetoing server: {str(e)}")
+
     async def handle_veto_map(self, data):
         """
         Captain vetoes a map.
@@ -1241,7 +1364,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
                 
                 await self.send(text_data=json.dumps({
                     'event': 'veto_acknowledged',
-                    'data': result
+                    'payload': result
                 }))
                 
                 logger.info(f"Map {map_name} vetoed by {team} in match {match.id}")
@@ -1302,7 +1425,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
                 
                 await self.send(text_data=json.dumps({
                     'event': 'side_acknowledged',
-                    'data': result
+                    'payload': result
                 }))
                 
                 logger.info(f"Side {side} selected by {team} in match {match.id}")
@@ -1323,7 +1446,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         """
         Send lobby chat messages to the frontend.
         """
-        print(f"Broadcasting message: {event}")
+        logger.debug(f"Broadcasting lobby message from {event.get('username', 'Unknown')}")
         await self.send(text_data=json.dumps({
             'event': 'lobby_message',
             'username': event['username'],
@@ -1334,7 +1457,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
     # Handler for incoming lobby chat message events
     async def handle_lobby_message(self, data):
         payload = data.get('payload', {})
-        print(payload)
+        logger.debug(f"Received lobby message: {payload.get('message', '')[:50]}...")
         message = payload.get('message')
         lobby_id = payload.get('lobby_id')
         username = payload.get('userAlias', 'Anonymous')
@@ -1419,13 +1542,13 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
             if result['status'] == 'success':
                 await self.send(text_data=json.dumps({
                     'event': 'custom_game_created_ack',
-                    'data': result
+                    'payload': result
                 }))
                 logger.info(f"Custom game created: {pregame_id} for match {match_id}")
             else:
                 await self.send(text_data=json.dumps({
                     'event': 'error',
-                    'data': {'message': result.get('message')}
+                    'payload': {'message': result.get('message')}
                 }))
                 
         except Exception as e:
@@ -1438,7 +1561,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
     async def handle_player_joined_game(self, data):
         """
         Player client reports successful join to custom game.
-        Track which players have joined.
+        Track which players have joined and start match when all players ready.
         """
         payload = data.get('payload', {})
         match_id = payload.get('match_id')
@@ -1450,11 +1573,165 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         
         logger.info(f"Player {player_puuid} joined match {match_id} (Team: {team})")
         
-        # TODO: Track join status, start match when all 10 players joined
-        # For now, just acknowledge
+        try:
+            Match = apps.get_model('scrimgg', 'Match')
+            
+            def update_match():
+                match = Match.objects.get(id=match_id)
+                
+                # Add player to joined list if not already there
+                if player_puuid not in match.joined_players:
+                    match.joined_players.append(player_puuid)
+                    match.save()
+                
+                return match
+            
+            match = await sync_to_async(update_match)()
+            
+            # Get expected players
+            team_a_players = match.team_a_data.get('players', [])
+            team_b_players = match.team_b_data.get('players', [])
+            all_expected = [p['puuid'] for p in team_a_players + team_b_players]
+            
+            joined_count = len(match.joined_players)
+            total_expected = len(all_expected)
+            
+            logger.info(f"Match {match_id}: {joined_count}/{total_expected} players joined")
+            
+            # Check if all players have joined
+            if joined_count >= total_expected:
+                logger.info(f"All players joined match {match_id} - starting game")
+                
+                # Find constructor
+                constructor_puuid = match.constructor_puuid
+                if not constructor_puuid:
+                    # Fallback: use first player from team A as constructor
+                    constructor_puuid = team_a_players[0]['puuid'] if team_a_players else None
+                
+                if constructor_puuid:
+                    # Notify constructor to start game
+                    await self.channel_layer.group_send(
+                        f"player_{constructor_puuid}",
+                        {
+                            'type': 'all_players_joined',
+                            'match_id': str(match_id),
+                            'is_constructor': True
+                        }
+                    )
+                    
+                    logger.info(f"Notified constructor {constructor_puuid} to start match {match_id}")
+                else:
+                    logger.error(f"No constructor found for match {match_id}")
+            
+            # Acknowledge join
+            await self.send(text_data=json.dumps({
+                'event': 'player_joined_ack',
+                'payload': {
+                    'match_id': match_id,
+                    'player_puuid': player_puuid,
+                    'joined_count': joined_count,
+                    'total_expected': total_expected
+                }
+            }))
+            
+        except Exception as e:
+            logger.error(f"Error handling player join: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            
+            # Still acknowledge to prevent client hanging
+            await self.send(text_data=json.dumps({
+                'event': 'player_joined_ack',
+                'payload': {'match_id': match_id, 'player_puuid': player_puuid, 'error': str(e)}
+            }))
+    
+    
+    async def handle_player_join_failed(self, data):
+        """
+        Handle when a player fails to join the custom game.
+        This could lead to match cancellation if critical players fail.
+        """
+        payload = data.get('payload', {})
+        match_id = payload.get('match_id')
+        player_puuid = payload.get('player_puuid')
+        team = payload.get('team')
+        error = payload.get('error', 'Unknown error')
+        
+        logger.warning(f"Player {player_puuid} failed to join match {match_id}: {error}")
+        
+        try:
+            Match = apps.get_model('scrimgg', 'Match')
+            
+            def check_match():
+                try:
+                    match = Match.objects.get(id=match_id)
+                    return match
+                except Match.DoesNotExist:
+                    return None
+            
+            match = await sync_to_async(check_match)()
+            
+            if not match:
+                logger.error(f"Match {match_id} not found for join failure")
+                return
+            
+            # For now, we'll be lenient and allow matches to continue with fewer players
+            # In a production system, you might want to cancel if too many critical players fail
+            
+            logger.info(f"Match {match_id} continuing despite join failure from {player_puuid}")
+            
+            # Acknowledge the failure
+            await self.send(text_data=json.dumps({
+                'event': 'player_join_failed_ack',
+                'payload': {
+                    'match_id': match_id,
+                    'player_puuid': player_puuid,
+                    'error': error
+                }
+            }))
+            
+        except Exception as e:
+            logger.error(f"Error handling player join failure: {str(e)}")
+            import traceback
+            traceback.print_exc()
+    
+    
+    async def all_players_joined(self, event):
+        """
+        WebSocket event handler for when all players have joined.
+        This is called when the channel layer sends the event to the constructor.
+        """
+        match_id = event['match_id']
+        is_constructor = event.get('is_constructor', False)
+        
+        logger.info(f"All players joined event received for match {match_id}")
+        
+        # Forward to constructor client
         await self.send(text_data=json.dumps({
-            'event': 'player_joined_ack',
-            'data': {'match_id': match_id, 'player_puuid': player_puuid}
+            'event': 'all_players_joined',
+            'payload': {
+                'match_id': match_id,
+                'is_constructor': is_constructor
+            }
+        }))
+    
+    
+    async def match_cancelled(self, event):
+        """
+        WebSocket event handler for when a match is cancelled.
+        """
+        match_id = event['match_id']
+        reason = event.get('reason', 'unknown')
+        
+        logger.info(f"Match {match_id} cancelled: {reason}")
+        
+        # Forward to client
+        await self.send(text_data=json.dumps({
+            'event': 'match_cancelled',
+            'payload': {
+                'match_id': match_id,
+                'reason': reason
+            }
         }))
     
     
@@ -1562,7 +1839,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
             
             await self.send(text_data=json.dumps({
                 'event': 'rejoin_token',
-                'data': {'token': token, 'match_id': match_id}
+                'payload': {'token': token, 'match_id': match_id}
             }))
             
             logger.info(f"Generated rejoin token for {player_puuid} in match {match_id}")
@@ -1595,7 +1872,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
             if result['status'] == 'success':
                 await self.send(text_data=json.dumps({
                     'event': 'match_statistics',
-                    'data': result['data']
+                    'payload': result['data']
                 }))
             else:
                 await self.send(text_data=json.dumps({
@@ -1615,7 +1892,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         """Send match_starting event to client"""
         await self.send(text_data=json.dumps({
             'event': 'match_starting',
-            'data': {
+            'payload': {
                 'match_id': event['match_id'],
                 'constructor_puuid': event['constructor_puuid'],
                 'is_constructor': event['is_constructor'],
@@ -1630,7 +1907,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         """Send join_custom_game event to client"""
         await self.send(text_data=json.dumps({
             'event': 'join_custom_game',
-            'data': {
+            'payload': {
                 'match_id': event['match_id'],
                 'pregame_id': event['pregame_id'],
                 'team': event['team']
@@ -1642,7 +1919,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         """Send match_in_progress event to client"""
         await self.send(text_data=json.dumps({
             'event': 'match_in_progress',
-            'data': {
+            'payload': {
                 'match_id': event['match_id'],
                 'coregame_id': event['coregame_id'],
                 'map': event['map'],
@@ -1655,7 +1932,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         """Send score update to spectators"""
         await self.send(text_data=json.dumps({
             'event': 'match_score_update',
-            'data': {
+            'payload': {
                 'match_id': event['match_id'],
                 'team_a_score': event['team_a_score'],
                 'team_b_score': event['team_b_score'],
@@ -1668,7 +1945,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         """Send match completion event"""
         await self.send(text_data=json.dumps({
             'event': 'match_completed',
-            'data': {
+            'payload': {
                 'match_id': event['match_id'],
                 'team_a_score': event['team_a_score'],
                 'team_b_score': event['team_b_score'],
@@ -1681,7 +1958,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         """Send lobby destroyed event to client"""
         await self.send(text_data=json.dumps({
             'event': 'lobby_destroyed',
-            'data': {
+            'payload': {
                 'message': event['message'],
                 'reason': event['reason']
             }
@@ -1691,7 +1968,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         """Send player left lobby event to client"""
         await self.send(text_data=json.dumps({
             'event': 'player_left_lobby',
-            'data': {
+            'payload': {
                 'player': event['player'],
                 'message': event['message']
             }
@@ -1701,7 +1978,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         """Send lobby leader changed event to client"""
         await self.send(text_data=json.dumps({
             'event': 'lobby_leader_changed',
-            'data': {
+            'payload': {
                 'new_leader': event['new_leader'],
                 'old_leader': event['old_leader'],
                 'message': event['message']
@@ -1716,7 +1993,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         
         await self.send(text_data=json.dumps({
             'event': 'veto_update',
-            'data': {
+            'payload': {
                 'match_id': event['match_id'],
                 'map_name': event['map_name'],
                 'vetoed_by': event['vetoed_by'],
@@ -1734,7 +2011,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         
         await self.send(text_data=json.dumps({
             'event': 'veto_complete',
-            'data': {
+            'payload': {
                 'match_id': event['match_id'],
                 'final_map': event['final_map'],
                 'side_selector': event.get('side_selector')
@@ -1749,7 +2026,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         
         await self.send(text_data=json.dumps({
             'event': 'side_selected',
-            'data': {
+            'payload': {
                 'match_id': event['match_id'],
                 'side': event['side'],
                 'selected_by': event['selected_by'],

@@ -236,6 +236,119 @@ const PlayerCard = ({ player, isCurrentUser, theme, colors, isLeftTeam = false }
   );
 };
 
+// Compact Vertical Server Veto Component
+const ServerVetoSection = ({ servers, vetoedServers, currentTurn, timeLeft, onServerVeto, theme, colors, isCaptain, myTeam }) => {
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const isMyTurn = currentTurn === myTeam && isCaptain;
+  
+  // Debug logging
+  console.log('🎮 [SERVER VETO COMPONENT] State:', {
+    currentTurn,
+    myTeam,
+    isCaptain,
+    isMyTurn,
+    serversCount: servers.length,
+    vetoedCount: vetoedServers.length
+  });
+
+  return (
+    <Box sx={{ width: '180px', textAlign: 'center' }}>
+      {/* Timer */}
+      <Box sx={{ mb: 2 }}>
+        <Typography variant="body1" sx={{ color: colors.seance[300], fontWeight: 600, mb: 1, fontSize: '0.9rem' }}>
+          {currentTurn ? `${currentTurn.replace('_', ' ').toUpperCase()}` : 'SERVER VETO'}
+        </Typography>
+        <Typography variant="body2" sx={{ color: colors.grey[300], mb: 1, fontSize: '0.8rem' }}>
+          is banning a server
+        </Typography>
+        {timeLeft && (
+          <Box sx={{ 
+            display: 'inline-flex', 
+            alignItems: 'center', 
+            gap: 0.5,
+            bgcolor: colors.primary[500],
+            px: 1.5,
+            py: 0.25,
+            borderRadius: '12px',
+            border: `1px solid ${colors.seance[400]}`
+          }}>
+            <TimerIcon sx={{ color: colors.seance[300], fontSize: 14 }} />
+            <Typography variant="body2" sx={{ color: colors.grey[100], fontWeight: 600, fontSize: '0.8rem' }}>
+              {formatTime(timeLeft)}
+            </Typography>
+          </Box>
+        )}
+      </Box>
+
+      {/* Servers Vertical List */}
+      <Stack spacing={0.5}>
+        {servers.map((server) => {
+          const isVetoed = vetoedServers.includes(server);
+          return (
+            <Card
+              key={server}
+              sx={{
+                position: 'relative',
+                borderRadius: '6px',
+                overflow: 'hidden',
+                cursor: isMyTurn && !isVetoed ? 'pointer' : 'default',
+                transition: 'all 0.2s ease',
+                opacity: isVetoed ? 0.4 : 1,
+                filter: isVetoed ? 'grayscale(100%)' : 'none',
+                border: `1px solid ${isVetoed ? colors.redAccent[400] : colors.grey[700]}`,
+                '&:hover': isMyTurn && !isVetoed ? {
+                  transform: 'translateX(4px)',
+                  boxShadow: `0 2px 8px ${colors.seance[400]}40`,
+                  border: `1px solid ${colors.seance[400]}`,
+                } : {}
+              }}
+              onClick={() => isMyTurn && !isVetoed && onServerVeto(server)}
+            >
+              <Box
+                sx={{
+                  height: 32,
+                  bgcolor: colors.primary[400],
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  position: 'relative'
+                }}
+              >
+                <Typography variant="body2" sx={{ color: colors.grey[100], fontWeight: 600, fontSize: '0.8rem' }}>
+                  {server}
+                </Typography>
+                
+                {isVetoed && (
+                  <Box
+                    sx={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      bgcolor: 'rgba(0,0,0,0.6)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    <CancelIcon sx={{ color: colors.redAccent[300], fontSize: 18 }} />
+                  </Box>
+                )}
+              </Box>
+            </Card>
+          );
+        })}
+      </Stack>
+    </Box>
+  );
+};
+
 // Compact Vertical Map Veto Component
 const MapVetoSection = ({ maps, vetoedMaps, currentTurn, timeLeft, onMapVeto, theme, colors, isCaptain, myTeam }) => {
   const formatTime = (seconds) => {
@@ -362,7 +475,14 @@ export default function MatchPage() {
   const [loading, setLoading] = useState(true); // Start with loading true
   const [error, setError] = useState(null);
   
-  // Veto state
+  // Server veto state
+  const [serverVetoPhase, setServerVetoPhase] = useState(false);
+  const [serverVetoTurn, setServerVetoTurn] = useState(null);
+  const [availableServers, setAvailableServers] = useState([]);
+  const [vetoedServers, setVetoedServers] = useState([]);
+  const [serverVetoDeadline, setServerVetoDeadline] = useState(null);
+  
+  // Map veto state
   const [vetoPhase, setVetoPhase] = useState(false);
   const [currentTurn, setCurrentTurn] = useState(null);
   const [availableMaps, setAvailableMaps] = useState([]);
@@ -439,7 +559,8 @@ export default function MatchPage() {
     if (!matchData) return 'Loading...';
     
     switch (matchData.state) {
-      case 'VETO': return 'Ban';
+      case 'SERVER_VETO': return 'Server Ban';
+      case 'VETO': return 'Map Ban';
       case 'SIDE_SELECTION': return 'Side';
       case 'READY': return 'Ready';
       default: return 'Loading...';
@@ -476,9 +597,21 @@ export default function MatchPage() {
       setLoading(false);
       setError(null);
       
-      // Initialize veto state from real data
-      if (payload.state === 'VETO') {
-        console.log('🎮 [MATCH PAGE] VETO PHASE DETECTED - Initializing veto component');
+      // Initialize server veto state from real data
+      if (payload.state === 'SERVER_VETO') {
+        console.log('🎮 [MATCH PAGE] SERVER VETO PHASE DETECTED - Initializing server veto component');
+        console.log('   Server veto turn:', payload.server_veto_turn);
+        console.log('   Available servers:', payload.server_pool);
+        console.log('   Vetoed servers:', payload.vetoed_servers);
+        console.log('   Server veto deadline:', payload.server_veto_deadline);
+        
+        setServerVetoPhase(true);
+        setServerVetoTurn(payload.server_veto_turn);
+        setAvailableServers(payload.server_pool || []);
+        setVetoedServers(payload.vetoed_servers || []);
+        setServerVetoDeadline(payload.server_veto_deadline);
+      } else if (payload.state === 'VETO') {
+        console.log('🎮 [MATCH PAGE] MAP VETO PHASE DETECTED - Initializing map veto component');
         console.log('   Veto turn:', payload.veto_turn);
         console.log('   Remaining maps:', payload.remaining_maps);
         console.log('   Vetoed maps:', payload.vetoed_maps);
@@ -541,11 +674,11 @@ export default function MatchPage() {
     });
 
     const unsubscribeVetoComplete = on('veto_complete', (payload) => {
-      console.log('📥 [MATCH PAGE] Veto phase completed:', payload);
+      console.log('📥 [MATCH PAGE] Map veto phase completed:', payload);
       setVetoPhase(false);
       setSideSelectionPhase(true);
       setSideSelector(payload.side_selector);
-      setSideTimeLeft(15);
+      setSideTimeLeft(30);
       setMatchData(prev => ({
         ...prev,
         state: 'SIDE_SELECTION',
@@ -556,6 +689,132 @@ export default function MatchPage() {
       console.log('🎮 [MATCH PAGE] Transitioning to side selection phase:', {
         finalMap: payload.final_map,
         sideSelector: payload.side_selector
+      });
+    });
+
+    // Server veto event handlers
+    const unsubscribeServerVetoStarted = on('server_veto_started', (payload) => {
+      console.log('📥 [MATCH PAGE] Server veto phase started:', payload);
+      
+      // Initialize server veto state
+      setServerVetoPhase(true);
+      setServerVetoTurn(payload.current_turn);
+      setAvailableServers(payload.available_servers || []);
+      setVetoedServers([]);
+      setServerVetoDeadline(payload.deadline);
+      
+      // Update match data
+      setMatchData(prev => ({
+        ...prev,
+        state: 'SERVER_VETO',
+        server_pool: payload.available_servers,
+        server_veto_turn: payload.current_turn,
+        server_veto_deadline: payload.deadline
+      }));
+      
+      console.log('🎮 [MATCH PAGE] Server veto phase initialized:', {
+        currentTurn: payload.current_turn,
+        availableServers: payload.available_servers,
+        myTeam,
+        isCaptain,
+        isMyTurn: payload.current_turn === myTeam && isCaptain
+      });
+    });
+
+    const unsubscribeServerVetoUpdate = on('server_veto_update', (payload) => {
+      console.log('📥 [MATCH PAGE] Server veto update received:', payload);
+      
+      // Update vetoed servers list - add the newly vetoed server
+      const newVetoedServers = [...(vetoedServers || [])];
+      if (payload.server_name && !newVetoedServers.includes(payload.server_name)) {
+        newVetoedServers.push(payload.server_name);
+      }
+      
+      // Update server veto state
+      setAvailableServers(payload.remaining_servers || []);
+      setVetoedServers(newVetoedServers);
+      setServerVetoTurn(payload.next_turn || payload.server_veto_turn);
+      setServerVetoDeadline(payload.deadline || payload.server_veto_deadline);
+      
+      // Update match data
+      setMatchData(prev => ({
+        ...prev,
+        server_pool: payload.remaining_servers,
+        vetoed_servers: newVetoedServers,
+        server_veto_turn: payload.next_turn || payload.server_veto_turn,
+        server_veto_deadline: payload.deadline || payload.server_veto_deadline
+      }));
+      
+      console.log('✅ [MATCH PAGE] Server veto state updated:', {
+        currentTurn: payload.next_turn || payload.server_veto_turn,
+        availableServers: payload.remaining_servers,
+        vetoedServers: newVetoedServers,
+        myTeam,
+        isCaptain,
+        isMyTurn: (payload.next_turn || payload.server_veto_turn) === myTeam && isCaptain
+      });
+    });
+
+    // Handle server_vetoed events (sent by server)
+    const unsubscribeServerVetoed = on('server_vetoed', (payload) => {
+      console.log('📥 [MATCH PAGE] Server vetoed event received:', payload);
+      
+      // Update vetoed servers list - add the newly vetoed server
+      const vetoedServer = payload.server_name;
+      setVetoedServers(prev => {
+        const newVetoedServers = [...prev];
+        if (vetoedServer && !newVetoedServers.includes(vetoedServer)) {
+          newVetoedServers.push(vetoedServer);
+        }
+        return newVetoedServers;
+      });
+      
+      // Update server veto state
+      setAvailableServers(payload.remaining_servers || []);
+      setServerVetoTurn(payload.next_turn);
+      setServerVetoDeadline(payload.deadline);
+      
+      // Update match data
+      setMatchData(prev => ({
+        ...prev,
+        server_pool: payload.remaining_servers,
+        vetoed_servers: [...(prev.vetoed_servers || []), ...(vetoedServer && !prev.vetoed_servers?.includes(vetoedServer) ? [vetoedServer] : [])],
+        server_veto_turn: payload.next_turn,
+        server_veto_deadline: payload.deadline
+      }));
+      
+      console.log('✅ [MATCH PAGE] Server vetoed state updated:', {
+        currentTurn: payload.next_turn,
+        availableServers: payload.remaining_servers,
+        vetoedServer: vetoedServer,
+        myTeam,
+        isCaptain,
+        isMyTurn: payload.next_turn === myTeam && isCaptain
+      });
+    });
+
+    const unsubscribeServerVetoComplete = on('server_veto_complete', (payload) => {
+      console.log('📥 [MATCH PAGE] Server veto phase completed:', payload);
+      setServerVetoPhase(false);
+      setVetoPhase(true);
+      setCurrentTurn(payload.current_turn);
+      setAvailableMaps(payload.available_maps || []);
+      setVetoedMaps([]);
+      setVetoHistory([]);
+      setVetoDeadline(payload.veto_deadline);
+      setMatchData(prev => ({
+        ...prev,
+        state: 'VETO',
+        final_server: payload.final_server,
+        map_pool: payload.available_maps,
+        veto_turn: payload.current_turn,
+        veto_deadline: payload.veto_deadline
+      }));
+      
+      console.log('🎮 [MATCH PAGE] Transitioning to map veto phase:', {
+        finalServer: payload.final_server,
+        availableMaps: payload.available_maps,
+        currentTurn: payload.current_turn
       });
     });
 
@@ -591,13 +850,42 @@ export default function MatchPage() {
       if (typeof unsubscribeMatchData === 'function') unsubscribeMatchData();
       if (typeof unsubscribeVetoUpdate === 'function') unsubscribeVetoUpdate();
       if (typeof unsubscribeVetoComplete === 'function') unsubscribeVetoComplete();
+      if (typeof unsubscribeServerVetoStarted === 'function') unsubscribeServerVetoStarted();
+      if (typeof unsubscribeServerVetoUpdate === 'function') unsubscribeServerVetoUpdate();
+      if (typeof unsubscribeServerVetoed === 'function') unsubscribeServerVetoed();
+      if (typeof unsubscribeServerVetoComplete === 'function') unsubscribeServerVetoComplete();
       if (typeof unsubscribeSideSelected === 'function') unsubscribeSideSelected();
       if (typeof unsubscribeError === 'function') unsubscribeError();
     };
   }, [on]);
   
   
-  // Countdown timer
+  // Server veto countdown timer
+  useEffect(() => {
+    if (!serverVetoDeadline) {
+      setTimeLeft(null);
+      return;
+    }
+    
+    const updateTimer = () => {
+      const deadline = new Date(serverVetoDeadline);
+      const now = new Date();
+      const diff = Math.max(0, Math.floor((deadline - now) / 1000));
+      setTimeLeft(diff);
+      
+      if (diff === 0) {
+        // Timer expired
+        setTimeLeft(0);
+      }
+    };
+    
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    
+    return () => clearInterval(interval);
+  }, [serverVetoDeadline]);
+
+  // Map veto countdown timer
   useEffect(() => {
     if (!vetoDeadline) {
       setTimeLeft(null);
@@ -622,11 +910,11 @@ export default function MatchPage() {
     return () => clearInterval(interval);
   }, [vetoDeadline]);
 
-  // Side selection countdown (fallback 15s if server deadline isn't provided yet)
+  // Side selection countdown (fallback 30s if server deadline isn't provided yet)
   useEffect(() => {
     if (!sideSelectionPhase) return;
     // If server provides a deadline later, we can replace this with sync logic similar to veto
-    if (sideTimeLeft === null) setSideTimeLeft(15);
+    if (sideTimeLeft === null) setSideTimeLeft(30);
     const interval = setInterval(() => {
       setSideTimeLeft(prev => {
         if (prev === null) return null;
@@ -655,19 +943,38 @@ export default function MatchPage() {
     }
   }, [matchData, playerData]);
   
-  // Handle veto action
+  // Handle server veto action
+  const handleServerVetoAction = (serverName) => {
+    if (!isCaptain) {
+      console.log('[SERVER VETO] Not captain, cannot veto');
+      return;
+    }
+    
+    if (serverVetoTurn !== myTeam) {
+      console.log('[SERVER VETO] Not our turn');
+      return;
+    }
+    
+    console.log('[SERVER VETO] Vetoing server:', serverName);
+    sendEvent('veto_server', {
+      match_id: matchId,
+      server_name: serverName
+    });
+  };
+
+  // Handle map veto action
   const handleVetoMapAction = (mapName) => {
     if (!isCaptain) {
-      console.log('[VETO] Not captain, cannot veto');
+      console.log('[MAP VETO] Not captain, cannot veto');
       return;
     }
     
     if (currentTurn !== myTeam) {
-      console.log('[VETO] Not our turn');
+      console.log('[MAP VETO] Not our turn');
       return;
     }
     
-    console.log('[VETO] Vetoing map:', mapName);
+    console.log('[MAP VETO] Vetoing map:', mapName);
     sendEvent('veto_map', {
       match_id: matchId,
       map_name: mapName
@@ -913,6 +1220,23 @@ export default function MatchPage() {
               </Stack>
             </Paper>
           </Box>
+
+          {/* Server Veto Section - Center */}
+          {serverVetoPhase && (
+            <Box sx={{ display: 'flex', alignItems: 'center', minHeight: '400px' }}>
+              <ServerVetoSection
+                servers={availableServers}
+                vetoedServers={vetoedServers}
+                currentTurn={serverVetoTurn}
+                timeLeft={timeLeft}
+                onServerVeto={handleServerVetoAction}
+                theme={theme}
+                colors={colors}
+                isCaptain={isCaptain}
+                myTeam={myTeam}
+              />
+            </Box>
+          )}
 
           {/* Map Veto Section - Center */}
           {vetoPhase && (
