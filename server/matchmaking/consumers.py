@@ -890,7 +890,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         """
         await self.send(text_data=json.dumps({
             'event': 'lobby_updated',
-            'payload': event['lobby']
+            'payload': event.get('lobby', {})
         }))
     
     async def player_joined_lobby(self, event):
@@ -900,8 +900,8 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             'event': 'player_joined_lobby',
             'payload': {
-                'lobby': event['lobby'],
-                'player_puuid': event['player_puuid']
+                'lobby': event.get('lobby', {}),
+                'player_puuid': event.get('player_puuid')
             }
         }))
     
@@ -912,8 +912,8 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             'event': 'player_left_lobby',
             'payload': {
-                'lobby': event['lobby'],
-                'player_puuid': event['player_puuid'],
+                'lobby': event.get('lobby', {}),
+                'player_puuid': event.get('player_puuid'),
                 'reason': event.get('reason', 'left')
             }
         }))
@@ -925,8 +925,8 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             'event': 'kicked_from_lobby',
             'payload': {
-                'lobby_id': event['lobby_id'],
-                'message': event['message']
+                'lobby_id': event.get('lobby_id'),
+                'message': event.get('message', 'You were kicked from the lobby')
             }
         }))
     
@@ -937,7 +937,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             'event': 'lobby_disbanded',
             'payload': {
-                'reason': event['reason']
+                'reason': event.get('reason', 'unknown')
             }
         }))
     
@@ -947,7 +947,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         """
         await self.send(text_data=json.dumps({
             'event': 'lobby_preferences_updated',
-            'payload': event['lobby']
+            'payload': event.get('lobby', {})
         }))
 
     async def match_ready(self, event):
@@ -958,7 +958,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
             'event': 'match_ready',
             'payload': {
                 'match_id': event.get('match_id'),
-                'message': event['message'],
+                'message': event.get('message', 'Match is ready!'),
             }
         }))
 
@@ -969,7 +969,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             'event': 'player_accepted',
             'payload': {
-                'accepted_count': event["accepted_count"],
+                'accepted_count': event.get("accepted_count", 0),
                 'total_players': event.get("total_players", 10),
                 'timeout_seconds': event.get("timeout_seconds", 30)
             }
@@ -981,7 +981,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         """
         await self.send(text_data=json.dumps({
             'event': 'lobby_queued',
-            'message': event['message'],
+            'message': event.get('message', 'Lobby has been queued'),
             'queue_position': event.get('queue_position'),
             'estimated_wait': event.get('estimated_wait')
         }))
@@ -992,22 +992,22 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         """
         await self.send(text_data=json.dumps({
             'event': 'lobby_removed_from_queue',
-            'message': event['message']
+            'message': event.get('message', 'Lobby was removed from queue')
         }))
     
     async def match_found(self, event):
         """
         Sends a notification that a match has been found.
         """
-        match_id = event['match_confirmation_id']
-        logger.info(f"🎮 MATCH PROPOSED to player {self.puuid[:12]}... - Match ID: {match_id[:8]}...")
+        match_id = event.get('match_confirmation_id')
+        logger.info(f"🎮 MATCH PROPOSED to player {self.puuid[:12]}... - Match ID: {match_id[:8] if match_id else 'Unknown'}...")
         logger.info(f"   Timeout: {event.get('timeout_seconds', 30)}s")
         
         await self.send(text_data=json.dumps({
             'event': 'match_found',
             'payload': {
-                'match_id': event['match_confirmation_id'],  # Client expects match_id
-                'match_confirmation_id': event['match_confirmation_id'],
+                'match_id': event.get('match_confirmation_id'),  # Client expects match_id
+                'match_confirmation_id': event.get('match_confirmation_id'),
                 'opponent_lobby': event.get('opponent_lobby'),
                 'timeout_seconds': event.get('timeout_seconds'),
                 'message': event.get('message', 'Match found! Please accept to continue.')
@@ -1022,7 +1022,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         """
         await self.send(text_data=json.dumps({
             'event': 'match_declined',
-            'message': event['message'],
+            'message': event.get('message', 'Match was declined'),
             'reason': event.get('reason', 'Unknown')
         }))
     
@@ -1067,13 +1067,32 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         """
         All players accepted - redirect to match page.
         """
+        match_id = event.get('match_id')
         await self.send(text_data=json.dumps({
             'event': 'match_confirmed',
             'payload': {
-                'match_id': event['match_id'],
+                'match_id': match_id,
                 'team': event.get('team'),
-                'redirect_url': f"/match/{event['match_id']}"
+                'redirect_url': f"/match/{match_id}" if match_id else None
             }
+        }))
+    
+    async def match_data(self, event):
+        """
+        🔧 FIX: Match data broadcast - ensures all players get captain/team info.
+        """
+        # Add player to match group for veto updates
+        match_id = event.get('match_id')
+        if match_id:
+            await self.channel_layer.group_add(
+                f"match_{match_id}",
+                self.channel_name
+            )
+            logger.info(f"Added player {self.puuid} to match group match_{match_id}")
+        
+        await self.send(text_data=json.dumps({
+            'event': 'match_data',
+            'payload': event.get('payload', {})
         }))
     
     async def veto_started(self, event):
@@ -1083,10 +1102,10 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             'event': 'veto_started',
             'payload': {
-                'match_id': event['match_id'],
-                'current_turn': event['current_turn'],
-                'available_maps': event['available_maps'],
-                'deadline': event['deadline']
+                'match_id': event.get('match_id'),
+                'current_turn': event.get('current_turn'),
+                'available_maps': event.get('available_maps', []),
+                'deadline': event.get('deadline')
             }
         }))
     
@@ -1097,10 +1116,10 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             'event': 'server_veto_started',
             'payload': {
-                'match_id': event['match_id'],
-                'current_turn': event['current_turn'],
-                'available_servers': event['available_servers'],
-                'deadline': event['deadline']
+                'match_id': event.get('match_id'),
+                'current_turn': event.get('current_turn'),
+                'available_servers': event.get('available_servers', []),
+                'deadline': event.get('deadline')
             }
         }))
     
@@ -1111,11 +1130,11 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             'event': 'server_veto_update',
             'payload': {
-                'match_id': event['match_id'],
-                'server_name': event['server_name'],
-                'vetoed_by': event['vetoed_by'],
+                'match_id': event.get('match_id'),
+                'server_name': event.get('server_name'),
+                'vetoed_by': event.get('vetoed_by'),
                 'next_turn': event.get('next_turn'),
-                'remaining_servers': event['remaining_servers'],
+                'remaining_servers': event.get('remaining_servers', []),
                 'deadline': event.get('deadline')
             }
         }))
@@ -1127,13 +1146,25 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             'event': 'server_veto_complete',
             'payload': {
-                'match_id': event['match_id'],
-                'final_server': event['final_server'],
-                'current_turn': event['current_turn'],
-                'available_maps': event['available_maps'],
-                'veto_deadline': event['veto_deadline']
+                'match_id': event.get('match_id'),
+                'final_server': event.get('final_server'),
+                'current_turn': event.get('current_turn'),
+                'available_maps': event.get('available_maps', []),
+                'veto_deadline': event.get('veto_deadline')
             }
         }))
+        
+        # 🔧 FIX: If map veto started, also send map_veto_started event
+        if event.get('map_veto_started', False):
+            await self.send(text_data=json.dumps({
+                'event': 'map_veto_started',
+                'payload': {
+                    'match_id': event.get('match_id'),
+                    'current_turn': event.get('current_turn'),
+                    'available_maps': event.get('available_maps', []),
+                    'deadline': event.get('veto_deadline')
+                }
+            }))
     
     async def server_veto_timeout(self, event):
         """
@@ -1142,7 +1173,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             'event': 'server_veto_timeout',
             'payload': {
-                'match_id': event['match_id'],
+                'match_id': event.get('match_id'),
                 'timed_out_team': event.get('timed_out_team'),
                 'auto_vetoed_server': event.get('auto_vetoed_server'),
                 'next_turn': event.get('next_turn'),
@@ -1156,6 +1187,18 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
                 'veto_deadline': event.get('veto_deadline')
             }
         }))
+        
+        # 🔧 FIX: If map veto started, also send map_veto_started event
+        if event.get('map_veto_started', False):
+            await self.send(text_data=json.dumps({
+                'event': 'map_veto_started',
+                'payload': {
+                    'match_id': event.get('match_id'),
+                    'current_turn': event.get('current_turn'),
+                    'available_maps': event.get('available_maps'),
+                    'deadline': event.get('veto_deadline')
+                }
+            }))
 
     async def map_vetoed(self, event):
         """
@@ -1164,11 +1207,25 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             'event': 'map_vetoed',
             'payload': {
-                'match_id': event['match_id'],
-                'map': event['map_name'],
-                'vetoed_by': event['vetoed_by'],
+                'match_id': event.get('match_id'),
+                'map': event.get('map_name'),
+                'vetoed_by': event.get('vetoed_by'),
                 'next_turn': event.get('next_turn'),
-                'remaining_maps': event['remaining_maps'],
+                'remaining_maps': event.get('remaining_maps', []),
+                'deadline': event.get('deadline')
+            }
+        }))
+    
+    async def map_veto_started(self, event):
+        """
+        🔧 FIX: Map veto phase has begun.
+        """
+        await self.send(text_data=json.dumps({
+            'event': 'map_veto_started',
+            'payload': {
+                'match_id': event.get('match_id'),
+                'current_turn': event.get('current_turn'),
+                'available_maps': event.get('available_maps', []),
                 'deadline': event.get('deadline')
             }
         }))
@@ -1180,8 +1237,8 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             'event': 'map_veto_timeout',
             'payload': {
-                'match_id': event['match_id'],
-                'auto_vetoed_map': event['auto_vetoed_map'],
+                'match_id': event.get('match_id'),
+                'auto_vetoed_map': event.get('auto_vetoed_map'),
                 'veto_complete': event.get('veto_complete', False),
                 'next_turn': event.get('next_turn'),
                 'remaining_maps': event.get('remaining_maps', []),
@@ -1197,7 +1254,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             'event': 'side_selection_timeout',
             'payload': {
-                'match_id': event['match_id'],
+                'match_id': event.get('match_id'),
                 'auto_selected_side': event.get('auto_selected_side'),
                 'side_selection_complete': event.get('side_selection_complete', False),
                 'match_ready': event.get('match_ready', False)
@@ -1211,8 +1268,8 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             'event': 'veto_complete',
             'payload': {
-                'match_id': event['match_id'],
-                'final_map': event['final_map'],
+                'match_id': event.get('match_id'),
+                'final_map': event.get('final_map'),
                 'side_selector': event.get('side_selector')
             }
         }))
@@ -1485,9 +1542,9 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         logger.debug(f"Broadcasting lobby message from {event.get('username', 'Unknown')}")
         await self.send(text_data=json.dumps({
             'event': 'lobby_message',
-            'username': event['username'],
-            'message': event['message'],
-            'timestamp': event['timestamp'],
+            'username': event.get('username', 'Unknown'),
+            'message': event.get('message', ''),
+            'timestamp': event.get('timestamp'),
         }))
     
     # Handler for incoming lobby chat message events
@@ -1520,9 +1577,9 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         """
         await self.send(text_data=json.dumps({
             'event': 'direct_message',
-            'username': event['username'],
-            'message': event['message'],
-            'timestamp': event['timestamp'],
+            'username': event.get('username', 'Unknown'),
+            'message': event.get('message', ''),
+            'timestamp': event.get('timestamp'),
         }))
         
     async def handle_direct_message(self, data):
@@ -1737,7 +1794,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         WebSocket event handler for when all players have joined.
         This is called when the channel layer sends the event to the constructor.
         """
-        match_id = event['match_id']
+        match_id = event.get('match_id')
         is_constructor = event.get('is_constructor', False)
         
         logger.info(f"All players joined event received for match {match_id}")
@@ -1756,7 +1813,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         """
         WebSocket event handler for when a match is cancelled.
         """
-        match_id = event['match_id']
+        match_id = event.get('match_id')
         reason = event.get('reason', 'unknown')
         
         logger.info(f"Match {match_id} cancelled: {reason}")
@@ -1929,12 +1986,12 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             'event': 'match_starting',
             'payload': {
-                'match_id': event['match_id'],
-                'constructor_puuid': event['constructor_puuid'],
-                'is_constructor': event['is_constructor'],
-                'map': event['map'],
-                'server': event['server'],
-                'team': event['team']
+                'match_id': event.get('match_id'),
+                'constructor_puuid': event.get('constructor_puuid'),
+                'is_constructor': event.get('is_constructor', False),
+                'map': event.get('map'),
+                'server': event.get('server'),
+                'team': event.get('team')
             }
         }))
     
@@ -1944,9 +2001,9 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             'event': 'join_custom_game',
             'payload': {
-                'match_id': event['match_id'],
-                'pregame_id': event['pregame_id'],
-                'team': event['team']
+                'match_id': event.get('match_id'),
+                'pregame_id': event.get('pregame_id'),
+                'team': event.get('team')
             }
         }))
     
@@ -1956,10 +2013,10 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             'event': 'match_in_progress',
             'payload': {
-                'match_id': event['match_id'],
-                'coregame_id': event['coregame_id'],
-                'map': event['map'],
-                'server': event['server']
+                'match_id': event.get('match_id'),
+                'coregame_id': event.get('coregame_id'),
+                'map': event.get('map'),
+                'server': event.get('server')
             }
         }))
     
@@ -1969,10 +2026,10 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             'event': 'match_score_update',
             'payload': {
-                'match_id': event['match_id'],
-                'team_a_score': event['team_a_score'],
-                'team_b_score': event['team_b_score'],
-                'current_round': event['current_round']
+                'match_id': event.get('match_id'),
+                'team_a_score': event.get('team_a_score'),
+                'team_b_score': event.get('team_b_score'),
+                'current_round': event.get('current_round')
             }
         }))
     
@@ -1982,9 +2039,9 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             'event': 'match_completed',
             'payload': {
-                'match_id': event['match_id'],
-                'team_a_score': event['team_a_score'],
-                'team_b_score': event['team_b_score'],
+                'match_id': event.get('match_id'),
+                'team_a_score': event.get('team_a_score'),
+                'team_b_score': event.get('team_b_score'),
                 'winner': event.get('winner'),
                 'final_data': event.get('final_data', {})
             }
@@ -1995,8 +2052,8 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             'event': 'lobby_destroyed',
             'payload': {
-                'message': event['message'],
-                'reason': event['reason']
+                'message': event.get('message', 'Lobby was destroyed'),
+                'reason': event.get('reason', 'unknown')
             }
         }))
     
@@ -2005,8 +2062,8 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             'event': 'player_left_lobby',
             'payload': {
-                'player': event['player'],
-                'message': event['message']
+                'player': event.get('player', {}),
+                'message': event.get('message', 'Player left the lobby')
             }
         }))
     
@@ -2015,9 +2072,9 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             'event': 'lobby_leader_changed',
             'payload': {
-                'new_leader': event['new_leader'],
-                'old_leader': event['old_leader'],
-                'message': event['message']
+                'new_leader': event.get('new_leader', {}),
+                'old_leader': event.get('old_leader', {}),
+                'message': event.get('message', 'Lobby leader changed')
             }
         }))
     
@@ -2028,14 +2085,14 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         logger.info(f"Map vetoed event received: {event}")
         
         await self.send(text_data=json.dumps({
-            'event': 'veto_update',
+            'event': 'map_vetoed',
             'payload': {
-                'match_id': event['match_id'],
-                'map_name': event['map_name'],
-                'vetoed_by': event['vetoed_by'],
-                'next_turn': event['next_turn'],
-                'remaining_maps': event['remaining_maps'],
-                'deadline': event['deadline']
+                'match_id': event.get('match_id'),
+                'map_name': event.get('map_name'),
+                'vetoed_by': event.get('vetoed_by'),
+                'next_turn': event.get('next_turn'),
+                'remaining_maps': event.get('remaining_maps', []),
+                'deadline': event.get('deadline')
             }
         }))
     
@@ -2048,8 +2105,8 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             'event': 'veto_complete',
             'payload': {
-                'match_id': event['match_id'],
-                'final_map': event['final_map'],
+                'match_id': event.get('match_id'),
+                'final_map': event.get('final_map'),
                 'side_selector': event.get('side_selector')
             }
         }))
@@ -2063,10 +2120,10 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             'event': 'side_selected',
             'payload': {
-                'match_id': event['match_id'],
-                'side': event['side'],
-                'selected_by': event['selected_by'],
-                'side_complete': event['side_complete']
+                'match_id': event.get('match_id'),
+                'side': event.get('side'),
+                'selected_by': event.get('selected_by'),
+                'side_complete': event.get('side_complete', False)
             }
         }))
     

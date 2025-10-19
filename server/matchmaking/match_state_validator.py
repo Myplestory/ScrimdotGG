@@ -20,6 +20,7 @@ class MatchStateValidator:
     # Match states that should block queuing
     ACTIVE_MATCH_STATES = [
         'CONFIRMED',           # All players accepted, ready for veto
+        'SERVER_VETO',         # Server veto in progress
         'VETO',                # Map veto in progress
         'SIDE_SELECTION',      # Side selection in progress
         'CREATING',            # Custom game being created

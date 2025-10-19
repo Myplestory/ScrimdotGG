@@ -48,14 +48,28 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
     'django_celery_beat',
+    'channels',
+    
+    # Core utilities (no dependencies)
+    'core',
+    
+    # Main domain apps
     'scrimgg',
     'riotlogin',
     'users',
+    
+    # Matchmaking system
     'lobby',
+    'matchmaking',
+    'match_system',         # NEW: Post-acceptance match flow
+    'match_execution',      # NEW: Live game management
+    
+    # Realtime communication (depends on all above)
+    'realtime',            # NEW: WebSocket layer
+    
+    # Legacy/utility apps
     'maps',
     'match',
-    'matchmaking',
-    'channels',
 ]
 
 MIDDLEWARE = [

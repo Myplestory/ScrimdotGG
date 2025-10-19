@@ -641,12 +641,22 @@ class MatchConfirmationManager:
             # Get all player PUUIDs and their teams
             all_players = match.get_all_player_puuids()
             
+            # 🔧 FIX: Get match data and broadcast to all players immediately
+            match_data = await MatchManager.get_match_data(str(match.id))
+            if not match_data:
+                logger.error(f"Failed to get match data for {match.id}")
+                return {
+                    'status': 'error',
+                    'message': 'Failed to get match data'
+                }
+            
             # Broadcast match_confirmed to all players
             channel_layer = get_channel_layer()
             
             for player_puuid in all_players:
                 team = match.get_player_team(player_puuid)
                 
+                # Send match_confirmed event
                 await channel_layer.group_send(
                     f"player_{player_puuid}",
                     {
@@ -655,8 +665,18 @@ class MatchConfirmationManager:
                         'team': team
                     }
                 )
+                
+                # 🔧 FIX: Send match_data event immediately after match_confirmed
+                await channel_layer.group_send(
+                    f"player_{player_puuid}",
+                    {
+                        'type': 'match_data',
+                        'match_id': str(match.id),
+                        'payload': match_data
+                    }
+                )
             
-            logger.info(f"Match confirmed broadcast sent to {len(all_players)} players")
+            logger.info(f"Match confirmed and match_data broadcast sent to {len(all_players)} players")
             
             # Start veto phase
             veto_result = await MatchManager.start_server_veto(match)

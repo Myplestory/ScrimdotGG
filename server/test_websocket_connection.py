@@ -14,7 +14,7 @@ async def test_websocket():
             
             # Test lobby creation
             message = {
-                "action": "create_lobby",
+                "event": "create_lobby",
                 "payload": {
                     "puuid": "52f0666e-4d7a-5b84-9e1a-a35286de3d27"
                 }
@@ -29,7 +29,7 @@ async def test_websocket():
             
             # Test queue join
             message2 = {
-                "action": "add_lobby_to_queue",
+                "event": "add_lobby_to_queue",
                 "payload": {
                     "lobby_id": "655d1c06-288e-42cf-86dd-1543d85ed233",
                     "requester_puuid": "52f0666e-4d7a-5b84-9e1a-a35286de3d27",

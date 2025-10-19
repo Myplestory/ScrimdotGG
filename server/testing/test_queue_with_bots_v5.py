@@ -60,6 +60,7 @@ class BotWebSocketClient:
     def __init__(self, bot_puuid: str, bot_alias: str):
         self.bot_puuid = bot_puuid
         self.bot_alias = bot_alias
+        logger.info(f"🤖 [INIT] Bot {bot_alias} initialized with PUUID: '{bot_puuid}' (type: {type(bot_puuid)})")
         self.websocket = None
         self.lobby_id = None
         self.connected = False
@@ -160,16 +161,17 @@ class BotWebSocketClient:
             self.current_match_id = payload.get('match_id')
             logger.info(f" Bot {self.bot_alias} match confirmed! Match ID: {self.current_match_id[:8] if self.current_match_id else 'Unknown'}")
             
-            # Request match data to join match group and receive veto updates
-            await self._send_message('get_match_data', {
-                'match_id': self.current_match_id
-            })
+            # 🔧 FIX: Don't request match_data here - server now broadcasts it automatically
+            # The server will send match_data event immediately after match_confirmed
+            logger.info(f" Bot {self.bot_alias} waiting for automatic match_data broadcast...")
         
         elif event == 'match_data':
             # Handle match data (veto phase initialization)
+            logger.info(f"🔧 [FIX] Bot {self.bot_alias} received match_data event from server broadcast!")
             await self._handle_match_data(payload)
 
         elif event == 'veto_update':
+            logger.info(f"veto update: {payload}")
             # Handle veto updates (map vetoed, turn changes)
             await self._handle_veto_update(payload)
         
@@ -296,7 +298,7 @@ class BotWebSocketClient:
                 'lobby_id': self.lobby_id,
                 'requester_puuid': self.bot_puuid,
                 'map_preferences': map_preferences,
-                'server_preferences': ['Virginia', 'Illinois']
+                'server_preferences': ['Virginia', 'Illinois', 'Georgia', 'California', 'Dallas', 'Oregon']
             })
             
             # Wait a moment for preferences update
@@ -330,6 +332,13 @@ class BotWebSocketClient:
         """Handle match data (veto phase initialization)"""
         logger.info(f" Bot {self.bot_alias} received match data")
         
+        # 🔧 FIX: The server should have already added us to the match group
+        # when it sent the match_data event
+        logger.info(f"Payload: {payload}")
+        # DEBUG: Log PUUID information
+        logger.info(f"🔍 [DEBUG] Bot {self.bot_alias} PUUID investigation:")
+        logger.info(f"   Bot's self.bot_puuid: '{self.bot_puuid}' (type: {type(self.bot_puuid)})")
+        
         # Initialize veto state from match data
         if payload.get('state') == 'SERVER_VETO':
             # Server veto phase
@@ -341,8 +350,24 @@ class BotWebSocketClient:
             # Determine if this bot is captain (same logic as map veto)
             team_a_players = payload.get('team_a_players', [])
             team_b_players = payload.get('team_b_players', [])
-            self.is_captain = False
-            self.my_team = None
+            
+            # DEBUG: Log team player PUUIDs
+            logger.info(f"   Team A players ({len(team_a_players)}):")
+            for i, player in enumerate(team_a_players):
+                puuid = player.get('puuid')
+                is_captain = player.get('is_captain')
+                alias = player.get('alias', 'Unknown')
+                logger.info(f"     [{i}] PUUID: '{puuid}' (type: {type(puuid)}), Captain: {is_captain}, Alias: {alias}")
+                logger.info(f"         Match check: '{puuid}' == '{self.bot_puuid}' = {puuid == self.bot_puuid}")
+            
+            logger.info(f"   Team B players ({len(team_b_players)}):")
+            for i, player in enumerate(team_b_players):
+                puuid = player.get('puuid')
+                is_captain = player.get('is_captain')
+                alias = player.get('alias', 'Unknown')
+                logger.info(f"     [{i}] PUUID: '{puuid}' (type: {type(puuid)}), Captain: {is_captain}, Alias: {alias}")
+                logger.info(f"         Match check: '{puuid}' == '{self.bot_puuid}' = {puuid == self.bot_puuid}")
+
             
             # Check team A
             for player in team_a_players:
@@ -374,6 +399,7 @@ class BotWebSocketClient:
                 
         elif payload.get('state') == 'VETO':
             # Map veto phase
+            logger.info(f"MAP VETO ONGOING")
             self.available_maps = payload.get('remaining_maps', [])
             self.vetoed_maps = payload.get('vetoed_maps', [])
             self.current_turn = payload.get('veto_turn')
@@ -382,11 +408,26 @@ class BotWebSocketClient:
             # Determine if this bot is captain
             team_a_players = payload.get('team_a_players', [])
             team_b_players = payload.get('team_b_players', [])
-            logger.info(f" Team A : {team_a_players}")
-            logger.info(f" Team B : {team_b_players}")
-            # First, find which team this bot is on
-            self.is_captain = False
-            self.my_team = None
+            
+            # DEBUG: Log team player PUUIDs for map veto
+            logger.info(f"🔍 [DEBUG] Bot {self.bot_alias} MAP VETO PUUID investigation:")
+            logger.info(f"   Bot's self.bot_puuid: '{self.bot_puuid}' (type: {type(self.bot_puuid)})")
+            logger.info(f"   Team A players ({len(team_a_players)}):")
+            for i, player in enumerate(team_a_players):
+                puuid = player.get('puuid')
+                is_captain = player.get('is_captain')
+                alias = player.get('alias', 'Unknown')
+                logger.info(f"     [{i}] PUUID: '{puuid}' (type: {type(puuid)}), Captain: {is_captain}, Alias: {alias}")
+                logger.info(f"         Match check: '{puuid}' == '{self.bot_puuid}' = {puuid == self.bot_puuid}")
+            
+            logger.info(f"   Team B players ({len(team_b_players)}):")
+            for i, player in enumerate(team_b_players):
+                puuid = player.get('puuid')
+                is_captain = player.get('is_captain')
+                alias = player.get('alias', 'Unknown')
+                logger.info(f"     [{i}] PUUID: '{puuid}' (type: {type(puuid)}), Captain: {is_captain}, Alias: {alias}")
+                logger.info(f"         Match check: '{puuid}' == '{self.bot_puuid}' = {puuid == self.bot_puuid}")
+            
             
             # Check team A
             for player in team_a_players:
@@ -422,44 +463,8 @@ class BotWebSocketClient:
             
             # If it's my turn and I'm captain, make a veto decision
             if self.is_captain and self.current_turn == self.my_team:
-                await self._make_veto_decision()
+                await self._make_map_veto_decision()
     
-    async def _handle_veto_update(self, payload: dict):
-        """Handle veto updates (map vetoed, turn changes)"""
-        logger.info(f" Bot {self.bot_alias} received veto update")
-        
-        # Check if we've initialized veto state yet (received match_data)
-        if self.my_team is None:
-            logger.warning(f" Bot {self.bot_alias} received veto_update but my_team is None - match_data not received yet!")
-            logger.warning(f"   Requesting match data again...")
-            # Request match data again
-            if self.current_match_id:
-                await self._send_message('get_match_data', {'match_id': self.current_match_id})
-            return
-        
-        # Update available maps
-        self.available_maps = payload.get('remaining_maps', [])
-        
-        # Update vetoed maps - add the newly vetoed map
-        map_name = payload.get('map_name')
-        if map_name and map_name not in self.vetoed_maps:
-            self.vetoed_maps.append(map_name)
-        
-        # Handle both 'veto_turn' (from match_data) and 'next_turn' (from veto_update)
-        self.current_turn = payload.get('veto_turn') or payload.get('next_turn')
-        self.veto_deadline = payload.get('deadline') or payload.get('veto_deadline')
-        
-        logger.info(f"   Remaining maps: {self.available_maps}")
-        logger.info(f"   Vetoed maps: {self.vetoed_maps}")
-        logger.info(f"   Current turn: {self.current_turn}")
-        logger.info(f"   Is captain: {self.is_captain}, My team: {self.my_team}")
-        
-        # If it's my turn and I'm captain, make a veto decision
-        if self.is_captain and self.current_turn == self.my_team:
-            logger.info(f" Bot {self.bot_alias} - IT'S MY TURN! Making veto decision...")
-            await self._make_veto_decision()
-        else:
-            logger.info(f"   Not my turn (is_captain={self.is_captain}, current_turn={self.current_turn}, my_team={self.my_team})")
     
     async def _handle_veto_timeout(self, payload: dict):
         """Handle veto timeout (auto-veto occurred)"""
@@ -479,10 +484,12 @@ class BotWebSocketClient:
             # Veto phase is complete
             self.veto_complete = True
             logger.info(f"   Final map: {final_map}")
-            # Reset veto state
-            self.is_captain = False
-            self.my_team = None
+            # 🔧 FIX: Don't reset captain/team info - preserve it for side selection
+            # Reset only veto-specific state
             self.available_maps = []
+            self.vetoed_maps = []
+            self.current_turn = None
+            self.veto_deadline = None
         else:
             # Continue veto phase - update state
             self.current_turn = next_turn
@@ -491,7 +498,7 @@ class BotWebSocketClient:
             # If it's my turn and I'm captain, make a veto decision
             if self.is_captain and self.current_turn == self.my_team:
                 logger.info(f"Bot {self.bot_alias} - IT'S MY TURN! Making veto decision...")
-                await self._make_veto_decision()
+                await self._make_map_veto_decision()
             else:
                 logger.info(f"   Not my turn (is_captain={self.is_captain}, current_turn={self.current_turn}, my_team={self.my_team})")
     
@@ -515,7 +522,7 @@ class BotWebSocketClient:
         # If it's my turn and I'm captain, make a veto decision
         if self.is_captain and self.current_turn == self.my_team:
             logger.info(f"Bot {self.bot_alias} - IT'S MY TURN! Making veto decision...")
-            await self._make_veto_decision()
+            await self._make_map_veto_decision()
         else:
             logger.info(f"   Not my turn (is_captain={self.is_captain}, current_turn={self.current_turn}, my_team={self.my_team})")
     
@@ -525,9 +532,6 @@ class BotWebSocketClient:
         logger.info(f"Bot {self.bot_alias} veto phase completed!")
         logger.info(f"   Final map: {payload.get('final_map')}")
         
-        # Reset veto state
-        self.is_captain = False
-        self.my_team = None
         self.available_maps = []
         self.vetoed_maps = []
         self.current_turn = None
@@ -597,6 +601,17 @@ class BotWebSocketClient:
         self.veto_deadline = payload.get('veto_deadline')
         self.vetoed_maps = []
         
+        # 🔧 FIX: PRESERVE captain/team info instead of re-initializing
+        # The server_veto_complete payload doesn't contain team player data,
+        # so we must preserve the existing captain/team information
+        logger.info(f"🔧 [FIX] Preserving captain/team info:")
+        logger.info(f"   Before: is_captain={self.is_captain}, my_team={self.my_team}")
+        
+        # Don't reset is_captain and my_team - keep the values from match_data
+        # The original code was resetting these to False/None, which broke the flow
+        
+        logger.info(f"   After: is_captain={self.is_captain}, my_team={self.my_team}")
+        
         logger.info(f"Bot {self.bot_alias} map veto phase starting!")
         logger.info(f"   Current turn: {self.current_turn}")
         logger.info(f"   Available maps: {self.available_maps}")
@@ -605,7 +620,7 @@ class BotWebSocketClient:
         # If it's my turn and I'm captain, make a map veto decision
         if self.is_captain and self.current_turn == self.my_team:
             logger.info(f"Bot {self.bot_alias} - IT'S MY TURN! Making map veto decision...")
-            await self._make_veto_decision()
+            await self._make_map_veto_decision()
         else:
             logger.info(f"   Not my turn (is_captain={self.is_captain}, current_turn={self.current_turn}, my_team={self.my_team})")
     
@@ -637,6 +652,14 @@ class BotWebSocketClient:
             self.veto_deadline = payload.get('veto_deadline')
             self.vetoed_maps = []
             
+            # 🔧 FIX: PRESERVE captain/team info instead of re-initializing
+            # The server_veto_timeout payload doesn't contain team player data,
+            # so we must preserve the existing captain/team information
+            logger.info(f"🔧 [FIX] Preserving captain/team info (timeout):")
+            logger.info(f"   Before: is_captain={self.is_captain}, my_team={self.my_team}")
+            # Don't reset is_captain and my_team - keep the values from match_data
+            logger.info(f"   After: is_captain={self.is_captain}, my_team={self.my_team}")
+            
             logger.info(f"Bot {self.bot_alias} map veto phase starting (after server veto timeout)!")
             logger.info(f"   Current turn: {self.current_turn}")
             logger.info(f"   Available maps: {self.available_maps}")
@@ -645,7 +668,7 @@ class BotWebSocketClient:
             # If it's my turn and I'm captain, make a map veto decision
             if self.is_captain and self.current_turn == self.my_team:
                 logger.info(f"Bot {self.bot_alias} - IT'S MY TURN! Making map veto decision...")
-                await self._make_veto_decision()
+                await self._make_map_veto_decision()
             else:
                 logger.info(f"   Not my turn (is_captain={self.is_captain}, current_turn={self.current_turn}, my_team={self.my_team})")
         else:
@@ -738,7 +761,7 @@ class BotWebSocketClient:
         self.game_started = False
         self.joined_custom_game = False
     
-    async def _make_veto_decision(self):
+    async def _make_map_veto_decision(self):
         """Make a veto decision when it's the bot's turn"""
         if not self.available_maps:
             logger.warning(f"Bot {self.bot_alias} no maps available to veto!")
@@ -1148,7 +1171,7 @@ async def main():
     
     # Configuration
     NUM_BOTS = 9
-    BASE_ELO = 6000
+    BASE_ELO = 6200
     BASE_MMR = 6000
     REGION = 'na'
     

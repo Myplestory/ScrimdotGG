@@ -1,10 +1,7 @@
 """
-ASGI config for ScrimGG project.
+Updated ASGI configuration for refactored WebSocket routing.
 
-It exposes the ASGI callable as a module-level variable named ``application``.
-
-For more information on this file, see
-https://docs.djangoproject.com/en/5.0/howto/deployment/asgi/
+REPLACE: scrimgg/asgi.py
 """
 
 import os
@@ -16,7 +13,6 @@ from channels.auth import AuthMiddlewareStack
 from channels.security.websocket import AllowedHostsOriginValidator
 from django.core.asgi import get_asgi_application
 from django.urls import re_path
-
 
 django.setup()
 
@@ -31,3 +27,4 @@ application = ProtocolTypeRouter({
         )
     ),
 })
+

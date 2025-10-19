@@ -115,12 +115,12 @@ const PugQueue = () => {
   // Set default region and servers (will be overridden by user selection)
   useEffect(() => {
     setPlayerRegion('na');
-    setAvailableServers(['Virginia', 'Illinois']);
+    setAvailableServers(['Virginia', 'Illinois', 'Georgia', 'California', 'Dallas', 'Oregon']);
   }, []);
 
   // Available maps for Valorant
   const availableMaps = [
-    'Ascent', 'Bind', 'Breeze', 'Fracture', 'Haven', 'Icebox', 'Lotus', 'Pearl', 'Split'
+    'Ascent', 'Bind', 'Breeze', 'Fracture', 'Haven', 'Icebox', 'Lotus', 'Pearl', 'Split','Sunset','Corrode','Abyss'
   ];
 
   // Available servers (will be populated based on detected region)
