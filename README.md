@@ -103,36 +103,26 @@ npm start
 
 | Category | Description |
 |----------|-------------|
-| **[Matchmaking System](./docs/matchmaking/)** | MMR/ELO system, algorithms, requeueing |
+| **[Architecture](./docs/architecture/)** | System design, matchmaking, and architecture docs |
+| **[Client](./docs/Client/)** | Frontend and backend client documentation |
+| **[Server](./docs/Server/)** | Server-side app documentation |
+| **[Implementation](./docs/implementation/)** | Implementation guides and technical docs |
 | **[Testing & Bots](./docs/testing/)** | Bot framework, testing commands |
 | **[Troubleshooting](./docs/troubleshooting/)** | Common issues and quick fixes |
 | **[Setup Guide](./docs/setup/)** | Installation and configuration |
-| **[Quick Start](./docs/QUICK_START.md)** | Get up and running quickly |
-| **[Architecture](./docs/ARCHITECTURE_IMPROVEMENTS.md)** | System design overview |
 
 ## Features
 
-### ✅ Implemented
+### Client Features
 - WebSocket-based real-time communication
 - Valorant client integration
 - Lobby creation and party management
 - Real-time chat system
-- Queue system with Redis backend
 - Player authentication
-- **MMR/ELO hybrid rating system**
-- **TrueSkill integration for skill estimation**
-- **Time-based matchmaking tolerance**
-- **Match acceptance flow (30s timeout)**
-- **Automatic requeueing on timeout**
-- **Rank-aware matchmaking (5 MMR tiers)**
-
-### In Development
 - Game state monitoring
 - Automatic match detection
 - Map/server veto system
 - Player verification (all 10 joined custom game)
-
-### Planned
 - Automated match result collection
 - Post-match ELO/MMR updates
 - Comprehensive stats tracking
@@ -141,6 +131,15 @@ npm start
 - Tournament system
 - Anti-cheat integration
 - Admin moderation panel
+
+### Server Features
+- Queue system with Redis backend
+- MMR/ELO hybrid rating system
+- TrueSkill integration for skill estimation
+- Time-based matchmaking tolerance
+- Match acceptance flow (30s timeout)
+- Automatic requeueing on timeout
+- Rank-aware matchmaking (5 MMR tiers)
 
 ## Tech Stack
 

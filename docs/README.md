@@ -1,188 +1,151 @@
 # 📚 Scrim.GG Documentation
 
-Welcome to the Scrim.GG documentation hub. This directory contains comprehensive guides for understanding and improving the codebase.
+Welcome to the Scrim.GG documentation hub. This directory contains comprehensive guides for understanding the codebase architecture, implementation details, and development workflows.
 
 ---
 
-## 🎯 Backend Refactoring Guide
+## 📁 Documentation Structure
 
-**Complete suite for refactoring the client backend to a modular architecture.**
+The documentation is organized into four main categories:
 
-### 📖 Available Documents
+### 🏗️ **[Architecture/](architecture/)**
+System design, flows, and architectural decisions
+- **[matchmaking/](architecture/matchmaking/)** - Matchmaking algorithm, MMR/ELO systems, tolerance, and requeueing
+- **[system/](architecture/system/)** - System architecture and improvements
+- **[legacy/](architecture/legacy/)** - Historical architecture documents
 
-| Document | Purpose | When to Use |
-|----------|---------|-------------|
-| **[backend-refactor/](backend-refactor/)** | **COMPLETE** - All implementation docs | Testing & reference |
-| **[REFACTOR_INDEX.md](REFACTOR_INDEX.md)** | Overview & navigation | Start here - choose your path |
-| **[REFACTOR_QUICKSTART.md](REFACTOR_QUICKSTART.md)** | Step-by-step implementation | When you're ready to code |
-| **[BACKEND_REFACTOR_PLAN.md](BACKEND_REFACTOR_PLAN.md)** | Complete technical spec | Reference during implementation |
-| **[ARCHITECTURE_COMPARISON.md](ARCHITECTURE_COMPARISON.md)** | Before/after diagrams | Understanding the changes |
-| **[REFACTOR_CHECKLIST.md](REFACTOR_CHECKLIST.md)** | Detailed task list | Tracking progress |
+### 💻 **[Client/](Client/)**
+Client-side documentation (React/Electron frontend + Quart backend)
+- **[frontend/](Client/frontend/)** - React/Electron application documentation
+- **[backend/](Client/backend/)** - Quart ASGI layer and valclient middleware
 
-### 🚀 Quick Start
+### 🖥️ **[Server/](Server/)**
+Server-side application documentation
+- Per-app function documentation (users, lobby, match_system, matchmaking, riotlogin, etc.)
 
-```bash
-# 1. Read the index to understand the scope
-open docs/REFACTOR_INDEX.md
-
-# 2. Choose your starting point:
-
-# Option A: I want to implement NOW
-open docs/REFACTOR_QUICKSTART.md
-
-# Option B: I want to understand first  
-open docs/ARCHITECTURE_COMPARISON.md
-
-# Option C: I need all the details
-open docs/BACKEND_REFACTOR_PLAN.md
-```
-
-### 📊 What's Being Refactored?
-
-**Current State:**
-- `bootstrap.py` (1360 lines) - monolithic, hard to maintain
-- Global state management
-- No message validation
-- Brittle Electron integration
-
-**Target State:**
-- Modular architecture (multiple focused files)
-- ConnectionManager for state
-- Pydantic message validation
-- Health check endpoint
-- Improved Electron integration
-
-**Estimated Time:** 6-8 hours  
-**Breaking Changes:** None  
-**Risk:** Low (fully reversible)
-
-### ✅ Benefits
-
-- ✅ **Maintainability:** 93% reduction in main file size
-- ✅ **Testability:** Isolated, testable handlers
-- ✅ **Type Safety:** Pydantic validation
-- ✅ **Reliability:** Health checks, clean shutdown
-- ✅ **Security:** Improved Electron security
-- ✅ **Extensibility:** Easy to add new features
+### 🔧 **[Implementation/](implementation/)**
+Implementation guides, setup, testing, and deployment
+- **[Setup/](implementation/Setup/)** - Development setup and deployment guides
+- **[Testing/](implementation/Testing/)** - Testing frameworks and procedures
+- **[Troubleshooting/](implementation/Troubleshooting/)** - Common issues and solutions
+- **[Features/](implementation/Features/)** - Feature implementation guides
+- **[Server-Refactor/](implementation/Server-Refactor/)** - Backend refactoring documentation
 
 ---
 
-## 📁 Organized Documentation
-
-### **Backend Refactor**
-- **[backend-refactor/](backend-refactor/)** - Complete backend refactor documentation (COMPLETED ✅)
-
-### **Development Phases**
-- **[phases/](phases/)** - Phase 1, 2, and 3 development documentation
-
-### **Features & Systems**
-- **[features/](features/)** - Match system, veto system, heartbeat system
-- **[system/](system/)** - Current status, next steps, system documentation
-
-### **Implementation**
-- **[implementation/](implementation/)** - Implementation guides and technical documentation
-
-### **Setup & Deployment**
-- **[setup/](setup/)** - Development setup, GitHub setup, production deployment
-- **[testing/](testing/)** - Testing guides and procedures
-- **[troubleshooting/](troubleshooting/)** - Troubleshooting guides
-
-### **Architecture**
-- **[architecture/](architecture/)** - Architecture improvements and comparisons
-
-### **Legacy Documentation**
-- **Server documentation** - Located in `server/` directory
-- **Client documentation** - Located in `client/` directory
-
----
-
-## 🎯 Recommended Reading Order
+## 🎯 Quick Start Guide
 
 ### For New Developers
-1. Start with project README (root)
-2. Read ARCHITECTURE_IMPROVEMENTS.md
-3. Review REFACTOR_INDEX.md (to understand planned changes)
+1. **Start Here**: [Development Setup](implementation/Setup/DEVELOPMENT_SETUP.md)
+2. **Architecture Overview**: [Matchmaking System](architecture/matchmaking/README.md)
+3. **Function Reference**: [Server Apps](Server/) and [Client Components](Client/)
 
-### For Backend Refactoring
-1. **[REFACTOR_INDEX.md](REFACTOR_INDEX.md)** - Start here
-2. **[ARCHITECTURE_COMPARISON.md](ARCHITECTURE_COMPARISON.md)** - Understand changes
-3. **[REFACTOR_QUICKSTART.md](REFACTOR_QUICKSTART.md)** - Implementation guide
-4. **[BACKEND_REFACTOR_PLAN.md](BACKEND_REFACTOR_PLAN.md)** - Complete reference
-5. **[REFACTOR_CHECKLIST.md](REFACTOR_CHECKLIST.md)** - Track progress
+### For Understanding Matchmaking
+1. **[Matchmaking Overview](architecture/matchmaking/README.md)** - System overview
+2. **[MMR/ELO System](architecture/matchmaking/MMR_ELO_SYSTEM.md)** - Rating system details
+3. **[TrueSkill](architecture/matchmaking/TRUESKILL.md)** - TrueSkill integration
+4. **[Priority Bias](architecture/matchmaking/PRIORITY_BIAS.md)** - Fairness mechanisms
+5. **[Requeue Logic](architecture/matchmaking/REQUEUE.md)** - Timeout handling
 
-### For Code Review
-1. **[ARCHITECTURE_COMPARISON.md](ARCHITECTURE_COMPARISON.md)** - Big picture
-2. **[BACKEND_REFACTOR_PLAN.md](BACKEND_REFACTOR_PLAN.md)** - Technical details
-3. **[REFACTOR_CHECKLIST.md](REFACTOR_CHECKLIST.md)** - Verify completeness
-
----
-
-## 🔗 Quick Links
-
-### Backend Refactor
-- [📋 Start Here (Index)](REFACTOR_INDEX.md)
-- [🚀 Quick Start Guide](REFACTOR_QUICKSTART.md)
-- [📖 Complete Plan](BACKEND_REFACTOR_PLAN.md)
-- [🔄 Before/After Comparison](ARCHITECTURE_COMPARISON.md)
-- [✓ Task Checklist](REFACTOR_CHECKLIST.md)
-
-### General
-- [🏗️ Architecture Improvements](ARCHITECTURE_IMPROVEMENTS.md)
+### For Development
+1. **[Testing Guide](implementation/Testing/TESTING_GUIDE.md)** - How to test
+2. **[Production Deployment](implementation/Setup/PRODUCTION_DEPLOYMENT.md)** - Deployment guide
+3. **[Troubleshooting](implementation/Troubleshooting/)** - Common issues
 
 ---
 
-## 📝 Document Summary
+## 🔗 Key Documents
 
-### Refactoring Suite (5 documents)
-- **Total Lines:** ~3,500
-- **Estimated Read Time:** 2-3 hours
-- **Implementation Time:** 6-8 hours
+### Architecture
+- [Matchmaking System](architecture/matchmaking/README.md) - Core matchmaking overview
+- [MMR/ELO System](architecture/matchmaking/MMR_ELO_SYSTEM.md) - Rating system design
+- [TrueSkill Integration](architecture/matchmaking/TRUESKILL.md) - Probabilistic ratings
+- [Priority Bias](architecture/matchmaking/PRIORITY_BIAS.md) - Fairness mechanisms
 
-| Document | Lines | Read Time |
-|----------|-------|-----------|
-| REFACTOR_INDEX.md | ~400 | 15 min |
-| REFACTOR_QUICKSTART.md | ~600 | 20 min |
-| BACKEND_REFACTOR_PLAN.md | ~1000 | 45 min |
-| ARCHITECTURE_COMPARISON.md | ~800 | 30 min |
-| REFACTOR_CHECKLIST.md | ~400 | 15 min |
+### Implementation
+- [Development Setup](implementation/Setup/DEVELOPMENT_SETUP.md) - Getting started
+- [Testing Guide](implementation/Testing/TESTING_GUIDE.md) - Testing procedures
+- [Production Deployment](implementation/Setup/PRODUCTION_DEPLOYMENT.md) - Deployment guide
+
+### Function Documentation
+- [Server Functions](Server/) - All server app functions
+- [Client Functions](Client/) - Frontend and backend client functions
 
 ---
 
-## 🎯 Next Steps
+## 📊 System Overview
 
-### If you haven't started the refactor yet:
-1. Read [REFACTOR_INDEX.md](REFACTOR_INDEX.md)
-2. Review [ARCHITECTURE_COMPARISON.md](ARCHITECTURE_COMPARISON.md)
-3. When ready, follow [REFACTOR_QUICKSTART.md](REFACTOR_QUICKSTART.md)
+### Core Components
+- **Matchmaking**: MMR-based matching with TrueSkill uncertainty
+- **Rating System**: Hybrid MMR (hidden) + ELO (display) with adaptive weighting
+- **Requeue Logic**: Smart requeueing with priority bias for compliant players
+- **Client Architecture**: React/Electron frontend + Quart ASGI backend
+- **Server Architecture**: Django-based with Celery task queue
 
-### If you're currently refactoring:
-1. Use [REFACTOR_CHECKLIST.md](REFACTOR_CHECKLIST.md) to track progress
-2. Reference [BACKEND_REFACTOR_PLAN.md](BACKEND_REFACTOR_PLAN.md) for code
-3. Check [REFACTOR_QUICKSTART.md](REFACTOR_QUICKSTART.md) for troubleshooting
+### Key Features
+- ✅ **Skill-based Matchmaking**: TrueSkill with uncertainty tracking
+- ✅ **Fair Requeueing**: Priority bias for accepting players
+- ✅ **Adaptive Tolerance**: Time-based matchmaking range expansion
+- ✅ **Real-time Updates**: WebSocket communication
+- ✅ **Bot Testing**: Comprehensive testing framework
 
-### If you've completed the refactor:
-1. Verify all items in [REFACTOR_CHECKLIST.md](REFACTOR_CHECKLIST.md)
-2. Update this README with results
-3. Share learnings with the team
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+- Python 3.8+
+- Node.js 16+
+- Redis
+- PostgreSQL (optional, SQLite for development)
+
+### Quick Setup
+```bash
+# 1. Clone and setup
+git clone <repository>
+cd Scrimdotgg
+
+# 2. Server setup
+cd server
+pipenv install
+pipenv run python manage.py migrate
+
+# 3. Client setup
+cd ../client
+pipenv install  # Backend
+cd frontend
+npm install     # Frontend
+
+# 4. Start services
+# Server: pipenv run python manage.py runserver
+# Client backend: pipenv run python run.py
+# Client frontend: npm start
+```
+
+### Next Steps
+1. Read [Development Setup](implementation/Setup/DEVELOPMENT_SETUP.md) for detailed instructions
+2. Explore [Matchmaking System](architecture/matchmaking/README.md) to understand the core algorithm
+3. Check [Testing Guide](implementation/Testing/TESTING_GUIDE.md) to run tests
 
 ---
 
 ## 📞 Support
 
-- **Questions about the refactor?** See the troubleshooting section in [REFACTOR_QUICKSTART.md](REFACTOR_QUICKSTART.md)
-- **Want to understand the architecture?** Read [ARCHITECTURE_COMPARISON.md](ARCHITECTURE_COMPARISON.md)
-- **Need implementation details?** Check [BACKEND_REFACTOR_PLAN.md](BACKEND_REFACTOR_PLAN.md)
-- **Lost or confused?** Start with [REFACTOR_INDEX.md](REFACTOR_INDEX.md)
+- **Architecture Questions**: Check [Architecture/](architecture/) documentation
+- **Implementation Issues**: See [Implementation/](implementation/) guides
+- **Function Reference**: Browse [Server/](Server/) and [Client/](Client/) docs
+- **Common Problems**: [Troubleshooting](implementation/Troubleshooting/) section
 
 ---
 
-## 🎉 Ready to Begin?
+## 🎉 Contributing
 
-**Everything you need is here. Choose your path and start improving the codebase!**
-
-👉 **[Start with the Refactor Index →](REFACTOR_INDEX.md)**
+1. **Read the docs** - Start with the relevant architecture or implementation guide
+2. **Follow patterns** - Check existing function documentation for style
+3. **Test thoroughly** - Use the testing framework and bot system
+4. **Update docs** - Keep documentation current with code changes
 
 ---
 
-*Last updated: October 13, 2025*  
-*Contributors: Architecture Team*
+*Last updated: October 2025*  
+*Documentation organized by: Architecture Team*
