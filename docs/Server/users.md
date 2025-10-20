@@ -1,0 +1,1 @@
+﻿# Users App\n\n## views.py\n- register_player(request)\n- update_player(request, pk)\n- player_stats(request, pk)\n- player_history(request, pk)\n- request_add_friend(request, pk)\n- confirm_add_friend(request, pk)\n- remove_friend(request, pk)\n

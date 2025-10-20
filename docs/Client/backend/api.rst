@@ -1,0 +1,1 @@
+﻿Client Backend API\n===================\n\n.. rubric:: App Factory\n\n- create_app() -> Quart\n\n.. rubric:: Sockets\n\n- on(event: str)\n- get_handler(event: str) -> Handler | None\n\n.. rubric:: Logging\n\n- get_logger(name: str, level: int = logging.INFO) -> logging.Logger\n- setup_root_logger()\n
