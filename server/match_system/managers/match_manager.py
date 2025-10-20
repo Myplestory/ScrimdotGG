@@ -1006,7 +1006,7 @@ class MatchManager:
                 match.save(update_fields=['vetoed_servers', 'server_veto_turn', 'server_veto_deadline'])
                 
                 return {
-                    'status': 'error',
+                    'status': 'success',
                     'was_timeout': True,
                     'server_veto_complete': False,
                     'auto_vetoed_server': auto_server,

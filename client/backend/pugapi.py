@@ -339,7 +339,7 @@ class PugSocketClient:
     async def on_map_vetoed(self, data):
         """Handle map vetoed event from Django."""
         try:
-            map_name = data.get("map_name")
+            map_name = data.get("map")  # Fixed: server sends 'map', not 'map_name'
             vetoed_by = data.get("vetoed_by")
             next_turn = data.get("next_turn")
             remaining_maps = data.get("remaining_maps", [])
@@ -460,13 +460,14 @@ class PugSocketClient:
             
             # Treat timeout as a server_veto_update or server_veto_complete
             if server_veto_complete:
-                # Forward as server_veto_complete
+                # Forward as server_veto_complete with map veto started flag
                 complete_data = {
                     'match_id': data.get('match_id'),
                     'final_server': final_server,
                     'current_turn': data.get('current_turn'),
                     'available_maps': data.get('available_maps', []),
-                    'veto_deadline': data.get('veto_deadline')
+                    'veto_deadline': data.get('veto_deadline'),
+                    'map_veto_started': data.get('map_veto_started', False)
                 }
                 if hasattr(self, 'server_veto_complete_callback'):
                     await self.server_veto_complete_callback(complete_data)
@@ -484,6 +485,21 @@ class PugSocketClient:
                     await self.server_veto_update_callback(update_data)
         except Exception as e:
             print(f"Error processing 'server_veto_timeout' event: {e}")
+    
+    async def on_side_selection_timeout(self, data):
+        """Handle side selection timeout (auto-select) from Django."""
+        try:
+            auto_selected_side = data.get("auto_selected_side")
+            side_selection_complete = data.get("side_selection_complete", False)
+            match_ready = data.get("match_ready", False)
+            
+            print(f"[SIDE SELECTION TIMEOUT] Auto-selected: {auto_selected_side}, Complete: {side_selection_complete}, Match Ready: {match_ready}")
+            
+            # Forward to main WebSocket connection via callback
+            if hasattr(self, 'side_selection_timeout_callback'):
+                await self.side_selection_timeout_callback(data)
+        except Exception as e:
+            print(f"Error processing 'side_selection_timeout' event: {e}")
     
     async def on_side_selected(self, data):
         """Handle side selection from Django."""

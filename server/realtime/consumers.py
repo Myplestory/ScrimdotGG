@@ -267,6 +267,11 @@ class RealtimeConsumer(AsyncWebsocketConsumer):
     async def match_confirmed(self, event):
         """All players accepted - redirect to match page."""
         match_id = event.get('match_id')
+        
+        # CRITICAL FIX: Join match group for future match events (veto updates)
+        if match_id:
+            await self.join_match_group(match_id)
+        
         await self.send(text_data=json.dumps({
             'event': 'match_confirmed',
             'payload': {

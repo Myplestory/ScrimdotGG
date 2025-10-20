@@ -333,19 +333,80 @@ export const WebSocketProvider = ({ children }) => {
         }
         break;
         
-      case 'map_vetoed':
-        console.log('📥 [FRONTEND] Received map vetoed:', payload);
+      case 'server_veto_complete':
+        console.log('📥 [FRONTEND] Server veto phase completed:', payload);
         setMatchData(prev => ({
           ...prev,
+          state: 'VETO', // Transition to map veto phase
+          final_server: payload.final_server,
+          map_pool: payload.available_maps,
+          veto_turn: payload.current_turn,
+          veto_deadline: payload.veto_deadline,
+          vetoed_maps: [], // Reset vetoed maps for map veto phase
           veto_state: {
             ...prev?.veto_state,
-            vetoed_map: payload.map,
-            vetoed_by: payload.vetoed_by,
-            current_turn: payload.next_turn,
-            remaining_maps: payload.remaining_maps,
+            server_veto_complete: true,
+            final_server: payload.final_server,
+            current_turn: payload.current_turn,
+            available_maps: payload.available_maps,
+            veto_deadline: payload.veto_deadline,
             last_update: Date.now()
           }
         }));
+        // Call custom event handler if registered
+        if (eventHandlers.current['server_veto_complete']) {
+          eventHandlers.current['server_veto_complete'](payload);
+        }
+        break;
+        
+      case 'map_veto_started':
+        console.log('📥 [FRONTEND] Map veto phase started:', payload);
+        setMatchData(prev => ({
+          ...prev,
+          state: 'VETO', // Ensure we're in map veto phase
+          map_pool: payload.available_maps || prev?.map_pool,
+          veto_turn: payload.current_turn,
+          veto_deadline: payload.deadline,
+          vetoed_maps: [], // Reset vetoed maps for map veto phase
+          veto_state: {
+            ...prev?.veto_state,
+            map_veto_started: true,
+            current_turn: payload.current_turn,
+            available_maps: payload.available_maps || prev?.map_pool,
+            veto_deadline: payload.deadline,
+            last_update: Date.now()
+          }
+        }));
+        // Call custom event handler if registered
+        if (eventHandlers.current['map_veto_started']) {
+          eventHandlers.current['map_veto_started'](payload);
+        }
+        break;
+        
+      case 'map_vetoed':
+        console.log('📥 [FRONTEND] Received map vetoed:', payload);
+        console.log('🔄 [WEBSOCKET] Before state update - matchData:', matchData);
+        console.log('🔄 [WEBSOCKET] Before state update - veto_state:', matchData?.veto_state);
+        
+        setMatchData(prev => {
+          const newState = {
+            ...prev,
+            veto_state: {
+              ...prev?.veto_state,
+              vetoed_map: payload.map,
+              vetoed_by: payload.vetoed_by,
+              current_turn: payload.next_turn,
+              remaining_maps: payload.remaining_maps,
+              last_update: Date.now()
+            }
+          };
+          
+          console.log('🔄 [WEBSOCKET] After state update - newState:', newState);
+          console.log('🔄 [WEBSOCKET] After state update - veto_state:', newState.veto_state);
+          
+          return newState;
+        });
+        
         // Call custom event handler if registered
         if (eventHandlers.current['map_vetoed']) {
           eventHandlers.current['map_vetoed'](payload);
@@ -408,6 +469,25 @@ export const WebSocketProvider = ({ children }) => {
         // Call custom event handler if registered
         if (eventHandlers.current['map_veto_timeout']) {
           eventHandlers.current['map_veto_timeout'](payload);
+        }
+        break;
+        
+      case 'side_selection_timeout':
+        console.log('📥 [FRONTEND] Side selection timeout:', payload);
+        setMatchData(prev => ({
+          ...prev,
+          veto_state: {
+            ...prev?.veto_state,
+            side_selection_timeout: true,
+            auto_selected_side: payload.auto_selected_side,
+            side_selection_complete: payload.side_selection_complete,
+            match_ready: payload.match_ready,
+            last_update: Date.now()
+          }
+        }));
+        // Call custom event handler if registered
+        if (eventHandlers.current['side_selection_timeout']) {
+          eventHandlers.current['side_selection_timeout'](payload);
         }
         break;
         

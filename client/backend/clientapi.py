@@ -166,16 +166,17 @@ class ValorantAPI(object):
                     
                     # Set up the map_veto_started callback to forward to main WebSocket
                     async def map_veto_started_callback(data):
-                        """Forward map_veto_started event to main WebSocket connection"""
+                        """Forward map_veto_started event to main WebSocket connection (IMMEDIATE)"""
                         try:
                             print(f"[MAP_VETO_STARTED_CALLBACK] Received map_veto_started event: {data}")
                             
-                            # Store the veto started data temporarily
-                            api_instance._pending_map_veto_started_data = data
+                            # Immediately broadcast to all connected frontend clients
+                            from quart import current_app
+                            await current_app.conn_mgr.broadcast('map_veto_started', data)
                             
-                            print(f"[MAP_VETO_STARTED_CALLBACK] Stored pending map veto started data, will be picked up by main loop")
+                            print(f"[MAP_VETO_STARTED_CALLBACK] Immediately broadcasted map_veto_started to all clients")
                         except Exception as e:
-                            print(f"[MAP_VETO_STARTED_CALLBACK] Error storing map_veto_started: {e}")
+                            print(f"[MAP_VETO_STARTED_CALLBACK] Error broadcasting map_veto_started: {e}")
                             import traceback
                             traceback.print_exc()
                     

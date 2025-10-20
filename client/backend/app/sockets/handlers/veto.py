@@ -41,7 +41,12 @@ async def handle_veto_map(payload: dict, client_id: int, ws, mgr):
         
         # Forward to Django backend via ValorantAPI
         if valorant_service and hasattr(valorant_service.api, 'pugsocket') and valorant_service.api.pugsocket:
-            await valorant_service.api.pugsocket.send_message('veto_map', payload)
+            # Transform payload: frontend sends 'map_name', server expects 'map'
+            server_payload = {
+                'match_id': match_id,
+                'map': map_name  # Convert map_name to map for server
+            }
+            await valorant_service.api.pugsocket.send_message('veto_map', server_payload)
             print(f"[VETO_MAP] Successfully forwarded veto request to Django backend")
         else:
             print(f"[VETO_MAP] ERROR: ValorantAPI or pugsocket not available")
@@ -129,6 +134,21 @@ async def handle_server_veto_timeout(payload: dict, client_id: int, ws, mgr):
         await mgr.send(ws, 'server_veto_timeout', payload)
     except Exception as e:
         print(f"[SERVER_VETO_TIMEOUT] Error handling server_veto_timeout: {e}")
+
+
+@on("side_selection_timeout")
+async def handle_side_selection_timeout(payload: dict, client_id: int, ws, mgr):
+    """Handle side selection timeout event from Django."""
+    try:
+        match_id = payload.get('match_id')
+        auto_selected_side = payload.get('auto_selected_side')
+        side_selection_complete = payload.get('side_selection_complete', False)
+        match_ready = payload.get('match_ready', False)
+        print(f"[SIDE_SELECTION_TIMEOUT] Match: {match_id}, Auto-selected: {auto_selected_side}, Complete: {side_selection_complete}, Match Ready: {match_ready}")
+        
+        await mgr.send(ws, 'side_selection_timeout', payload)
+    except Exception as e:
+        print(f"[SIDE_SELECTION_TIMEOUT] Error handling side_selection_timeout: {e}")
 
 
 @on("veto_complete")

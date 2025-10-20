@@ -144,36 +144,46 @@ def check_veto_timeouts(self):
                     processed += 1
                     
                     # Broadcast timeout event to all players
-                    WebSocketBroadcaster.broadcast_to_match(
+                    broadcast_data = {
+                        'match_id': str(match.id),
+                        # Server veto fields
+                        'auto_vetoed_server': result.get('auto_vetoed_server'),
+                        'server_veto_complete': result.get('server_veto_complete', False),
+                        'final_server': result.get('final_server'),
+                        'map_veto_started': result.get('map_veto_started', False),
+                        # Map veto fields
+                        'auto_vetoed_map': result.get('auto_vetoed_map'),
+                        'veto_complete': result.get('veto_complete', False),
+                        'final_map': result.get('final_map'),
+                        'side_selector': result.get('side_selector'),
+                        # Side selection fields
+                        'auto_selected_side': result.get('auto_selected_side'),
+                        'side_selection_complete': result.get('side_selection_complete', False),
+                        'match_ready': result.get('match_ready', False),
+                        # Common fields
+                        'next_turn': result.get('next_turn'),
+                        'remaining_servers': result.get('remaining_servers', []),
+                        'remaining_maps': result.get('remaining_maps', []),
+                        'deadline': result.get('deadline'),
+                    }
+                    
+                    logger.info(f"Match {match.id}: Broadcasting {event_type} event with data: {broadcast_data}")
+                    
+                    broadcast_success = WebSocketBroadcaster.broadcast_to_match(
                         str(match.id),
                         event_type,
-                        {
-                            'match_id': str(match.id),
-                            # Server veto fields
-                            'auto_vetoed_server': result.get('auto_vetoed_server'),
-                            'server_veto_complete': result.get('server_veto_complete', False),
-                            'final_server': result.get('final_server'),
-                            'map_veto_started': result.get('map_veto_started', False),
-                            # Map veto fields
-                            'auto_vetoed_map': result.get('auto_vetoed_map'),
-                            'veto_complete': result.get('veto_complete', False),
-                            'final_map': result.get('final_map'),
-                            'side_selector': result.get('side_selector'),
-                            # Side selection fields
-                            'auto_selected_side': result.get('auto_selected_side'),
-                            'side_selection_complete': result.get('side_selection_complete', False),
-                            'match_ready': result.get('match_ready', False),
-                            # Common fields
-                            'next_turn': result.get('next_turn'),
-                            'remaining_servers': result.get('remaining_servers', []),
-                            'remaining_maps': result.get('remaining_maps', []),
-                            'deadline': result.get('deadline'),
-                        }
+                        broadcast_data
                     )
+                    
+                    if broadcast_success:
+                        logger.info(f"Match {match.id}: {event_type} broadcast successful")
+                    else:
+                        logger.error(f"Match {match.id}: {event_type} broadcast FAILED")
                     
                     logger.info(f"Match {match.id}: {event_type} handled successfully")
                 else:
-                    logger.error(f"Match {match.id}: Timeout handling failed - {result.get('message')}")
+                    error_msg = result.get('message', 'Unknown error')
+                    logger.error(f"Match {match.id}: Timeout handling failed - {error_msg}")
                     
             except Exception as e:
                 logger.error(f"Error processing timeout for match {match.id}: {str(e)}")
