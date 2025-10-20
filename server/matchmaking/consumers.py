@@ -1331,7 +1331,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         
         try:
             # Get match (use sync_to_async for compatibility)
-            from .models_match import Match
+            from match_system.models import Match
             match = await sync_to_async(lambda: Match.objects.get(id=match_id), thread_sensitive=False)()
             
             # Determine which team this player is on
@@ -1407,7 +1407,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         
         try:
             # Get match (use sync_to_async for compatibility)
-            from .models_match import Match
+            from match_system.models import Match
             match = await sync_to_async(lambda: Match.objects.get(id=match_id), thread_sensitive=False)()
             
             # Determine which team this player is on
@@ -1488,7 +1488,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         
         try:
             # Get match (use sync_to_async for compatibility)
-            from .models_match import Match
+            from match_system.models import Match
             match = await sync_to_async(lambda: Match.objects.get(id=match_id), thread_sensitive=False)()
             
             # Determine which team this player is on

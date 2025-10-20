@@ -123,7 +123,7 @@ class ConnectionManager:
     async def _drain_pending_events(self, valorant_service):
         """Forward pending events from ValorantAPI to frontend clients.
         
-        NOTE: Time-sensitive events (veto_update, veto_complete, veto_acknowledged, side_selected)
+        NOTE: Time-sensitive events (veto_complete, veto_acknowledged, side_selected)
         are now immediately broadcasted and no longer batched here.
         """
         pending_events = [
@@ -134,7 +134,7 @@ class ConnectionManager:
             ('_pending_match_confirmed_data', 'match_confirmed'),
             ('_pending_map_veto_started_data', 'map_veto_started'),
             ('_pending_match_data_response', 'match_data'),
-            # Removed: veto_update, veto_complete, veto_acknowledged, side_selected (now immediate)
+            # Removed: veto_complete, veto_acknowledged, side_selected (now immediate)
         ]
         
         for attr_name, event_name in pending_events:

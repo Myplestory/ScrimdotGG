@@ -118,14 +118,14 @@ class PugSocketClient:
                 await self.on_map_veto_started(payload)
             elif event == "match_data":
                 await self.on_match_data(payload)
-            elif event == "veto_update":
-                await self.on_veto_update(payload)
             elif event == "veto_complete":
                 await self.on_veto_complete(payload)
             elif event == "veto_acknowledged":
                 await self.on_veto_acknowledged(payload)
             elif event == "map_veto_timeout":
                 await self.on_map_veto_timeout(payload)
+            elif event == "map_vetoed":
+                await self.on_map_vetoed(payload)
             elif event == "server_veto_started":
                 await self.on_server_veto_started(payload)
             elif event == "server_veto_update":
@@ -313,17 +313,6 @@ class PugSocketClient:
         except Exception as e:
             print(f"Error processing 'match_data' event: {e}")
     
-    async def on_veto_update(self, data):
-        """Handle veto update from Django."""
-        try:
-            print(f"[VETO UPDATE] Received veto update: {data}")
-            
-            # Forward to main WebSocket connection via callback
-            if hasattr(self, 'veto_update_callback'):
-                await self.veto_update_callback(data)
-        except Exception as e:
-            print(f"Error processing 'veto_update' event: {e}")
-    
     async def on_veto_complete(self, data):
         """Handle veto completion from Django."""
         try:
@@ -347,6 +336,24 @@ class PugSocketClient:
         except Exception as e:
             print(f"Error processing 'veto_acknowledged' event: {e}")
     
+    async def on_map_vetoed(self, data):
+        """Handle map vetoed event from Django."""
+        try:
+            map_name = data.get("map_name")
+            vetoed_by = data.get("vetoed_by")
+            next_turn = data.get("next_turn")
+            remaining_maps = data.get("remaining_maps", [])
+            deadline = data.get("deadline")
+            
+            print(f"[MAP VETOED] Map {map_name} vetoed by {vetoed_by}, next turn: {next_turn}")
+            print(f"[MAP VETOED] Remaining maps: {remaining_maps}")
+            
+            # Forward to main WebSocket connection via callback
+            if hasattr(self, 'map_vetoed_callback'):
+                await self.map_vetoed_callback(data)
+        except Exception as e:
+            print(f"Error processing 'map_vetoed' event: {e}")
+    
     async def on_map_veto_timeout(self, data):
         """Handle map veto timeout (auto-veto) from Django."""
         try:
@@ -356,7 +363,7 @@ class PugSocketClient:
             
             print(f"[MAP VETO TIMEOUT] Auto-vetoed: {auto_vetoed_map}, Complete: {veto_complete}, Final: {final_map}")
             
-            # Treat timeout as a veto_update or veto_complete
+            # Treat timeout as a map_vetoed or veto_complete
             if veto_complete:
                 # Forward as veto_complete
                 complete_data = {
@@ -366,17 +373,17 @@ class PugSocketClient:
                 if hasattr(self, 'veto_complete_callback'):
                     await self.veto_complete_callback(complete_data)
             else:
-                # Forward as veto_update
-                update_data = {
+                # Forward as map_vetoed (since veto_update is legacy)
+                vetoed_data = {
                     'match_id': data.get('match_id'),
-                    'map_name': auto_vetoed_map,
+                    'map': auto_vetoed_map,
                     'vetoed_by': 'timeout',
                     'next_turn': data.get('next_turn'),
                     'remaining_maps': data.get('remaining_maps', []),
                     'deadline': data.get('deadline')
                 }
-                if hasattr(self, 'veto_update_callback'):
-                    await self.veto_update_callback(update_data)
+                if hasattr(self, 'map_vetoed_callback'):
+                    await self.map_vetoed_callback(vetoed_data)
         except Exception as e:
             print(f"Error processing 'map_veto_timeout' event: {e}")
     

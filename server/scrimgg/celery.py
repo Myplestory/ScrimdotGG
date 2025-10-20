@@ -24,7 +24,7 @@ app.conf.beat_schedule = {
         'schedule': 10.0,  # Run every 10 seconds
     },
     'cleanup-expired-matches': {
-        'task': 'matchmaking.tasks.cleanup_expired_matches',
+        'task': 'match_system.tasks.cleanup_expired_matches',
         'schedule': 10.0,  # Run every 10 seconds
     },
     'cleanup-expired-queues': {
@@ -32,7 +32,7 @@ app.conf.beat_schedule = {
         'schedule': 300.0,  # Run every 5 minutes
     },
     'check-veto-timeouts': {
-        'task': 'matchmaking.tasks.check_veto_timeouts',
+        'task': 'match_system.tasks.check_veto_timeouts',
         'schedule': 3.0,  # Run every 5 seconds
     },
 }

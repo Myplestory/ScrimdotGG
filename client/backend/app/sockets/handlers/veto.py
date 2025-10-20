@@ -131,16 +131,6 @@ async def handle_server_veto_timeout(payload: dict, client_id: int, ws, mgr):
         print(f"[SERVER_VETO_TIMEOUT] Error handling server_veto_timeout: {e}")
 
 
-@on("veto_update")
-async def handle_veto_update(payload: dict, client_id: int, ws, mgr):
-    """Receive veto updates from Django."""
-    veto_state = payload.get('veto_state', payload)
-    
-    print(f"[VETO] Update - {veto_state.get('current_turn', 'unknown')} is {veto_state.get('action', 'unknown')}ing")
-    
-    await mgr.send(ws, 'veto_update', veto_state)
-
-
 @on("veto_complete")
 async def handle_veto_complete(payload: dict, client_id: int, ws, mgr):
     """Handle veto completion event from Django."""
@@ -167,6 +157,25 @@ async def handle_veto_acknowledged(payload: dict, client_id: int, ws, mgr):
     except Exception as e:
         print(f"[VETO_ACKNOWLEDGED] Error handling veto_acknowledged: {e}")
         await mgr.send(ws, 'error', {'message': f"Failed to process veto acknowledgment: {str(e)}"})
+
+
+@on("map_vetoed")
+async def handle_map_vetoed(payload: dict, client_id: int, ws, mgr):
+    """Handle map vetoed event from Django."""
+    try:
+        match_id = payload.get('match_id')
+        map_name = payload.get('map_name')
+        vetoed_by = payload.get('vetoed_by')
+        next_turn = payload.get('next_turn')
+        remaining_maps = payload.get('remaining_maps', [])
+        
+        print(f"[MAP_VETOED] Map {map_name} vetoed by {vetoed_by} - Match: {match_id}")
+        print(f"[MAP_VETOED] Next turn: {next_turn}, Remaining maps: {remaining_maps}")
+        
+        await mgr.send(ws, 'map_vetoed', payload)
+    except Exception as e:
+        print(f"[MAP_VETOED] Error handling map_vetoed: {e}")
+        await mgr.send(ws, 'error', {'message': f"Failed to process map vetoed event: {str(e)}"})
 
 
 @on("select_side")

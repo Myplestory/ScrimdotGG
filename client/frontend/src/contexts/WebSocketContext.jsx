@@ -333,19 +333,22 @@ export const WebSocketProvider = ({ children }) => {
         }
         break;
         
-      case 'veto_update':
-        console.log('📥 [FRONTEND] Received veto update:', payload);
+      case 'map_vetoed':
+        console.log('📥 [FRONTEND] Received map vetoed:', payload);
         setMatchData(prev => ({
           ...prev,
           veto_state: {
             ...prev?.veto_state,
-            ...payload,
+            vetoed_map: payload.map,
+            vetoed_by: payload.vetoed_by,
+            current_turn: payload.next_turn,
+            remaining_maps: payload.remaining_maps,
             last_update: Date.now()
           }
         }));
         // Call custom event handler if registered
-        if (eventHandlers.current['veto_update']) {
-          eventHandlers.current['veto_update'](payload);
+        if (eventHandlers.current['map_vetoed']) {
+          eventHandlers.current['map_vetoed'](payload);
         }
         break;
         
@@ -362,6 +365,49 @@ export const WebSocketProvider = ({ children }) => {
         // Call custom event handler if registered
         if (eventHandlers.current['veto_complete']) {
           eventHandlers.current['veto_complete'](payload);
+        }
+        break;
+        
+      case 'server_veto_timeout':
+        console.log('📥 [FRONTEND] Server veto timeout:', payload);
+        setMatchData(prev => ({
+          ...prev,
+          veto_state: {
+            ...prev?.veto_state,
+            server_veto_timeout: true,
+            auto_vetoed_server: payload.auto_vetoed_server,
+            server_veto_complete: payload.server_veto_complete,
+            final_server: payload.final_server,
+            current_turn: payload.current_turn,
+            available_maps: payload.available_maps,
+            veto_deadline: payload.veto_deadline,
+            last_update: Date.now()
+          }
+        }));
+        // Call custom event handler if registered
+        if (eventHandlers.current['server_veto_timeout']) {
+          eventHandlers.current['server_veto_timeout'](payload);
+        }
+        break;
+        
+      case 'map_veto_timeout':
+        console.log('📥 [FRONTEND] Map veto timeout:', payload);
+        setMatchData(prev => ({
+          ...prev,
+          veto_state: {
+            ...prev?.veto_state,
+            map_veto_timeout: true,
+            auto_vetoed_map: payload.auto_vetoed_map,
+            veto_complete: payload.veto_complete,
+            current_turn: payload.next_turn,
+            remaining_maps: payload.remaining_maps,
+            final_map: payload.final_map,
+            last_update: Date.now()
+          }
+        }));
+        // Call custom event handler if registered
+        if (eventHandlers.current['map_veto_timeout']) {
+          eventHandlers.current['map_veto_timeout'](payload);
         }
         break;
         

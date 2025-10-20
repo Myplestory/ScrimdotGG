@@ -280,7 +280,7 @@ async def monitor_match_confirmation():
                 print(f"   [INFO] Veto phase should have started")
                 
                 # Check if Match instance was created
-                from matchmaking.models_match import Match
+                from match_system.models import Match
                 await asyncio.sleep(1)
                 
                 try:

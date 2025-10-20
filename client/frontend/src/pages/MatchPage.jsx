@@ -642,42 +642,6 @@ export default function MatchPage() {
       }
     });
 
-    const unsubscribeVetoUpdate = on('veto_update', (payload) => {
-      console.log('📥 [MATCH PAGE] Veto update received:', payload);
-      
-      // Update vetoed maps list - add the newly vetoed map
-      const newVetoedMaps = [...(vetoedMaps || [])];
-      if (payload.map_name && !newVetoedMaps.includes(payload.map_name)) {
-        newVetoedMaps.push(payload.map_name);
-      }
-      
-      // Update veto state
-      setAvailableMaps(payload.remaining_maps || []);
-      setVetoedMaps(newVetoedMaps);
-      setVetoHistory(payload.veto_history || []);
-      // Handle both 'veto_turn' (from match_data) and 'next_turn' (from veto_update)
-      setCurrentTurn(payload.next_turn || payload.veto_turn);
-      setVetoDeadline(payload.deadline || payload.veto_deadline);
-      
-      // Update match data
-      setMatchData(prev => ({
-        ...prev,
-        remaining_maps: payload.remaining_maps,
-        vetoed_maps: newVetoedMaps,
-        veto_history: payload.veto_history || [],
-        veto_turn: payload.next_turn || payload.veto_turn,
-        veto_deadline: payload.deadline || payload.veto_deadline
-      }));
-      
-      console.log('✅ [MATCH PAGE] Veto state updated:', {
-        currentTurn: payload.next_turn || payload.veto_turn,
-        availableMaps: payload.remaining_maps,
-        vetoedMaps: newVetoedMaps,
-        myTeam,
-        isCaptain,
-        isMyTurn: (payload.next_turn || payload.veto_turn) === myTeam && isCaptain
-      });
-    });
 
     const unsubscribeVetoComplete = on('veto_complete', (payload) => {
       console.log('📥 [MATCH PAGE] Map veto phase completed:', payload);
@@ -973,7 +937,6 @@ export default function MatchPage() {
 
     return () => {
       if (typeof unsubscribeMatchData === 'function') unsubscribeMatchData();
-      if (typeof unsubscribeVetoUpdate === 'function') unsubscribeVetoUpdate();
       if (typeof unsubscribeVetoComplete === 'function') unsubscribeVetoComplete();
       if (typeof unsubscribeMapVetoTimeout === 'function') unsubscribeMapVetoTimeout();
       if (typeof unsubscribeServerVetoStarted === 'function') unsubscribeServerVetoStarted();
@@ -1069,6 +1032,43 @@ export default function MatchPage() {
       });
     }
   }, [matchData, playerData]);
+  
+  // Sync local veto state with matchData.veto_state when map_vetoed events are received
+  useEffect(() => {
+    if (matchData?.veto_state) {
+      const vetoState = matchData.veto_state;
+      
+      console.log('🔄 [MATCH PAGE] Syncing veto state from matchData:', vetoState);
+      
+      // Update current turn
+      if (vetoState.current_turn && vetoState.current_turn !== currentTurn) {
+        console.log('🔄 [MATCH PAGE] Updating currentTurn:', currentTurn, '->', vetoState.current_turn);
+        setCurrentTurn(vetoState.current_turn);
+      }
+      
+      // Update available maps
+      if (vetoState.remaining_maps && JSON.stringify(vetoState.remaining_maps) !== JSON.stringify(availableMaps)) {
+        console.log('🔄 [MATCH PAGE] Updating availableMaps:', availableMaps, '->', vetoState.remaining_maps);
+        setAvailableMaps(vetoState.remaining_maps);
+      }
+      
+      // Update vetoed maps (calculate from original maps - remaining maps)
+      if (vetoState.remaining_maps && matchData.available_maps) {
+        const originalMaps = matchData.available_maps;
+        const vetoed = originalMaps.filter(map => !vetoState.remaining_maps.includes(map));
+        if (JSON.stringify(vetoed) !== JSON.stringify(vetoedMaps)) {
+          console.log('🔄 [MATCH PAGE] Updating vetoedMaps:', vetoedMaps, '->', vetoed);
+          setVetoedMaps(vetoed);
+        }
+      }
+      
+      // Update veto deadline
+      if (vetoState.veto_deadline && vetoState.veto_deadline !== vetoDeadline) {
+        console.log('🔄 [MATCH PAGE] Updating vetoDeadline:', vetoDeadline, '->', vetoState.veto_deadline);
+        setVetoDeadline(vetoState.veto_deadline);
+      }
+    }
+  }, [matchData?.veto_state, currentTurn, availableMaps, vetoedMaps, vetoDeadline]);
   
   // Handle server veto action
   const handleServerVetoAction = (serverName) => {

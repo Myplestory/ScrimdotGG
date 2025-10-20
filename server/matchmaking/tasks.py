@@ -12,8 +12,8 @@ from .queue_manager import QueueManager
 from .matchmaker import Matchmaker
 from .matchmaker_v2 import MatchmakerV2  # New MMR-based matchmaker
 from .match_confirmation import MatchConfirmationManager
-from .match_manager import MatchManager
-from .models_match import Match
+# Match models moved to match_system app
+from match_system.models import Match
 
 logger = get_task_logger(__name__)
 

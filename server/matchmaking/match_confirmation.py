@@ -437,7 +437,7 @@ class MatchConfirmationManager:
                 try:
                     player = Player.objects.get(puuid=player_puuid)
                     lobby = Lobby.objects.filter(players=player, is_active=True).first()
-                    return lobby.id if lobby else None
+                    return str(lobby.id) if lobby else None  # Convert UUID to string for JSON serialization
                 except Player.DoesNotExist:
                     return None
             
@@ -624,12 +624,13 @@ class MatchConfirmationManager:
             Dict with transition result and match instance
         """
         try:
-            from .match_manager import MatchManager
+            # Import from match_system (where Match creation NOW lives)
+            from match_system.managers import MatchManager
             from channels.layers import get_channel_layer
             
             logger.info(f"Transitioning match {match_id} to Match instance...")
             
-            # Create Match instance
+            # Create Match instance from match_system
             match = await MatchManager.create_match_from_confirmation(match_id)
             
             if not match:

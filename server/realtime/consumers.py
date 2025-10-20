@@ -174,68 +174,164 @@ class RealtimeConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({'event': 'lobby_update', 'payload': event}))
     
     async def lobby_destroyed(self, event):
-        """Handle lobby_destroyed broadcast"""
-        await self.send(text_data=json.dumps({'event': 'lobby_destroyed', 'payload': event}))
+        """Send lobby destroyed event to client"""
+        await self.send(text_data=json.dumps({
+            'event': 'lobby_destroyed',
+            'payload': {
+                'message': event.get('message', 'Lobby was destroyed'),
+                'reason': event.get('reason', 'unknown')
+            }
+        }))
     
     async def lobby_leader_changed(self, event):
-        """Handle lobby_leader_changed broadcast"""
-        await self.send(text_data=json.dumps({'event': 'lobby_leader_changed', 'payload': event}))
+        """Send lobby leader changed event to client"""
+        await self.send(text_data=json.dumps({
+            'event': 'lobby_leader_changed',
+            'payload': {
+                'new_leader': event.get('new_leader', {}),
+                'old_leader': event.get('old_leader', {}),
+                'message': event.get('message', 'Lobby leader changed')
+            }
+        }))
     
     async def player_left_lobby(self, event):
-        """Handle player_left_lobby broadcast"""
-        await self.send(text_data=json.dumps({'event': 'player_left_lobby', 'payload': event}))
+        """Notify clients when a player leaves the lobby."""
+        await self.send(text_data=json.dumps({
+            'event': 'player_left_lobby',
+            'payload': {
+                'lobby': event.get('lobby', {}),
+                'player_puuid': event.get('player_puuid'),
+                'reason': event.get('reason', 'left')
+            }
+        }))
     
     async def player_joined_lobby(self, event):
-        """Handle player_joined_lobby broadcast"""
-        await self.send(text_data=json.dumps({'event': 'player_joined_lobby', 'payload': event}))
+        """Notify clients when a player joins the lobby."""
+        await self.send(text_data=json.dumps({
+            'event': 'player_joined_lobby',
+            'payload': {
+                'lobby': event.get('lobby', {}),
+                'player_puuid': event.get('player_puuid')
+            }
+        }))
+    
+    async def kicked_from_lobby(self, event):
+        """Notify a player they were kicked from a lobby."""
+        await self.send(text_data=json.dumps({
+            'event': 'kicked_from_lobby',
+            'payload': {
+                'lobby_id': event.get('lobby_id'),
+                'message': event.get('message', 'You were kicked from the lobby')
+            }
+        }))
+    
+    async def lobby_disbanded(self, event):
+        """Notify clients when lobby is disbanded."""
+        await self.send(text_data=json.dumps({
+            'event': 'lobby_disbanded',
+            'payload': {
+                'reason': event.get('reason', 'unknown')
+            }
+        }))
+    
+    async def lobby_preferences_updated(self, event):
+        """Notify clients when lobby preferences are updated."""
+        await self.send(text_data=json.dumps({
+            'event': 'lobby_preferences_updated',
+            'payload': event.get('lobby', {})
+        }))
     
     async def lobby_message(self, event):
-        """Handle lobby_message broadcast"""
-        await self.send(text_data=json.dumps({'event': 'lobby_message', 'payload': event}))
+        """Send lobby chat messages to the frontend."""
+        await self.send(text_data=json.dumps({
+            'event': 'lobby_message',
+            'username': event.get('username', 'Unknown'),
+            'message': event.get('message', ''),
+            'timestamp': event.get('timestamp'),
+        }))
     
     async def match_found(self, event):
-        """Handle match_found broadcast"""
-        await self.send(text_data=json.dumps({'event': 'match_found', 'payload': event}))
+        """Sends a notification that a match has been found."""
+        match_id = event.get('match_confirmation_id')
+        await self.send(text_data=json.dumps({
+            'event': 'match_found',
+            'payload': {
+                'match_id': event.get('match_confirmation_id'),  # Client expects match_id
+                'match_confirmation_id': event.get('match_confirmation_id'),
+                'opponent_lobby': event.get('opponent_lobby'),
+                'timeout_seconds': event.get('timeout_seconds'),
+                'message': event.get('message', 'Match found! Please accept to continue.')
+            }
+        }))
     
     async def match_confirmed(self, event):
-        """Handle match_confirmed broadcast"""
-        await self.send(text_data=json.dumps({'event': 'match_confirmed', 'payload': event}))
+        """All players accepted - redirect to match page."""
+        match_id = event.get('match_id')
+        await self.send(text_data=json.dumps({
+            'event': 'match_confirmed',
+            'payload': {
+                'match_id': match_id,
+                'team': event.get('team'),
+                'redirect_url': f"/match/{match_id}" if match_id else None
+            }
+        }))
     
     async def match_timeout(self, event):
-        """Handle match_timeout broadcast"""
-        await self.send(text_data=json.dumps({'event': 'match_timeout', 'payload': event}))
+        """Sends a notification that a match confirmation timed out."""
+        await self.send(text_data=json.dumps({
+            'event': 'match_timeout',
+            'message': event.get('message', 'Match confirmation timed out'),
+            'reason': event.get('reason', 'timeout')
+        }))
     
-    async def veto_started(self, event):
-        """Handle veto_started broadcast"""
-        await self.send(text_data=json.dumps({'event': 'veto_started', 'payload': event}))
-    
-    async def server_veto_update(self, event):
-        """Handle server_veto_update broadcast"""
-        await self.send(text_data=json.dumps({'event': 'server_veto_update', 'payload': event}))
-    
-    async def veto_update(self, event):
-        """Handle veto_update broadcast"""
-        await self.send(text_data=json.dumps({'event': 'veto_update', 'payload': event}))
     
     async def veto_complete(self, event):
-        """Handle veto_complete broadcast"""
-        await self.send(text_data=json.dumps({'event': 'veto_complete', 'payload': event}))
+        """Veto complete - final map selected."""
+        await self.send(text_data=json.dumps({
+            'event': 'veto_complete',
+            'payload': {
+                'match_id': event.get('match_id'),
+                'final_map': event.get('final_map'),
+                'side_selector': event.get('side_selector')
+            }
+        }))
     
     async def side_selection_started(self, event):
         """Handle side_selection_started broadcast"""
         await self.send(text_data=json.dumps({'event': 'side_selection_started', 'payload': event}))
     
     async def side_selected(self, event):
-        """Handle side_selected broadcast"""
-        await self.send(text_data=json.dumps({'event': 'side_selected', 'payload': event}))
+        """Handle side selected event - broadcast to all players in match."""
+        await self.send(text_data=json.dumps({
+            'event': 'side_selected',
+            'payload': {
+                'match_id': event.get('match_id'),
+                'side': event.get('side'),
+                'selected_by': event.get('selected_by'),
+                'side_complete': event.get('side_complete', False)
+            }
+        }))
     
     async def match_ready(self, event):
-        """Handle match_ready broadcast"""
-        await self.send(text_data=json.dumps({'event': 'match_ready', 'payload': event}))
+        """Sends a notification that the match is ready (all players accepted)."""
+        await self.send(text_data=json.dumps({
+            'event': 'match_ready',
+            'payload': {
+                'match_id': event.get('match_id'),
+                'message': event.get('message', 'Match is ready!')
+            }
+        }))
     
     async def player_accepted(self, event):
-        """Handle player_accepted broadcast"""
-        await self.send(text_data=json.dumps({'event': 'player_accepted', 'payload': event}))
+        """Sends a notification about player acceptance progress."""
+        await self.send(text_data=json.dumps({
+            'event': 'player_accepted',
+            'payload': {
+                'accepted_count': event.get('accepted_count', 0),
+                'total_players': event.get('total_players', 10),
+                'timeout_seconds': event.get('timeout_seconds', 30)
+            }
+        }))
     
     async def enqueue(self, event):
         """Handle enqueue broadcast"""
@@ -250,10 +346,152 @@ class RealtimeConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({'event': 'player_model', 'payload': event}))
     
     async def match_data(self, event):
-        """Handle match_data response"""
-        await self.send(text_data=json.dumps({'event': 'match_data', 'payload': event}))
+        """
+        Match data broadcast - ensures all players get captain/team info.
+        CRITICAL: Adds player to match group for veto updates.
+        """
+        # Add player to match group for veto updates
+        match_id = event.get('match_id')
+        if match_id:
+            await self.channel_layer.group_add(
+                f"match_{match_id}",
+                self.channel_name
+            )
+            logger.info(f"Added player {self.puuid} to match group match_{match_id}")
+        
+        await self.send(text_data=json.dumps({
+            'event': 'match_data',
+            'payload': event.get('payload', {})
+        }))
     
     async def direct_message(self, event):
         """Handle direct_message broadcast"""
         await self.send(text_data=json.dumps({'event': 'direct_message', 'payload': event}))
+    
+    # -------------------- Veto Broadcast Handlers --------------------
+    # These receive from channel_layer and forward to WebSocket client
+    
+    async def server_veto_started(self, event):
+        """Server veto phase has begun."""
+        await self.send(text_data=json.dumps({
+            'event': 'server_veto_started',
+            'payload': {
+                'match_id': event.get('match_id'),
+                'current_turn': event.get('current_turn'),
+                'available_servers': event.get('available_servers', []),
+                'deadline': event.get('deadline')
+            }
+        }))
+    
+    async def server_vetoed(self, event):
+        """A server was vetoed."""
+        await self.send(text_data=json.dumps({
+            'event': 'server_veto_update',
+            'payload': {
+                'match_id': event.get('match_id'),
+                'server_name': event.get('server_name'),
+                'vetoed_by': event.get('vetoed_by'),
+                'next_turn': event.get('next_turn'),
+                'remaining_servers': event.get('remaining_servers', []),
+                'deadline': event.get('deadline')
+            }
+        }))
+    
+    async def server_veto_complete(self, event):
+        """Server veto phase completed - transition to map veto."""
+        await self.send(text_data=json.dumps({
+            'event': 'server_veto_complete',
+            'payload': {
+                'match_id': event.get('match_id'),
+                'final_server': event.get('final_server'),
+                'current_turn': event.get('current_turn'),
+                'available_maps': event.get('available_maps', []),
+                'veto_deadline': event.get('veto_deadline')
+            }
+        }))
+        
+        # Also send map_veto_started if applicable
+        if event.get('map_veto_started', False):
+            await self.send(text_data=json.dumps({
+                'event': 'map_veto_started',
+                'payload': {
+                    'match_id': event.get('match_id'),
+                    'current_turn': event.get('current_turn'),
+                    'available_maps': event.get('available_maps', []),
+                    'deadline': event.get('veto_deadline')
+                }
+            }))
+    
+    async def server_veto_timeout(self, event):
+        """Server veto timeout - auto-veto occurred."""
+        await self.send(text_data=json.dumps({
+            'event': 'server_veto_timeout',
+            'payload': {
+                'match_id': event.get('match_id'),
+                'timed_out_team': event.get('timed_out_team'),
+                'auto_vetoed_server': event.get('auto_vetoed_server'),
+                'next_turn': event.get('next_turn'),
+                'remaining_servers': event.get('remaining_servers', []),
+                'deadline': event.get('deadline'),
+                'server_veto_complete': event.get('server_veto_complete', False),
+                'final_server': event.get('final_server'),
+                'map_veto_started': event.get('map_veto_started', False),
+                'current_turn': event.get('current_turn'),
+                'available_maps': event.get('available_maps', []),
+                'veto_deadline': event.get('veto_deadline')
+            }
+        }))
+    
+    async def map_vetoed(self, event):
+        """A map was vetoed."""
+        await self.send(text_data=json.dumps({
+            'event': 'map_vetoed',
+            'payload': {
+                'match_id': event.get('match_id'),
+                'map': event.get('map_name'),
+                'vetoed_by': event.get('vetoed_by'),
+                'next_turn': event.get('next_turn'),
+                'remaining_maps': event.get('remaining_maps', []),
+                'deadline': event.get('deadline')
+            }
+        }))
+    
+    async def map_veto_started(self, event):
+        """Map veto phase has begun."""
+        await self.send(text_data=json.dumps({
+            'event': 'map_veto_started',
+            'payload': {
+                'match_id': event.get('match_id'),
+                'current_turn': event.get('current_turn'),
+                'available_maps': event.get('available_maps', []),
+                'deadline': event.get('deadline')
+            }
+        }))
+    
+    async def map_veto_timeout(self, event):
+        """Map veto timeout - auto-veto occurred."""
+        await self.send(text_data=json.dumps({
+            'event': 'map_veto_timeout',
+            'payload': {
+                'match_id': event.get('match_id'),
+                'auto_vetoed_map': event.get('auto_vetoed_map'),
+                'veto_complete': event.get('veto_complete', False),
+                'next_turn': event.get('next_turn'),
+                'remaining_maps': event.get('remaining_maps', []),
+                'deadline': event.get('deadline'),
+                'final_map': event.get('final_map')
+            }
+        }))
+    
+    async def side_selection_timeout(self, event):
+        """Side selection timeout - auto-select occurred."""
+        await self.send(text_data=json.dumps({
+            'event': 'side_selection_timeout',
+            'payload': {
+                'match_id': event.get('match_id'),
+                'auto_selected_side': event.get('auto_selected_side'),
+                'side_selection_complete': event.get('side_selection_complete', False),
+                'match_ready': event.get('match_ready', False)
+            }
+        }))
 

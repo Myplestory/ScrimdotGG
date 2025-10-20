@@ -23,7 +23,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'scrimgg.settings')
 django.setup()
 
 from scrimgg.models import Player, Lobby
-from matchmaking.models_match import Match, MatchPlayer, VetoAction
+from match_system.models import Match, MatchPlayer, VetoAction
 import redis
 from django.conf import settings
 from django.db.models import Q

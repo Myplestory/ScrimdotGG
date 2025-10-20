@@ -194,22 +194,6 @@ class ValorantAPI(object):
                             import traceback
                             traceback.print_exc()
                     
-                    # Set up the veto_update callback to forward to main WebSocket
-                    async def veto_update_callback(data):
-                        """Forward veto_update event to main WebSocket connection (IMMEDIATE)"""
-                        try:
-                            print(f"[VETO_UPDATE_CALLBACK] Received veto_update event: {data}")
-                            
-                            # Immediately broadcast to all connected frontend clients
-                            from quart import current_app
-                            await current_app.conn_mgr.broadcast('veto_update', data)
-                            
-                            print(f"[VETO_UPDATE_CALLBACK] Immediately broadcasted veto_update to all clients")
-                        except Exception as e:
-                            print(f"[VETO_UPDATE_CALLBACK] Error broadcasting veto_update: {e}")
-                            import traceback
-                            traceback.print_exc()
-                    
                     # Set up the veto_complete callback to forward to main WebSocket
                     async def veto_complete_callback(data):
                         """Forward veto_complete event to main WebSocket connection (IMMEDIATE)"""
@@ -239,6 +223,22 @@ class ValorantAPI(object):
                             print(f"[VETO_ACKNOWLEDGED_CALLBACK] Immediately broadcasted veto_acknowledged to all clients")
                         except Exception as e:
                             print(f"[VETO_ACKNOWLEDGED_CALLBACK] Error broadcasting veto_acknowledged: {e}")
+                            import traceback
+                            traceback.print_exc()
+                    
+                    # Set up the map_vetoed callback to forward to main WebSocket
+                    async def map_vetoed_callback(data):
+                        """Forward map_vetoed event to main WebSocket connection (IMMEDIATE)"""
+                        try:
+                            print(f"[MAP_VETOED_CALLBACK] Received map_vetoed event: {data}")
+                            
+                            # Immediately broadcast to all connected frontend clients
+                            from quart import current_app
+                            await current_app.conn_mgr.broadcast('map_vetoed', data)
+                            
+                            print(f"[MAP_VETOED_CALLBACK] Immediately broadcasted map_vetoed to all clients")
+                        except Exception as e:
+                            print(f"[MAP_VETOED_CALLBACK] Error broadcasting map_vetoed: {e}")
                             import traceback
                             traceback.print_exc()
                     
@@ -345,9 +345,9 @@ class ValorantAPI(object):
                     self.pugsocket.match_confirmed_callback = match_confirmed_callback
                     self.pugsocket.map_veto_started_callback = map_veto_started_callback
                     self.pugsocket.match_data_callback = match_data_callback
-                    self.pugsocket.veto_update_callback = veto_update_callback
                     self.pugsocket.veto_complete_callback = veto_complete_callback
                     self.pugsocket.veto_acknowledged_callback = veto_acknowledged_callback
+                    self.pugsocket.map_vetoed_callback = map_vetoed_callback
                     self.pugsocket.server_veto_started_callback = server_veto_started_callback
                     self.pugsocket.server_veto_update_callback = server_veto_update_callback
                     self.pugsocket.server_veto_complete_callback = server_veto_complete_callback
@@ -361,7 +361,6 @@ class ValorantAPI(object):
                     self._pending_match_confirmed_data = None
                     self._pending_veto_started_data = None
                     self._pending_match_data_response = None
-                    self._pending_veto_update_data = None
                     self._pending_veto_complete_data = None
                     self._pending_veto_acknowledged_data = None
                     
