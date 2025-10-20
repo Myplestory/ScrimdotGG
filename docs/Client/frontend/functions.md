@@ -1,1 +1,85 @@
-﻿# Client Frontend (React/Electron)\n\n## src/contexts/WebSocketContext.jsx\n- useWebSocket()\n- WebSocketProvider({ children })\n\n## src/pages/MatchPage.jsx\n- PlayerCard(props)\n- ServerVetoSection(props)\n- MapVetoSection(props)\n- getCurrentUserTeam()\n- getCurrentUserCaptainStatus()\n- getMyTeamPlayers()\n- getEnemyTeamPlayers()\n- getMatchPhase()\n- getMatchOdds()\n- updateTimer() (multiple variants)\n- handleServerVetoAction(serverName)\n- handleVetoMapAction(mapName)\n- handleSideSelection(side)\n\n## src/pages/PugQueue.jsx\n- PugQueue()\n- handlePreview()\n- handleJoinQueue()\n- handleLeaveQueue()\n- handleFindMatch()\n- getQueueTime()\n- getQueueTitle()\n- isPartyLeader()\n- sendLobbyMessage()\n- handleEmptySlotClick(slotIndex)\n- handleAcceptMatch()\n- handleDeclineMatch()\n- toggleMap(mapName)\n- toggleServer(serverName)\n- formatTime(seconds)\n- AcceptanceProgress()\n\n## src/components/SideSelection.jsx\n- handleSideSelect(side)\n\n## src/utils/maps.js\n- mapSlug(name)\n- mapImageUrl(name, overrideUrl)\n\n## src/App.js\n- Logout({ setAuthenticated })\n- MatchPageWrapper()\n- handleSetActiveComponent(component)\n- App()\n- handleLogout()\n- handleAuthentication(status)\n\n## src/pages/landing.jsx\n- LandingPage()\n\n## src/components/home/home.jsx\n- Copyright(props)\n- HomeComponent()\n\n## src/components/listitems.jsx\n- CustomListItem({ text, onClick, navigateTo })\n- handleClick()\n- MainListItems({ setActiveComponent })\n- handleAccordionChange(panel)\n\n## src/components/SimpleRankGauge.jsx\n- SimpleRankGauge({ elo, size })\n- getColorForRank(rank)\n\n## src/components/StatusIndicator.jsx\n- StatusIndicator(props)\n- getStatusInfo()\n\n## src/utils/rankprog.jsx\n- getRankAndProgress(elo)\n\n## src/pages/login.jsx\n- onlyLettersAndNumbers(str)\n- AuthenticationScreen({ onAuthentication })\n\n## src/pages/layout.jsx\n- Layout({ children, setActiveComponent })\n- toggleDrawer()\n\n## src/components/rankwidget/rankwidget.jsx\n- getColorForRank(rank)\n- RankComponent({ elo, style })\n\n## src/components/lobby/playerslot.jsx\n- PlayerSlot({ player, handleEmptySlotClick, slotIndex })\n\n## src/components/home/playerinfo.jsx\n- PlayerInfoCard({ player })\n\n## src/components/dragbar.jsx\n- DragBar()\n- handleClose()\n\n## src/components/acceptmatch.jsx\n- MatchAcceptancePopup({ onClose })\n- handleAccept()\n\n## src/components/lobby/lobby.jsx\n- Lobby()\n- sendLobbyMessage()\n- handlePlayClick()\n- handleClose()\n- handleAccept()\n- handleDecline()\n- handleEmptySlotClick(slotIndex)\n- handleMapDeselect(mapToRemove)\n\n## src/theme.js\n- tokens(mode)\n- themeSettings(mode)\n- useMode()\n\n## src/components/selectbar/selectbar.jsx\n- HorizontalBox(props)\n- handleServerModalOpen()\n- handleServerModalClose()\n- handleServerSelectionChange(event)\n- handleMapModalOpen()\n- handleMapModalClose()\n- handleMapSelectionChange(event)\n\n## src/components/chart.jsx\n- createData(month, amount)\n\n## src/components/loadingscreen.jsx\n- LoadingScreen()\n\n## src/components/title.jsx\n- Title(props)\n
+﻿# Client Frontend (React/Electron) - Function Reference
+
+Sorted by file and grouped by functionality/logic flow. See `frontend/index.rst` for overview.
+
+## WebSocket Context and Navigation
+
+### src/contexts/WebSocketContext.jsx
+- WebSocketProvider({ children }): Provides WS connection, state, and API
+- useWebSocket(): Hook exposing connection status, data, sendEvent, on/off
+
+### src/components/GlobalMatchButton.jsx
+- GlobalMatchButton(): Floating navigation to active match
+
+### src/App.jsx
+- App(): Routes and layout
+- MatchPageWrapper(): Binds URL param to `MatchPage`
+- Logout({ setAuthenticated }): Clears session and returns to login
+
+## Match Page Flow (Phases and UI)
+
+### src/pages/MatchPage.jsx
+- MatchPage(): Orchestrates phase rendering and event subscriptions
+- getMatchPhase(matchData): Derives current phase
+- handleVetoMapAction(mapName): Sends veto map
+- handleSideSelection(side): Sends side selection
+- handleJoinGame(payload): Handles join_custom_game event
+
+### src/pages/components (examples)
+- VetoPhase({ matchData }): Interactive map veto
+- SideSelectionPhase({ matchData }): Side selection UI
+- WaitingForGamePhase({ matchData }): Constructor creating game
+- LiveMatchPhase({ matchData }): Live score/stats
+
+## Queue and Lobby
+
+### src/pages/PugQueue.jsx
+- PugQueue(): Queue UI and actions
+- handleFindMatch(): Initiates matchmaking
+- handleJoinQueue()/handleLeaveQueue(): Queue membership
+- sendLobbyMessage(message, lobbyId): Lobby chat
+
+### src/components/lobby/lobby.jsx
+- Lobby(): Lobby screen and interactions
+- handlePlayClick(): Queue lobby
+- handleAccept()/handleDecline(): Match acceptance
+
+### src/components/lobby/playerslot.jsx
+- PlayerSlot({ player, handleEmptySlotClick, slotIndex }): Renders slot
+
+## Authentication and Layout
+
+### src/pages/login.jsx
+- AuthenticationScreen({ onAuthentication }): Login flow
+
+### src/pages/layout.jsx
+- Layout({ children, setActiveComponent }): App shell and drawer
+
+## Utilities and Theming
+
+### src/utils/maps.js
+- mapSlug(name): Stable slug for a map name
+- mapImageUrl(name, overrideUrl?): Returns image URL
+
+### src/utils/rankprog.jsx
+- getRankAndProgress(elo): Returns display rank and progress
+
+### src/components/SimpleRankGauge.jsx
+- SimpleRankGauge({ elo, size }): Gauge UI for rank
+
+### src/components/StatusIndicator.jsx
+- StatusIndicator(props): Connection/auth status indicator
+
+### src/theme.js
+- tokens(mode): Design tokens
+- themeSettings(mode): MUI theme config
+- useMode(): Dark/light mode hook
+
+## Misc Components
+
+### src/components/*
+- Title, LoadingScreen, Chart, SelectBar, RankWidget, Home components: Presentational helpers used across pages
+
+Notes:
+- Event names and payload shapes are defined in `docs/Server/*` and `docs/Client/backend/*`.
+- Match page subcomponents should follow phase naming and reside under a dedicated folder if expanded further.

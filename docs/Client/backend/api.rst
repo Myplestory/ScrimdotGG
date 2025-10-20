@@ -1,1 +1,20 @@
-﻿Client Backend API\n===================\n\n.. rubric:: App Factory\n\n- create_app() -> Quart\n\n.. rubric:: Sockets\n\n- on(event: str)\n- get_handler(event: str) -> Handler | None\n\n.. rubric:: Logging\n\n- get_logger(name: str, level: int = logging.INFO) -> logging.Logger\n- setup_root_logger()\n
+﻿Client Backend API
+==================
+
+See also:
+- functions.md (per-file function reference)
+- matchpage.md (constructor and join flows)
+
+.. rubric:: App Factory
+
+- create_app() -> Quart
+
+.. rubric:: Sockets
+
+- on(event: str)
+- get_handler(event: str) -> Handler | None
+
+.. rubric:: Logging
+
+- get_logger(name: str, level: int = logging.INFO) -> logging.Logger
+- setup_root_logger()
