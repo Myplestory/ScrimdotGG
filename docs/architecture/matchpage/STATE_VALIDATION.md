@@ -1,4 +1,4 @@
-# Match State Validation Implementation Plan
+# Match State Validation
 
 ## Overview
 Implement a validation system to prevent players/parties from queuing when they are already in an active match or match confirmation phase.
@@ -466,24 +466,8 @@ const handleValidationError = (error) => {
 };
 ```
 
-## Implementation Priority
-
-### Phase 1: Backend Foundation
-1. **HIGH**: Create `MatchStateValidator` service
-2. **HIGH**: Add validation to `QueueManager.add_lobby_to_queue()`
-3. **HIGH**: Enhance WebSocket consumer with validation
-4. **MEDIUM**: Add database indexes for performance
-
-### Phase 2: Frontend Integration
-1. **HIGH**: Update WebSocket context with match state tracking
-2. **HIGH**: Enhance PugQueue component with validation
-3. **MEDIUM**: Add lobby/party validation
-4. **MEDIUM**: Implement notification system
-
-### Phase 3: Optimization & UX
-1. **MEDIUM**: Add Redis caching layer
-2. **LOW**: Real-time match state broadcasting
-3. **LOW**: Advanced error handling and recovery
+## Notes
+Planning, prioritization, and timelines are tracked in `docs/implementation/`.
 
 ## Testing Strategy
 

@@ -394,47 +394,7 @@ ws.send({
 
 ---
 
-## Implementation Phases
-
-### **Phase 1: Basic Match Room** ✅ START HERE
-1. Create Match model with enhanced fields
-2. Create `/match/:matchId` route
-3. Display teams with player info
-4. Show match configuration
-5. Participant vs Spectator access control
-
-### **Phase 2: Ready System**
-1. Player ready-up button
-2. WebSocket ready status updates
-3. Auto-start veto when all ready
-
-### **Phase 3: Map Veto**
-1. Veto phase state machine
-2. Captain-only veto controls
-3. Map ban/pick UI
-4. Veto history log
-5. 30-second timer per veto action
-6. Auto-random if timeout
-
-### **Phase 4: Game Server Integration**
-1. Allocate game server
-2. Create custom game in Valorant
-3. Send connect info to players
-4. Monitor pregame lobby
-
-### **Phase 5: Live Stats**
-1. Connect to Valorant API
-2. Fetch live match data
-3. WebSocket broadcast stats
-4. Real-time scoreboard
-
-### **Phase 6: Post-Match**
-1. Calculate ELO/MMR changes
-2. Update player stats
-3. Determine MVP
-4. Show final results
-
----
+ 
 
 ## API Endpoints
 
@@ -448,15 +408,5 @@ POST   /api/match/:matchId/connect      - Get game server connect info
 
 ---
 
-## Next Steps
-
-1. **Create Match model migrations**
-2. **Build basic Match Room UI (React page)**
-3. **Implement WebSocket match room channels**
-4. **Create match creation flow (after all accept)**
-5. **Build veto system**
-
----
-
-**Ready to start with Phase 1?** 🚀
+ 
 

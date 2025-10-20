@@ -1,52 +1,6 @@
-# Match Page Implementation Plan
+# Match Page Implementation
 
-**Version**: 1.0  
-**Date**: October 2025  
-**Status**: Planning Phase
 
----
-
-## Executive Summary
-
-This document outlines the complete implementation plan for the Match Page system, which handles the post-acceptance flow from match confirmation through custom game creation and match execution.
-
-### Key Features
-1. **Auto-redirect** to match page after acceptance
-2. **Snake draft map veto** system (alternating bans)
-3. **Side selection** by losing team
-4. **Delegated server creation** (one player creates, others join)
-5. **Unique match pages** with persistent URL
-6. **Global "Match in Progress" button** for navigation
-7. **Late joiner handling** for slow connections
-
----
-
-## Phase Breakdown
-
-### Phase 1: Match Page Infrastructure (Week 1-2)
-- Database models for match state
-- WebSocket events for real-time sync
-- Frontend routing and match page component
-- Global navigation state management
-
-### Phase 2: Map Veto System (Week 2-3)
-- Snake draft veto logic (Team A ban → Team B ban → repeat)
-- Real-time veto UI with countdown timers
-- Veto timeout handling
-- Final map selection
-
-### Phase 3: Server Creation & Joining (Week 3-4)
-- Constructor delegation logic
-- Custom game creation via valclient
-- Party joining mechanism
-- Late joiner resilience
-
-### Phase 4: Match Monitoring (Week 4-5)
-- Live score tracking
-- Match completion detection
-- Post-match flow
-
----
 
 ## Architecture Overview
 
@@ -707,47 +661,9 @@ async def join_custom_game(self, pregame_id: str, match_id: str):
 
 ---
 
-## 6. Ghost Account Feasibility Analysis
+## 6. Constructor Delegation Rationale
 
-### **Conclusion: NOT FEASIBLE**
-
-Based on analysis of valclient API:
-
-**Why Ghost Account Doesn't Work:**
-
-1. **Authentication Required**
-   - Valclient requires Riot account credentials via lockfile
-   - Lockfile only exists when Valorant client is running
-   - Cannot create lockfile without actual logged-in Valorant client
-
-2. **Party API Limitations**
-   - `party_change_to_custom()` requires active party
-   - `party_set_custom_game_settings()` requires party leader permissions
-   - `party_start_custom_game()` triggers client-side game start
-   - All these operations need a real Valorant client instance running
-
-3. **No Headless Mode**
-   - Valorant has no headless/server mode
-   - Riot Games doesn't provide server hosting API
-   - All custom games must be created by a player client
-
-4. **Security & Anti-Cheat**
-   - Vanguard (Riot's anti-cheat) prevents automated/bot accounts
-   - API calls are validated against active game client
-   - Lockfile contains temporary session tokens tied to actual game instance
-
-**Alternative Considered: Dedicated Constructor Bot**
-- Would require a physical machine running Valorant 24/7
-- High resource cost (~8GB RAM, GPU, Windows OS)
-- Riot TOS violation (automated/unattended accounts)
-- Not practical or recommended
-
-**Recommended Approach: Delegate to Player (Current Plan)**
-- Select Team A captain as constructor
-- Fallback to any available player
-- 99.9% reliable (players are already online and in-game)
-- No additional infrastructure needed
-- Works within Riot's ecosystem
+Delegate custom game creation to a player (constructor) rather than a headless account to comply with Riot client constraints and ensure reliability. The constructor is typically the Team A captain, with fallback to the first available online player.
 
 ---
 
@@ -1017,46 +933,9 @@ export function MatchPage() {
 
 ---
 
-## 9. Timeline & Milestones
+## 9. Omitted Planning Content
 
-### Week 1-2: Infrastructure
-- [ ] Database models (Match, MatchPlayer)
-- [ ] WebSocket events (server→client, client→server)
-- [ ] Frontend routing (/match/:matchId)
-- [ ] Global match context provider
-- [ ] Basic match page shell
-
-### Week 2-3: Map Veto
-- [ ] Snake draft veto logic (backend)
-- [ ] Veto UI component (frontend)
-- [ ] Timeout handling (Celery task)
-- [ ] Real-time veto updates (WebSocket)
-- [ ] Auto-veto on timeout
-
-### Week 3: Side Selection
-- [ ] Side selection logic (backend)
-- [ ] Side selection UI (frontend)
-- [ ] Constructor delegation
-- [ ] Timeout handling
-
-### Week 4: Custom Game Creation
-- [ ] Constructor client implementation
-- [ ] `create_custom_game_for_match()` function
-- [ ] Server pregame tracking
-- [ ] Join flow for non-constructors
-- [ ] Late joiner retry logic
-
-### Week 4-5: Match Monitoring
-- [ ] Constructor monitors coregame API
-- [ ] Live score updates (WebSocket)
-- [ ] Match completion detection
-- [ ] Post-match flow
-
-### Week 5: Polish & Testing
-- [ ] Global "Match in Progress" button
-- [ ] Match page persistence (refresh handling)
-- [ ] Error handling & edge cases
-- [ ] End-to-end testing with 10 players
+Planning, timelines, milestones, and detailed project management items have been moved to `docs/implementation/`.
 
 ---
 
@@ -1142,11 +1021,7 @@ export function MatchPage() {
 
 ## 13. Next Steps
 
-1. **Review & Approval**: Get stakeholder approval on plan
-2. **Database Schema**: Create Django migrations for Match/MatchPlayer models
-3. **WebSocket Events**: Define and document all event payloads
-4. **Frontend Prototypes**: Create mockups for match page UI
-5. **Phased Implementation**: Start with Week 1-2 infrastructure
+See `docs/implementation/` for planning and delivery timelines.
 
 ---
 

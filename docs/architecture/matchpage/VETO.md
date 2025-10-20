@@ -1,10 +1,6 @@
 # Match Page & Veto System Implementation
 
-**Date**: October 2025  
-**Status**: Implementation Complete (Backend + Frontend)  
-**Phase**: Match Confirmation → Redirect → Veto
-
----
+ 
 
 ## Overview
 
@@ -649,66 +645,6 @@ pipenv run python manage.py migrate
 
 ---
 
-## Known Limitations
-
-1. **Map Pool Size**
-   - Currently uses intersection of player preferences
-   - May result in small map pool
-   - TODO: Fallback to default 7 maps if <5 available
-
-2. **Veto Format**
-   - Currently: ban-only until 1 remains
-   - Future: Support ban/pick format
-
-3. **Constructor Selection**
-   - Always Team A captain
-   - TODO: Implement fallback if captain fails
-
-4. **State Persistence**
-   - Match state in database
-   - TODO: Add Redis caching for active matches
-
----
-
-## Performance Metrics
-
-### Backend
-- **Match Creation**: ~50-100ms (database insert + 10 MatchPlayer entries)
-- **Veto Processing**: ~20-50ms (validation + broadcast)
-- **Timeout Check**: ~10-30ms per match (database query)
-- **WebSocket Broadcast**: ~5-15ms to 10 players
-
-### Frontend
-- **Page Load**: ~200-300ms (fetch match data)
-- **Veto Action**: ~50-100ms (UI update)
-- **Timer Update**: <1ms (local JavaScript)
-- **WebSocket Latency**: ~10-20ms
-
----
-
-## Success Criteria
-
-### ✅ Completed
-- Match confirmation transitions to Match instance automatically
-- All 10 players redirected to unique match page
-- Veto phase starts immediately
-- Snake draft veto working (alternating teams)
-- Captain-only veto enforcement
-- Real-time updates for all players
-- Countdown timer with timeout handling
-- Veto history display
-- Final map selection
-
-### Pending (Next Phases)
-- Side selection implementation
-- Custom game creation and joining
-- Match start and monitoring
-- Post-match flow
-
----
-
-**Implementation Status**: ✅ COMPLETE  
-**Ready for Testing**: Yes  
-**Next Phase**: Side Selection
+ 
 
 
