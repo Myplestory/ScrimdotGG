@@ -12,6 +12,13 @@ import LandingPage from './pages/landing';
 import MatchPage from './pages/MatchPage';
 import Layout from './pages/layout';
 
+// League Pages
+import LeagueCreateTeam from './pages/leaguecreateteam';
+import LeagueRegisterPay from './pages/leagueregteam';
+import LeagueStandings from './pages/leaguestandings';
+import LeagueSchedule from './pages/leagueschedule';
+import LeagueRules from './pages/leaguerules';
+
 // Routings
 import {Routes, Route, Navigate, useNavigate } from "react-router-dom"; // Make sure you are using BrowserRouter
 
@@ -42,6 +49,27 @@ const MatchPageWrapper = () => {
   return (
     <Layout setActiveComponent={handleSetActiveComponent}>
       <MatchPage />
+    </Layout>
+  );
+};
+
+// League page wrapper with unified navigation
+const LeaguePageWrapper = ({ children }) => {
+  const navigate = useNavigate();
+  
+  const handleSetActiveComponent = (component) => {
+    if (component === 'home') {
+      navigate('/landingpage');
+    } else if (component === 'pug') {
+      navigate('/landingpage', { state: { activeComponent: 'pug' } });
+    } else if (component === 'lobby') {
+      navigate('/landingpage', { state: { activeComponent: 'lobby' } });
+    }
+  };
+
+  return (
+    <Layout setActiveComponent={handleSetActiveComponent}>
+      {children}
     </Layout>
   );
 };
@@ -134,8 +162,33 @@ function App() {
                     <Route path="/" element={<Navigate to="/landingpage" replace />} />
                     <Route path="/Logout" element={<Logout setAuthenticated={setAuthenticated} />} />
                     <Route path="/landingpage" element={<LandingPage />} />
-                    <Route path="/match/:matchId" element={
-                      <MatchPageWrapper />
+                    <Route path="/match/:matchId" element={<MatchPageWrapper />} />
+                    
+                    {/* League Routes with Unified Navigation */}
+                    <Route path="/leaguecreateteam" element={
+                      <LeaguePageWrapper>
+                        <LeagueCreateTeam />
+                      </LeaguePageWrapper>
+                    } />
+                    <Route path="/leagueregteam" element={
+                      <LeaguePageWrapper>
+                        <LeagueRegisterPay />
+                      </LeaguePageWrapper>
+                    } />
+                    <Route path="/leaguestandings" element={
+                      <LeaguePageWrapper>
+                        <LeagueStandings />
+                      </LeaguePageWrapper>
+                    } />
+                    <Route path="/leagueschedule" element={
+                      <LeaguePageWrapper>
+                        <LeagueSchedule />
+                      </LeaguePageWrapper>
+                    } />
+                    <Route path="/leaguerules" element={
+                      <LeaguePageWrapper>
+                        <LeagueRules />
+                      </LeaguePageWrapper>
                     } />
                   </Routes>
                 </Suspense>

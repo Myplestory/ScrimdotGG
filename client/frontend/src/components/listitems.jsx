@@ -6,7 +6,7 @@ import ListSubheader from '@mui/material/ListSubheader';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { Accordion, AccordionSummary, AccordionDetails, List } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
 import { ColorModeContext, useMode } from '../theme';
 
@@ -32,7 +32,27 @@ const CustomListItem = ({ text, onClick, navigateTo }) => {
 };
 
 export const MainListItems = ({ setActiveComponent }) => {
-  const [expandedAccordion, setExpandedAccordion] = React.useState(null);
+  const location = useLocation();
+  
+  // Determine which accordion should be expanded based on current route
+  const getInitialExpanded = () => {
+    const path = location.pathname;
+    if (path.startsWith('/league')) return 'league';
+    if (path.startsWith('/forum')) return 'forums';
+    if (path.startsWith('/support') || path.startsWith('/faq')) return 'support';
+    if (path.startsWith('/download')) return 'client';
+    return null; // Default: no accordion expanded on landing page
+  };
+
+  const [expandedAccordion, setExpandedAccordion] = React.useState(getInitialExpanded);
+
+  // Update expanded accordion when route changes
+  React.useEffect(() => {
+    const newExpanded = getInitialExpanded();
+    if (newExpanded) {
+      setExpandedAccordion(newExpanded);
+    }
+  }, [location.pathname]);
 
   const handleAccordionChange = (panel) => (event, isExpanded) => {
     setExpandedAccordion(isExpanded ? panel : null);
