@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   Box, 
   Typography, 
@@ -15,10 +15,19 @@ import { useMode } from '../../theme';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
+import { gsap } from 'gsap';
+import { usePageEnter } from '../../animations/useGSAP';
+import { staggerIn, fadeIn, ease } from '../../animations/gsapUtils';
 
 const LeagueSchedule = () => {
   const [theme] = useMode();
   const [selectedWeek, setSelectedWeek] = useState(6);
+
+  // Animation refs
+  const containerRef = useRef(null);
+  const titleRef = useRef(null);
+  const tabsRef = useRef(null);
+  const matchesRef = useRef(null);
 
   const weeks = [
     'Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5', 
@@ -144,27 +153,87 @@ const LeagueSchedule = () => {
     return scheduleData[selectedWeek] || scheduleData[0];
   };
 
+  // Page enter animations
+  usePageEnter(containerRef, () => {
+    const tl = gsap.timeline();
+    
+    tl.from(titleRef.current, {
+      opacity: 0,
+      y: -30,
+      duration: 0.6,
+      ease: ease.aggressive,
+    })
+    .from(tabsRef.current, {
+      opacity: 0,
+      y: 20,
+      duration: 0.5,
+      ease: ease.smooth,
+    }, '-=0.3');
+    
+    return tl;
+  }, []);
+
+  // Animate matches on week change
+  useEffect(() => {
+    if (matchesRef.current) {
+      gsap.fromTo(matchesRef.current.children,
+        {
+          opacity: 0,
+          y: 20,
+        },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.4,
+          stagger: 0.08,
+          ease: ease.snappy,
+          clearProps: 'all',
+        }
+      );
+    }
+  }, [selectedWeek]);
+
   return (
     <Container maxWidth="lg" sx={{ height: '100%', overflow: 'hidden' }}>
-      <Box sx={{ 
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100%',
-        backgroundColor: theme.palette.background.dark,
-        padding: theme.spacing(3),
-        overflow: 'hidden'
-      }}>
-        <Typography variant="h4" sx={{ mb: 3, color: theme.palette.secondary.main, flexShrink: 0 }}>
+      <Box 
+        ref={containerRef}
+        sx={{ 
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100%',
+          backgroundColor: theme.palette.background.dark,
+          padding: theme.spacing(4),
+          overflow: 'hidden'
+        }}
+      >
+        <Typography 
+          ref={titleRef}
+          variant="h4" 
+          sx={{ 
+            mb: 4, 
+            color: theme.palette.secondary.main, 
+            flexShrink: 0,
+            fontWeight: 700,
+            letterSpacing: '0.02em',
+          }}
+        >
           League Schedule
         </Typography>
 
       <Box sx={{ flex: 1, overflow: 'auto', pr: 1 }}>
-      <Card sx={{ 
-        backgroundColor: theme.palette.background.paper, 
-        mb: 3,
-        boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-        border: `1px solid ${theme.palette.divider}`
-      }}>
+      <Card 
+        ref={tabsRef}
+        sx={{ 
+          backgroundColor: theme.palette.background.paper, 
+          mb: 3,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+          border: `1px solid ${theme.palette.divider}`,
+          transition: 'box-shadow 0.3s ease',
+          '&:hover': {
+            boxShadow: `0 6px 20px ${theme.palette.secondary.dark}20`,
+          },
+        }}
+      >
         <CardContent>
           <Tabs 
             value={selectedWeek} 

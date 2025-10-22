@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   Box, 
   Typography, 
@@ -20,37 +20,108 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import GavelIcon from '@mui/icons-material/Gavel';
 import WarningIcon from '@mui/icons-material/Warning';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import { gsap } from 'gsap';
+import { usePageEnter } from '../../animations/useGSAP';
+import { staggerIn, fadeIn, ease } from '../../animations/gsapUtils';
 
 const LeagueRules = () => {
   const [theme] = useMode();
-  const [expanded, setExpanded] = useState('general');
+  const [expanded, setExpanded] = useState(false); // Changed from 'general' to false
+
+  // Animation refs
+  const containerRef = useRef(null);
+  const titleRef = useRef(null);
+  const alertRef = useRef(null);
+  const accordionsRef = useRef(null);
 
   const handleAccordionChange = (panel) => (event, isExpanded) => {
     setExpanded(isExpanded ? panel : false);
   };
 
+  // Page enter animations
+  usePageEnter(containerRef, () => {
+    const tl = gsap.timeline();
+    
+    // Set initial states immediately
+    gsap.set(titleRef.current, {
+      opacity: 0,
+      y: -30,
+    });
+    
+    gsap.set(alertRef.current, {
+      opacity: 0,
+      y: 20,
+    });
+    
+    gsap.set(accordionsRef.current.children, {
+      opacity: 0,
+      y: 30,
+    });
+    
+    // Animate to final states
+    tl.to(titleRef.current, {
+      opacity: 1,
+      y: 0,
+      duration: 0.2,
+      ease: ease.smooth,
+    })
+    .to(alertRef.current, {
+      opacity: 1,
+      y: 0,
+      duration: 0.15,
+      ease: ease.smooth,
+    }, '-=0.1')
+    .to(accordionsRef.current.children, {
+      opacity: 1,
+      y: 0,
+      duration: 0.15,
+      stagger: 0.03,
+      ease: ease.smooth,
+    }, '-=0.05');
+    
+    return tl;
+  }, []);
+
   return (
     <Container maxWidth="lg" sx={{ height: '100%', overflow: 'hidden' }}>
-      <Box sx={{ 
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100%',
-        backgroundColor: theme.palette.background.dark,
-        padding: theme.spacing(3),
-        overflow: 'auto'
-      }}>
-      <Typography variant="h4" sx={{ mb: 1, color: theme.palette.secondary.main }}>
-        League Rules & Regulations
-      </Typography>
-      
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        Last Updated: October 21, 2025 - Season 2025
-      </Typography>
+      <Box 
+        ref={containerRef}
+        sx={{ 
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100%',
+          backgroundColor: theme.palette.background.dark,
+          padding: theme.spacing(4),
+          overflow: 'auto'
+        }}
+      >
+      <Box ref={titleRef}>
+        <Typography 
+          variant="h4" 
+          sx={{ 
+            mb: 1, 
+            color: theme.palette.secondary.main,
+            fontWeight: 700,
+            letterSpacing: '0.02em',
+          }}
+        >
+          League Rules & Regulations
+        </Typography>
+        
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+          Last Updated: October 21, 2025 - Season 2025
+        </Typography>
+      </Box>
 
-      <Alert severity="info" sx={{ mb: 3 }}>
+      <Alert 
+        ref={alertRef}
+        severity="info" 
+        sx={{ mb: 3 }}
+      >
         All participants must read and agree to these rules before competing. Violations may result in penalties or disqualification.
       </Alert>
 
+      <Box ref={accordionsRef}>
       <Accordion 
         expanded={expanded === 'general'} 
         onChange={handleAccordionChange('general')}
@@ -60,14 +131,17 @@ const LeagueRules = () => {
           boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
           border: `1px solid ${theme.palette.divider}`,
           '&:before': { display: 'none' },
+          transition: 'all 0.3s ease',
           '&:hover': {
-            boxShadow: '0 4px 12px rgba(0,0,0,0.4)'
+            boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+            transform: 'translateY(-2px)',
           }
         }}
       >
         <AccordionSummary 
           expandIcon={<ExpandMoreIcon />}
           sx={{
+            transition: 'background-color 0.2s ease',
             '&:hover': {
               backgroundColor: theme.palette.action.hover
             }
@@ -118,8 +192,10 @@ const LeagueRules = () => {
           boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
           border: `1px solid ${theme.palette.divider}`,
           '&:before': { display: 'none' },
+          transition: 'all 0.3s ease',
           '&:hover': {
-            boxShadow: '0 4px 12px rgba(0,0,0,0.4)'
+            boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+            transform: 'translateY(-2px)',
           }
         }}
       >
@@ -190,8 +266,10 @@ const LeagueRules = () => {
           boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
           border: `1px solid ${theme.palette.divider}`,
           '&:before': { display: 'none' },
+          transition: 'all 0.3s ease',
           '&:hover': {
-            boxShadow: '0 4px 12px rgba(0,0,0,0.4)'
+            boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+            transform: 'translateY(-2px)',
           }
         }}
       >
@@ -248,8 +326,10 @@ const LeagueRules = () => {
           boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
           border: `1px solid ${theme.palette.divider}`,
           '&:before': { display: 'none' },
+          transition: 'all 0.3s ease',
           '&:hover': {
-            boxShadow: '0 4px 12px rgba(0,0,0,0.4)'
+            boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+            transform: 'translateY(-2px)',
           }
         }}
       >
@@ -313,8 +393,10 @@ const LeagueRules = () => {
           boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
           border: `1px solid ${theme.palette.divider}`,
           '&:before': { display: 'none' },
+          transition: 'all 0.3s ease',
           '&:hover': {
-            boxShadow: '0 4px 12px rgba(0,0,0,0.4)'
+            boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+            transform: 'translateY(-2px)',
           }
         }}
       >
@@ -371,8 +453,10 @@ const LeagueRules = () => {
           boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
           border: `1px solid ${theme.palette.divider}`,
           '&:before': { display: 'none' },
+          transition: 'all 0.3s ease',
           '&:hover': {
-            boxShadow: '0 4px 12px rgba(0,0,0,0.4)'
+            boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+            transform: 'translateY(-2px)',
           }
         }}
       >
@@ -412,17 +496,18 @@ const LeagueRules = () => {
           </List>
         </AccordionDetails>
       </Accordion>
+      </Box>
 
       <Grid container spacing={2} sx={{ mt: 2, pb: 6 }}>
         <Grid item xs={12} md={6}>
           <Card sx={{ 
             backgroundColor: theme.palette.info.dark,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
             border: `1px solid ${theme.palette.divider}`,
-            transition: 'transform 0.2s ease',
+            transition: 'transform 0.3s ease',
             '&:hover': {
               transform: 'translateY(-4px)',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.4)'
+              boxShadow: `0 6px 16px ${theme.palette.secondary.dark}30`,
             }
           }}>
             <CardContent>
@@ -446,12 +531,12 @@ const LeagueRules = () => {
         <Grid item xs={12} md={6}>
           <Card sx={{ 
             backgroundColor: theme.palette.warning.dark,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
             border: `1px solid ${theme.palette.divider}`,
-            transition: 'transform 0.2s ease',
+            transition: 'transform 0.3s ease',
             '&:hover': {
               transform: 'translateY(-4px)',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.4)'
+              boxShadow: `0 6px 16px ${theme.palette.secondary.dark}30`,
             }
           }}>
             <CardContent>

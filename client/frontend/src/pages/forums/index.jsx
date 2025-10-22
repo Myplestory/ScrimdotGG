@@ -1,14 +1,22 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Box, Typography, Paper, List, ListItem, ListItemText, Chip, Avatar, Button } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { useNavigate } from 'react-router-dom';
 import ForumIcon from '@mui/icons-material/Forum';
 import PersonIcon from '@mui/icons-material/Person';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import { gsap } from 'gsap';
+import { usePageEnter } from '../../animations/useGSAP';
+import { staggerIn, fadeIn, ease } from '../../animations/gsapUtils';
 
 const ForumIndex = () => {
   const theme = useTheme();
   const navigate = useNavigate();
+
+  // Animation refs
+  const containerRef = useRef(null);
+  const titleRef = useRef(null);
+  const buttonRef = useRef(null);
 
   // Sample forum categories and topics
   const forumCategories = [
@@ -74,8 +82,29 @@ const ForumIndex = () => {
     }
   ];
 
+  // Page enter animations
+  usePageEnter(containerRef, () => {
+    const tl = gsap.timeline();
+    
+    tl.from(titleRef.current, {
+      opacity: 0,
+      y: -30,
+      duration: 0.6,
+      ease: ease.aggressive,
+    })
+    .from(buttonRef.current, {
+      opacity: 0,
+      x: 20,
+      duration: 0.5,
+      ease: ease.smooth,
+    }, '-=0.4');
+    
+    return tl;
+  }, []);
+
   return (
     <Box
+      ref={containerRef}
       sx={{
         width: '100%',
         height: '100%',
@@ -86,7 +115,7 @@ const ForumIndex = () => {
     >
       {/* Header */}
       <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Box>
+        <Box ref={titleRef}>
           <Typography variant="h4" sx={{ color: theme.palette.secondary.main, fontWeight: 'bold', mb: 1 }}>
             Community Forums
           </Typography>
@@ -95,6 +124,7 @@ const ForumIndex = () => {
           </Typography>
         </Box>
         <Button
+          ref={buttonRef}
           variant="contained"
           color="secondary"
           onClick={() => navigate('/postnew')}

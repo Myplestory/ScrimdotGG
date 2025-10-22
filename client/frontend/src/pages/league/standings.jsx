@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   Box, 
   Typography, 
@@ -21,10 +21,19 @@ import {
 } from '@mui/material';
 import { useMode } from '../../theme';
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
+import { gsap } from 'gsap';
+import { usePageEnter } from '../../animations/useGSAP';
+import { staggerIn, fadeIn, ease } from '../../animations/gsapUtils';
 
 const LeagueStandings = () => {
   const [theme] = useMode();
   const [selectedDivision, setSelectedDivision] = useState(0);
+
+  // Animation refs
+  const containerRef = useRef(null);
+  const titleRef = useRef(null);
+  const cardRef = useRef(null);
+  const tableRef = useRef(null);
 
   const divisions = [
     'Elite Division',
@@ -91,35 +100,95 @@ const LeagueStandings = () => {
     return streak.startsWith('W') ? 'success' : 'error';
   };
 
+  // Page enter animations
+  usePageEnter(containerRef, () => {
+    const tl = gsap.timeline();
+    
+    tl.from(titleRef.current, {
+      opacity: 0,
+      y: -30,
+      duration: 0.6,
+      ease: ease.aggressive,
+    })
+    .from(cardRef.current, {
+      opacity: 0,
+      y: 40,
+      duration: 0.7,
+      ease: ease.smooth,
+    }, '-=0.3');
+    
+    return tl;
+  }, []);
+
+  // Animate table rows on division change
+  useEffect(() => {
+    if (tableRef.current) {
+      const rows = tableRef.current.querySelectorAll('tbody tr');
+      gsap.fromTo(rows, 
+        {
+          opacity: 0,
+          x: -20,
+        },
+        {
+          opacity: 1,
+          x: 0,
+          duration: 0.4,
+          stagger: 0.03,
+          ease: ease.snappy,
+          clearProps: 'all', // Clear properties after animation
+        }
+      );
+    }
+  }, [selectedDivision]);
+
   return (
     <Container maxWidth="xl" sx={{ height: '100%', overflow: 'hidden' }}>
-      <Box sx={{ 
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100%',
-        backgroundColor: theme.palette.background.dark,
-        padding: theme.spacing(3),
-        overflow: 'hidden'
-      }}>
-        <Typography variant="h4" sx={{ mb: 3, color: theme.palette.secondary.main, flexShrink: 0 }}>
+      <Box 
+        ref={containerRef}
+        sx={{ 
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100%',
+          backgroundColor: theme.palette.background.dark,
+          padding: theme.spacing(4),
+          overflow: 'hidden'
+        }}
+      >
+        <Typography 
+          ref={titleRef}
+          variant="h4" 
+          sx={{ 
+            mb: 4, 
+            color: theme.palette.secondary.main, 
+            flexShrink: 0,
+            fontWeight: 700,
+            letterSpacing: '0.02em',
+          }}
+        >
           League Divisions & Standings
         </Typography>
 
       <Box sx={{ flex: 1, overflow: 'auto', pr: 1 }}>
-      <Card sx={{ 
-        backgroundColor: theme.palette.background.paper, 
-        mb: 3,
-        boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-        border: `1px solid ${theme.palette.divider}`
-      }}>
-        <CardContent>
+      <Card 
+        ref={cardRef}
+        sx={{ 
+          backgroundColor: theme.palette.background.paper, 
+          mb: 3,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+          border: `1px solid ${theme.palette.divider}`,
+          transition: 'box-shadow 0.3s ease',
+          '&:hover': {
+            boxShadow: `0 6px 20px ${theme.palette.secondary.dark}20`,
+          },
+        }}
+      >
+        <CardContent sx={{ p: 3 }}>
           <Tabs 
             value={selectedDivision} 
             onChange={handleTabChange}
-            variant="scrollable"
-            scrollButtons="auto"
+            variant="fullWidth"
             sx={{ 
-              mb: 2,
+              mb: 3,
               '& .MuiTabs-indicator': {
                 backgroundColor: theme.palette.secondary.main,
                 height: 3
@@ -129,11 +198,13 @@ const LeagueStandings = () => {
                 fontWeight: 600,
                 textTransform: 'uppercase',
                 fontSize: '0.875rem',
+                transition: 'all 0.3s ease',
                 '&.Mui-selected': {
                   color: theme.palette.secondary.main
                 },
                 '&:hover': {
-                  color: theme.palette.secondary.light
+                  color: theme.palette.secondary.light,
+                  transform: 'translateY(-2px)',
                 }
               }
             }}
@@ -143,14 +214,25 @@ const LeagueStandings = () => {
             ))}
           </Tabs>
 
-          <Typography variant="h5" sx={{ mb: 2, color: theme.palette.secondary.main }}>
+          <Typography 
+            variant="h5" 
+            sx={{ 
+              mb: 3, 
+              color: theme.palette.secondary.main,
+              fontWeight: 600,
+            }}
+          >
             {divisions[selectedDivision]}
           </Typography>
 
-          <TableContainer component={Paper} sx={{ 
-            backgroundColor: theme.palette.background.default,
-            boxShadow: 'none'
-          }}>
+          <TableContainer 
+            ref={tableRef}
+            component={Paper} 
+            sx={{ 
+              backgroundColor: theme.palette.background.default,
+              boxShadow: 'none'
+            }}
+          >
             <Table>
               <TableHead>
                 <TableRow sx={{ backgroundColor: theme.palette.background.dark }}>
@@ -172,14 +254,13 @@ const LeagueStandings = () => {
                       '&:hover': { 
                         backgroundColor: theme.palette.action.hover,
                         cursor: 'pointer',
-                        transform: 'scale(1.001)',
-                        transition: 'all 0.2s ease'
                       },
                       backgroundColor: team.rank <= 3 ? 'rgba(255, 215, 0, 0.05)' : 'transparent',
                       borderLeft: team.rank === 1 ? `3px solid #FFD700` : 
                                   team.rank === 2 ? `3px solid #C0C0C0` : 
                                   team.rank === 3 ? `3px solid #CD7F32` : 
-                                  team.rank <= 4 ? `3px solid ${theme.palette.success.main}` : 'none'
+                                  team.rank <= 4 ? `3px solid ${theme.palette.success.main}` : 'none',
+                      transition: 'background-color 0.2s ease',
                     }}
                   >
                     <TableCell align="center">

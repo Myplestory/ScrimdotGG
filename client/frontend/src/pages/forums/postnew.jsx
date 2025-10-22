@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -15,10 +15,18 @@ import { useTheme } from '@mui/material/styles';
 import { useNavigate } from 'react-router-dom';
 import SendIcon from '@mui/icons-material/Send';
 import CancelIcon from '@mui/icons-material/Cancel';
+import { gsap } from 'gsap';
+import { usePageEnter } from '../../animations/useGSAP';
+import { staggerIn, fadeIn, ease } from '../../animations/gsapUtils';
 
 const PostNew = () => {
   const theme = useTheme();
   const navigate = useNavigate();
+
+  // Animation refs
+  const containerRef = useRef(null);
+  const titleRef = useRef(null);
+  const formRef = useRef(null);
 
   const [formData, setFormData] = useState({
     category: '',
@@ -87,8 +95,29 @@ const PostNew = () => {
     navigate('/forumindex');
   };
 
+  // Page enter animations
+  usePageEnter(containerRef, () => {
+    const tl = gsap.timeline();
+    
+    tl.from(titleRef.current, {
+      opacity: 0,
+      y: -30,
+      duration: 0.6,
+      ease: ease.aggressive,
+    })
+    .from(formRef.current, {
+      opacity: 0,
+      y: 30,
+      duration: 0.6,
+      ease: ease.smooth,
+    }, '-=0.3');
+    
+    return tl;
+  }, []);
+
   return (
     <Box
+      ref={containerRef}
       sx={{
         width: '100%',
         height: '100%',
@@ -98,7 +127,7 @@ const PostNew = () => {
       }}
     >
       {/* Header */}
-      <Box sx={{ mb: 4 }}>
+      <Box ref={titleRef} sx={{ mb: 4 }}>
         <Typography variant="h4" sx={{ color: theme.palette.secondary.main, fontWeight: 'bold', mb: 1 }}>
           Create New Topic
         </Typography>
@@ -116,6 +145,7 @@ const PostNew = () => {
 
       {/* Form */}
       <Paper
+        ref={formRef}
         sx={{
           p: 4,
           backgroundColor: theme.palette.background.paper,

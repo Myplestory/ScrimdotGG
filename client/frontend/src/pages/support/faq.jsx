@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -13,11 +13,19 @@ import { useTheme } from '@mui/material/styles';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import SearchIcon from '@mui/icons-material/Search';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import { gsap } from 'gsap';
+import { usePageEnter } from '../../animations/useGSAP';
+import { staggerIn, fadeIn, ease } from '../../animations/gsapUtils';
 
 const FAQ = () => {
   const theme = useTheme();
   const [searchTerm, setSearchTerm] = useState('');
   const [expanded, setExpanded] = useState(false);
+
+  // Animation refs
+  const containerRef = useRef(null);
+  const titleRef = useRef(null);
+  const searchRef = useRef(null);
 
   const faqCategories = [
     {
@@ -141,8 +149,29 @@ const FAQ = () => {
     ),
   })).filter((category) => category.questions.length > 0);
 
+  // Page enter animations
+  usePageEnter(containerRef, () => {
+    const tl = gsap.timeline();
+    
+    tl.from(titleRef.current, {
+      opacity: 0,
+      y: -30,
+      duration: 0.6,
+      ease: ease.aggressive,
+    })
+    .from(searchRef.current, {
+      opacity: 0,
+      y: 20,
+      duration: 0.5,
+      ease: ease.smooth,
+    }, '-=0.3');
+    
+    return tl;
+  }, []);
+
   return (
     <Box
+      ref={containerRef}
       sx={{
         width: '100%',
         height: '100%',
@@ -152,7 +181,7 @@ const FAQ = () => {
       }}
     >
       {/* Header */}
-      <Box sx={{ mb: 4 }}>
+      <Box ref={titleRef} sx={{ mb: 4 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
           <HelpOutlineIcon sx={{ fontSize: 40, color: theme.palette.secondary.main, mr: 2 }} />
           <Typography variant="h4" sx={{ color: theme.palette.secondary.main, fontWeight: 'bold' }}>
@@ -165,6 +194,7 @@ const FAQ = () => {
 
         {/* Search */}
         <TextField
+          ref={searchRef}
           fullWidth
           placeholder="Search for answers..."
           value={searchTerm}
@@ -188,7 +218,10 @@ const FAQ = () => {
       {/* FAQ Sections */}
       <Box sx={{ maxWidth: 900 }}>
         {filteredFAQs.map((category, categoryIndex) => (
-          <Box key={categoryIndex} sx={{ mb: 4 }}>
+          <Box 
+            key={categoryIndex} 
+            sx={{ mb: 4 }}
+          >
             <Typography
               variant="h5"
               sx={{

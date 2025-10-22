@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   Box, 
   Typography, 
@@ -24,6 +24,9 @@ import {
 import { useMode } from '../../theme';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
+import { gsap } from 'gsap';
+import { usePageEnter } from '../../animations/useGSAP';
+import { staggerIn, fadeIn, scaleIn, ease } from '../../animations/gsapUtils';
 
 const LeagueCreateTeam = () => {
   const [theme] = useMode();
@@ -37,7 +40,41 @@ const LeagueCreateTeam = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
+  // Animation refs
+  const containerRef = useRef(null);
+  const titleRef = useRef(null);
+  const teamInfoCardRef = useRef(null);
+  const rosterCardRef = useRef(null);
+  const buttonsRef = useRef(null);
+
   const availableRoles = ['IGL', 'Lurk', 'AWP', 'Entry', 'Support', 'Substitute'];
+
+  // Page enter animations
+  usePageEnter(containerRef, () => {
+    const tl = gsap.timeline();
+    
+    tl.from(titleRef.current, {
+      opacity: 0,
+      y: -30,
+      duration: 0.6,
+      ease: ease.aggressive,
+    })
+    .from([teamInfoCardRef.current, rosterCardRef.current], {
+      opacity: 0,
+      y: 40,
+      duration: 0.7,
+      stagger: 0.15,
+      ease: ease.smooth,
+    }, '-=0.3')
+    .from(buttonsRef.current, {
+      opacity: 0,
+      y: 20,
+      duration: 0.5,
+      ease: ease.snappy,
+    }, '-=0.4');
+    
+    return tl;
+  }, []);
 
   const handleLogoUpload = (event) => {
     const file = event.target.files[0];
@@ -135,13 +172,25 @@ const LeagueCreateTeam = () => {
 
   return (
     <Container maxWidth="lg" sx={{ height: '100%', py: 0 }}>
-      <Box sx={{ 
-        height: '100%',
-        overflow: 'auto',
-        backgroundColor: theme.palette.background.dark,
-        padding: theme.spacing(3)
-      }}>
-        <Typography variant="h4" sx={{ mb: 3, color: theme.palette.secondary.main }}>
+      <Box 
+        ref={containerRef}
+        sx={{ 
+          height: '100%',
+          overflow: 'auto',
+          backgroundColor: theme.palette.background.dark,
+          padding: theme.spacing(4)
+        }}
+      >
+        <Typography 
+          ref={titleRef}
+          variant="h4" 
+          sx={{ 
+            mb: 4, 
+            color: theme.palette.secondary.main,
+            fontWeight: 700,
+            letterSpacing: '0.02em',
+          }}
+        >
           Create Your League Team
         </Typography>
 
@@ -159,13 +208,28 @@ const LeagueCreateTeam = () => {
 
       <Grid container spacing={3}>
         <Grid item xs={12} md={6}>
-          <Card sx={{ 
-            backgroundColor: theme.palette.background.paper,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-            border: `1px solid ${theme.palette.divider}`
-          }}>
-            <CardContent>
-              <Typography variant="h6" sx={{ mb: 2, color: theme.palette.secondary.main }}>
+          <Card 
+            ref={teamInfoCardRef}
+            sx={{ 
+              backgroundColor: theme.palette.background.paper,
+              boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+              border: `1px solid ${theme.palette.divider}`,
+              transition: 'transform 0.3s ease, box-shadow 0.3s ease',
+              '&:hover': {
+                transform: 'translateY(-4px)',
+                boxShadow: `0 8px 24px ${theme.palette.secondary.dark}25`,
+              },
+            }}
+          >
+            <CardContent sx={{ p: 3 }}>
+              <Typography 
+                variant="h6" 
+                sx={{ 
+                  mb: 3, 
+                  color: theme.palette.secondary.main,
+                  fontWeight: 600,
+                }}
+              >
                 Team Information
               </Typography>
               
@@ -174,7 +238,15 @@ const LeagueCreateTeam = () => {
                 label="Team Name"
                 value={teamName}
                 onChange={(e) => setTeamName(e.target.value)}
-                sx={{ mb: 2 }}
+                sx={{ 
+                  mb: 2,
+                  '& .MuiOutlinedInput-root': {
+                    transition: 'all 0.3s ease',
+                    '&:hover fieldset': {
+                      borderColor: theme.palette.secondary.main,
+                    },
+                  },
+                }}
                 placeholder="e.g., Cloud9 Blue"
               />
 
@@ -186,11 +258,19 @@ const LeagueCreateTeam = () => {
                 inputProps={{ maxLength: 4 }}
                 helperText="Maximum 4 characters"
                 placeholder="e.g., C9B"
-                sx={{ mb: 3 }}
+                sx={{ 
+                  mb: 3,
+                  '& .MuiOutlinedInput-root': {
+                    transition: 'all 0.3s ease',
+                    '&:hover fieldset': {
+                      borderColor: theme.palette.secondary.main,
+                    },
+                  },
+                }}
               />
 
               <Box>
-                <Typography variant="body2" sx={{ mb: 1, fontWeight: 600 }}>
+                <Typography variant="body2" sx={{ mb: 2, fontWeight: 600 }}>
                   Team Logo
                 </Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -205,7 +285,11 @@ const LeagueCreateTeam = () => {
                         borderRadius: 1,
                         objectFit: 'cover',
                         border: `2px solid ${theme.palette.divider}`,
-                        boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                        transition: 'transform 0.3s ease',
+                        '&:hover': {
+                          transform: 'scale(1.1)',
+                        },
                       }}
                     />
                   ) : (
@@ -232,7 +316,13 @@ const LeagueCreateTeam = () => {
                       component="label"
                       size="small"
                       color="secondary"
-                      sx={{ mb: 1 }}
+                      sx={{ 
+                        mb: 1,
+                        transition: 'all 0.3s ease',
+                        '&:hover': {
+                          transform: 'translateX(4px)',
+                        },
+                      }}
                     >
                       Upload Logo
                       <input
@@ -249,8 +339,8 @@ const LeagueCreateTeam = () => {
                 </Box>
               </Box>
 
-              <Box sx={{ mt: 3 }}>
-                <Typography variant="body2" color="text.secondary">
+              <Box sx={{ mt: 4, p: 2, backgroundColor: theme.palette.background.default, borderRadius: 1 }}>
+                <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600, mb: 1 }}>
                   Team Requirements:
                 </Typography>
                 <Typography variant="caption" display="block" sx={{ mt: 1 }}>
@@ -268,13 +358,28 @@ const LeagueCreateTeam = () => {
         </Grid>
 
         <Grid item xs={12} md={6}>
-          <Card sx={{ 
-            backgroundColor: theme.palette.background.paper,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-            border: `1px solid ${theme.palette.divider}`
-          }}>
-            <CardContent>
-              <Typography variant="h6" sx={{ mb: 2, color: theme.palette.secondary.main }}>
+          <Card 
+            ref={rosterCardRef}
+            sx={{ 
+              backgroundColor: theme.palette.background.paper,
+              boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+              border: `1px solid ${theme.palette.divider}`,
+              transition: 'transform 0.3s ease, box-shadow 0.3s ease',
+              '&:hover': {
+                transform: 'translateY(-4px)',
+                boxShadow: `0 8px 24px ${theme.palette.secondary.dark}25`,
+              },
+            }}
+          >
+            <CardContent sx={{ p: 3 }}>
+              <Typography 
+                variant="h6" 
+                sx={{ 
+                  mb: 3, 
+                  color: theme.palette.secondary.main,
+                  fontWeight: 600,
+                }}
+              >
                 Team Roster ({teamMembers.length}/7)
               </Typography>
 
@@ -287,6 +392,14 @@ const LeagueCreateTeam = () => {
                   onKeyPress={(e) => e.key === 'Enter' && handleAddMember()}
                   placeholder="Enter player name or tag"
                   size="small"
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      transition: 'all 0.3s ease',
+                      '&:hover fieldset': {
+                        borderColor: theme.palette.secondary.main,
+                      },
+                    },
+                  }}
                 />
                 <FormControl size="small" sx={{ minWidth: 140 }}>
                   <InputLabel>Role</InputLabel>
@@ -304,6 +417,12 @@ const LeagueCreateTeam = () => {
                   color="secondary" 
                   onClick={handleAddMember}
                   disabled={teamMembers.length >= 7}
+                  sx={{
+                    transition: 'transform 0.2s ease',
+                    '&:hover': {
+                      transform: 'scale(1.1) rotate(90deg)',
+                    },
+                  }}
                 >
                   <AddCircleOutlineIcon />
                 </IconButton>
@@ -313,7 +432,8 @@ const LeagueCreateTeam = () => {
                 sx={{ 
                   maxHeight: 300, 
                   overflow: 'auto',
-                  backgroundColor: theme.palette.background.default
+                  backgroundColor: theme.palette.background.default,
+                  border: `1px solid ${theme.palette.divider}`,
                 }}
               >
                 <List>
@@ -326,7 +446,16 @@ const LeagueCreateTeam = () => {
                     </ListItem>
                   ) : (
                     teamMembers.map((member, index) => (
-                      <ListItem key={index} divider>
+                      <ListItem 
+                        key={index} 
+                        divider
+                        sx={{
+                          transition: 'background-color 0.2s ease',
+                          '&:hover': {
+                            backgroundColor: theme.palette.action.hover,
+                          },
+                        }}
+                      >
                         <ListItemText 
                           primary={member.name}
                           secondary={
@@ -348,6 +477,13 @@ const LeagueCreateTeam = () => {
                             edge="end" 
                             onClick={() => handleRemoveMember(index)}
                             size="small"
+                            sx={{
+                              transition: 'transform 0.2s ease',
+                              '&:hover': {
+                                transform: 'scale(1.2)',
+                                color: '#ff4655',
+                              },
+                            }}
                           >
                             <DeleteIcon />
                           </IconButton>
@@ -362,7 +498,10 @@ const LeagueCreateTeam = () => {
         </Grid>
 
         <Grid item xs={12}>
-          <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
+          <Box 
+            ref={buttonsRef}
+            sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}
+          >
             <Button 
               variant="outlined"
               color="secondary"
@@ -375,6 +514,13 @@ const LeagueCreateTeam = () => {
                 setError('');
                 setSuccess('');
               }}
+              sx={{
+                transition: 'all 0.3s ease',
+                '&:hover': {
+                  transform: 'translateY(-2px)',
+                  boxShadow: `0 4px 12px ${theme.palette.secondary.dark}30`,
+                },
+              }}
             >
               Reset
             </Button>
@@ -383,6 +529,18 @@ const LeagueCreateTeam = () => {
               color="secondary"
               onClick={handleCreateTeam}
               disabled={teamMembers.length < 5 || !teamName || !teamTag}
+              sx={{
+                px: 4,
+                fontWeight: 600,
+                transition: 'all 0.3s ease',
+                '&:hover': {
+                  transform: 'translateY(-2px)',
+                  boxShadow: `0 6px 16px ${theme.palette.secondary.dark}40`,
+                },
+                '&:disabled': {
+                  backgroundColor: theme.palette.action.disabledBackground,
+                },
+              }}
             >
               Create Team
             </Button>

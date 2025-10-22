@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Box, 
@@ -26,6 +26,9 @@ import {
 } from '@mui/material';
 import { useMode } from '../../theme';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import { gsap } from 'gsap';
+import { usePageEnter } from '../../animations/useGSAP';
+import { fadeIn, staggerIn, scaleIn, ease } from '../../animations/gsapUtils';
 
 const LeagueRegisterPay = () => {
   const [theme] = useMode();
@@ -37,6 +40,13 @@ const LeagueRegisterPay = () => {
   const [promoCode, setPromoCode] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  // Animation refs
+  const containerRef = useRef(null);
+  const titleRef = useRef(null);
+  const stepperRef = useRef(null);
+  const cardRef = useRef(null);
+  const buttonRef = useRef(null);
 
   const steps = ['Select Team', 'Choose Division', 'Payment'];
 
@@ -120,26 +130,93 @@ const LeagueRegisterPay = () => {
     return divisions.find(d => d.id.toString() === selectedDivision);
   };
 
+  // Page enter animations
+  usePageEnter(containerRef, () => {
+    const tl = gsap.timeline();
+    
+    tl.from(titleRef.current, {
+      opacity: 0,
+      x: -30,
+      duration: 0.6,
+      ease: ease.aggressive,
+    })
+    .from(stepperRef.current, {
+      opacity: 0,
+      y: 20,
+      duration: 0.5,
+      ease: ease.smooth,
+    }, '-=0.3')
+    .from(cardRef.current, {
+      opacity: 0,
+      y: 30,
+      duration: 0.7,
+      ease: ease.snappy,
+    }, '-=0.3')
+    // Immediately set step-content to visible after card animation
+    .set('.step-content', { opacity: 1 }, '-=0.1');
+    
+    return tl;
+  }, []);
+
+  // Animate card content on step change (only after initial load)
+  useEffect(() => {
+    if (cardRef.current && activeStep !== 0) {
+      // Only animate on step changes, not initial load
+      gsap.fromTo(cardRef.current.querySelectorAll('.step-content'), 
+        {
+          opacity: 0,
+          x: 20,
+        },
+        {
+          opacity: 1,
+          x: 0,
+          duration: 0.5,
+          ease: ease.smooth,
+        }
+      );
+    }
+  }, [activeStep]);
+
   return (
     <Container maxWidth="lg" sx={{ height: '100%', overflow: 'hidden' }}>
-      <Box sx={{ 
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100%',
-        backgroundColor: theme.palette.background.dark,
-        padding: theme.spacing(3),
-        overflow: 'hidden'
-      }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 3, flexShrink: 0 }}>
+      <Box 
+        ref={containerRef}
+        sx={{ 
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100%',
+          backgroundColor: theme.palette.background.dark,
+          padding: theme.spacing(4),
+          overflow: 'hidden'
+        }}
+      >
+        <Box 
+          ref={titleRef}
+          sx={{ display: 'flex', alignItems: 'center', mb: 3, flexShrink: 0 }}
+        >
           {activeStep > 0 && (
             <IconButton 
               onClick={handleBack}
-              sx={{ mr: 2, color: theme.palette.secondary.main }}
+              sx={{ 
+                mr: 2, 
+                color: theme.palette.secondary.main,
+                transition: 'transform 0.2s ease',
+                '&:hover': {
+                  transform: 'scale(1.1) translateX(-4px)',
+                },
+              }}
             >
               <ArrowBackIcon />
             </IconButton>
           )}
-          <Typography variant="h4" sx={{ color: theme.palette.secondary.main }}>
+          <Typography 
+            variant="h4" 
+            sx={{ 
+              color: theme.palette.secondary.main,
+              fontWeight: 700,
+              letterSpacing: '0.02em',
+            }}
+          >
             Register & Pay for League
           </Typography>
         </Box>
@@ -157,7 +234,19 @@ const LeagueRegisterPay = () => {
         </Alert>
       )}
 
-      <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
+      <Stepper 
+        ref={stepperRef}
+        activeStep={activeStep} 
+        sx={{ 
+          mb: 4,
+          '& .MuiStepLabel-root .Mui-completed': {
+            color: theme.palette.secondary.main,
+          },
+          '& .MuiStepLabel-root .Mui-active': {
+            color: theme.palette.secondary.main,
+          },
+        }}
+      >
         {steps.map((label) => (
           <Step key={label}>
             <StepLabel>{label}</StepLabel>
@@ -165,15 +254,29 @@ const LeagueRegisterPay = () => {
         ))}
       </Stepper>
 
-      <Card sx={{ 
-        backgroundColor: theme.palette.background.paper,
-        boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-        border: `1px solid ${theme.palette.divider}`
-      }}>
-        <CardContent>
+      <Card 
+        ref={cardRef}
+        sx={{ 
+          backgroundColor: theme.palette.background.paper,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+          border: `1px solid ${theme.palette.divider}`,
+          transition: 'box-shadow 0.3s ease',
+          '&:hover': {
+            boxShadow: `0 6px 20px ${theme.palette.secondary.dark}20`,
+          },
+        }}
+      >
+        <CardContent sx={{ p: 3 }}>
           {activeStep === 0 && (
-            <Box>
-              <Typography variant="h6" sx={{ mb: 2, color: theme.palette.secondary.main }}>
+            <Box className="step-content">
+              <Typography 
+                variant="h6" 
+                sx={{ 
+                  mb: 3, 
+                  color: theme.palette.secondary.main,
+                  fontWeight: 600,
+                }}
+              >
                 Select Your Team
               </Typography>
               
@@ -185,13 +288,27 @@ const LeagueRegisterPay = () => {
                 <FormControl component="fieldset" fullWidth>
                   <RadioGroup value={selectedTeam} onChange={(e) => setSelectedTeam(e.target.value)}>
                     {userTeams.map((team) => (
-                      <Card key={team.id} sx={{ mb: 2, backgroundColor: theme.palette.background.default }}>
+                      <Card 
+                        key={team.id} 
+                        sx={{ 
+                          mb: 2, 
+                          backgroundColor: theme.palette.background.default,
+                          transition: 'all 0.3s ease',
+                          cursor: 'pointer',
+                          '&:hover': {
+                            transform: 'translateX(8px)',
+                            boxShadow: `0 4px 12px ${theme.palette.secondary.dark}20`,
+                          },
+                        }}
+                        onClick={() => setSelectedTeam(team.id.toString())}
+                      >
                         <CardContent>
                           <FormControlLabel 
                             value={team.id.toString()}
                             control={<Radio />}
+                            sx={{ width: '100%', m: 0 }}
                             label={
-                              <Box>
+                              <Box sx={{ ml: 1 }}>
                                 <Typography variant="h6">
                                   {team.name} [{team.tag}]
                                 </Typography>
@@ -211,21 +328,42 @@ const LeagueRegisterPay = () => {
           )}
 
           {activeStep === 1 && (
-            <Box>
-              <Typography variant="h6" sx={{ mb: 2, color: theme.palette.secondary.main }}>
+            <Box className="step-content">
+              <Typography 
+                variant="h6" 
+                sx={{ 
+                  mb: 3, 
+                  color: theme.palette.secondary.main,
+                  fontWeight: 600,
+                }}
+              >
                 Choose Your Division
               </Typography>
               
               <FormControl component="fieldset" fullWidth>
                 <RadioGroup value={selectedDivision} onChange={(e) => setSelectedDivision(e.target.value)}>
                   {divisions.map((division) => (
-                    <Card key={division.id} sx={{ mb: 2, backgroundColor: theme.palette.background.default }}>
+                    <Card 
+                      key={division.id} 
+                      sx={{ 
+                        mb: 2, 
+                        backgroundColor: theme.palette.background.default,
+                        transition: 'all 0.3s ease',
+                        cursor: 'pointer',
+                        '&:hover': {
+                          transform: 'translateX(8px)',
+                          boxShadow: `0 4px 12px ${theme.palette.secondary.dark}20`,
+                        },
+                      }}
+                      onClick={() => setSelectedDivision(division.id.toString())}
+                    >
                       <CardContent>
                         <FormControlLabel 
                           value={division.id.toString()}
                           control={<Radio />}
+                          sx={{ width: '100%', m: 0, alignItems: 'flex-start' }}
                           label={
-                            <Box sx={{ width: '100%' }}>
+                            <Box sx={{ width: '100%', ml: 1 }}>
                               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <Typography variant="h6">
                                   {division.name}
@@ -254,19 +392,26 @@ const LeagueRegisterPay = () => {
           )}
 
           {activeStep === 2 && (
-            <Box>
-              <Typography variant="h6" sx={{ mb: 2, color: theme.palette.secondary.main }}>
+            <Box className="step-content">
+              <Typography 
+                variant="h6" 
+                sx={{ 
+                  mb: 3, 
+                  color: theme.palette.secondary.main,
+                  fontWeight: 600,
+                }}
+              >
                 Payment Information
               </Typography>
 
               <Card sx={{ 
                 mb: 3, 
                 backgroundColor: theme.palette.background.default,
-                boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
                 border: `1px solid ${theme.palette.divider}`
               }}>
                 <CardContent>
-                  <Typography variant="h6" gutterBottom>
+                  <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
                     Order Summary
                   </Typography>
                   <Divider sx={{ my: 2 }} />
@@ -301,11 +446,19 @@ const LeagueRegisterPay = () => {
                 label="Promo Code"
                 value={promoCode}
                 onChange={(e) => setPromoCode(e.target.value)}
-                sx={{ mb: 3 }}
+                sx={{ 
+                  mb: 3,
+                  '& .MuiOutlinedInput-root': {
+                    transition: 'all 0.3s ease',
+                    '&:hover fieldset': {
+                      borderColor: theme.palette.secondary.main,
+                    },
+                  },
+                }}
                 placeholder="Enter promo code if you have one"
               />
 
-              <Typography variant="h6" sx={{ mb: 2 }}>
+              <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
                 Payment Method
               </Typography>
               
@@ -331,6 +484,16 @@ const LeagueRegisterPay = () => {
               variant="contained"
               color="secondary"
               onClick={handleNext}
+              sx={{
+                px: 4,
+                py: 1.5,
+                fontWeight: 600,
+                transition: 'all 0.3s ease',
+                '&:hover': {
+                  transform: 'translateY(-2px)',
+                  boxShadow: `0 6px 16px ${theme.palette.secondary.dark}40`,
+                },
+              }}
             >
               {activeStep === steps.length - 1 ? 'Complete Payment' : 'Next'}
             </Button>

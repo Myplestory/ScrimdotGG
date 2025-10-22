@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -23,11 +23,20 @@ import SupportAgentIcon from '@mui/icons-material/SupportAgent';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import PendingIcon from '@mui/icons-material/Pending';
 import CancelIcon from '@mui/icons-material/Cancel';
+import { gsap } from 'gsap';
+import { usePageEnter } from '../../animations/useGSAP';
+import { staggerIn, fadeIn, ease } from '../../animations/gsapUtils';
 
 const SupportTickets = () => {
   const theme = useTheme();
   const [activeTab, setActiveTab] = useState(0);
   const [showSuccess, setShowSuccess] = useState(false);
+
+  // Animation refs
+  const containerRef = useRef(null);
+  const titleRef = useRef(null);
+  const tabsRef = useRef(null);
+  const contentRef = useRef(null);
 
   const [formData, setFormData] = useState({
     category: '',
@@ -165,8 +174,35 @@ const SupportTickets = () => {
     }
   };
 
+  // Page enter animations
+  usePageEnter(containerRef, () => {
+    const tl = gsap.timeline();
+    
+    tl.from(titleRef.current, {
+      opacity: 0,
+      y: -30,
+      duration: 0.6,
+      ease: ease.aggressive,
+    })
+    .from(tabsRef.current, {
+      opacity: 0,
+      y: 20,
+      duration: 0.5,
+      ease: ease.smooth,
+    }, '-=0.3')
+    .from(contentRef.current, {
+      opacity: 0,
+      y: 30,
+      duration: 0.5,
+      ease: ease.smooth,
+    }, '-=0.2');
+    
+    return tl;
+  }, []);
+
   return (
     <Box
+      ref={containerRef}
       sx={{
         width: '100%',
         height: '100%',
@@ -176,7 +212,7 @@ const SupportTickets = () => {
       }}
     >
       {/* Header */}
-      <Box sx={{ mb: 4 }}>
+      <Box ref={titleRef} sx={{ mb: 4 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
           <SupportAgentIcon sx={{ fontSize: 40, color: theme.palette.secondary.main, mr: 2 }} />
           <Typography variant="h4" sx={{ color: theme.palette.secondary.main, fontWeight: 'bold' }}>
@@ -190,6 +226,7 @@ const SupportTickets = () => {
 
       {/* Tabs */}
       <Tabs
+        ref={tabsRef}
         value={activeTab}
         onChange={(e, newValue) => setActiveTab(newValue)}
         sx={{
@@ -217,7 +254,7 @@ const SupportTickets = () => {
 
       {/* My Tickets Tab */}
       {activeTab === 0 && (
-        <Box sx={{ mb: 4 }}>
+        <Box ref={contentRef} sx={{ mb: 4 }}>
           <Paper
             sx={{
               backgroundColor: theme.palette.background.paper,
@@ -289,7 +326,7 @@ const SupportTickets = () => {
 
       {/* Submit New Ticket Tab */}
       {activeTab === 1 && (
-        <Box>
+        <Box ref={contentRef}>
           {showSuccess && (
             <Alert severity="success" sx={{ mb: 3 }}>
               Your ticket has been submitted successfully! We'll get back to you within 24-48 hours.

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -21,10 +21,19 @@ import UpdateIcon from '@mui/icons-material/Update';
 import SecurityIcon from '@mui/icons-material/Security';
 import SpeedIcon from '@mui/icons-material/Speed';
 import GroupsIcon from '@mui/icons-material/Groups';
+import { gsap } from 'gsap';
+import { usePageEnter } from '../../animations/useGSAP';
+import { staggerIn, fadeIn, ease } from '../../animations/gsapUtils';
 
 const Download = () => {
   const theme = useTheme();
   const [downloading, setDownloading] = useState(false);
+
+  // Animation refs
+  const containerRef = useRef(null);
+  const titleRef = useRef(null);
+  const windowsRef = useRef(null);
+  const macRef = useRef(null);
 
   const currentVersion = '2.1.4';
   const releaseDate = 'October 15, 2025';
@@ -93,8 +102,41 @@ const Download = () => {
     }, 1500);
   };
 
+  // Page enter animations
+  usePageEnter(containerRef, () => {
+    const tl = gsap.timeline();
+    
+    // Set initial states
+    gsap.set([windowsRef.current, macRef.current], {
+      opacity: 0,
+      y: 20,
+    });
+    
+    gsap.set(titleRef.current, {
+      opacity: 0,
+      y: -20,
+    });
+    
+    // Animate to final states - fast and simultaneous
+    tl.to(titleRef.current, {
+      opacity: 1,
+      y: 0,
+      duration: 0.3,
+      ease: ease.smooth,
+    })
+    .to([windowsRef.current, macRef.current], {
+      opacity: 1,
+      y: 0,
+      duration: 0.3,
+      ease: ease.smooth,
+    }, '-=0.15');
+    
+    return tl;
+  }, []);
+
   return (
     <Box
+      ref={containerRef}
       sx={{
         width: '100%',
         height: '100%',
@@ -104,7 +146,7 @@ const Download = () => {
       }}
     >
       {/* Header */}
-      <Box sx={{ mb: 4, textAlign: 'center' }}>
+      <Box ref={titleRef} sx={{ mb: 4, textAlign: 'center' }}>
         <Typography variant="h3" sx={{ color: theme.palette.secondary.main, fontWeight: 'bold', mb: 2 }}>
           Download ScrimGG Client
         </Typography>
@@ -119,6 +161,7 @@ const Download = () => {
       {/* Download Buttons */}
       <Box sx={{ display: 'flex', gap: 3, justifyContent: 'center', mb: 6 }}>
         <Paper
+          ref={windowsRef}
           sx={{
             p: 4,
             backgroundColor: theme.palette.background.paper,
@@ -162,6 +205,7 @@ const Download = () => {
         </Paper>
 
         <Paper
+          ref={macRef}
           sx={{
             p: 4,
             backgroundColor: theme.palette.background.paper,
@@ -184,7 +228,7 @@ const Download = () => {
             macOS 11 or later
           </Typography>
           <Button
-            variant="outlined"
+            variant="contained"
             color="secondary"
             fullWidth
             size="large"
@@ -195,10 +239,6 @@ const Download = () => {
               py: 1.5,
               fontWeight: 'bold',
               textTransform: 'none',
-              borderWidth: 2,
-              '&:hover': {
-                borderWidth: 2,
-              },
             }}
           >
             Download for macOS

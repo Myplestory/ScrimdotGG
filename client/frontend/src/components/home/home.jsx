@@ -86,6 +86,11 @@ const HomeComponent = () => {
               flexDirection: 'column',
               height: 240,
               width: '100%',
+              transition: 'transform 0.3s ease, box-shadow 0.3s ease',
+              '&:hover': {
+                transform: 'translateY(-4px)',
+                boxShadow: `0 8px 24px ${theme.palette.secondary.dark}20`,
+              },
             }}
           >
             <Chart />
@@ -101,10 +106,15 @@ const HomeComponent = () => {
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              height: '70vh', // Ensures the card is tall
-              backgroundColor: theme.palette.background.paper, // Use dark grey from the theme
-              boxShadow: '0 4px 10px rgba(0, 0, 0, 0.3)', // Optional: Add a subtle shadow for depth
-              borderRadius: '12px', // Optional: Slightly round the corners
+              height: '70vh',
+              backgroundColor: theme.palette.background.paper,
+              boxShadow: '0 4px 10px rgba(0, 0, 0, 0.3)',
+              borderRadius: '12px',
+              transition: 'transform 0.3s ease, box-shadow 0.3s ease',
+              '&:hover': {
+                transform: 'translateY(-4px)',
+                boxShadow: `0 8px 24px ${theme.palette.secondary.dark}20`,
+              },
             }}
           >
             {playerData ? (
@@ -117,7 +127,17 @@ const HomeComponent = () => {
         
         {/* Test Button for MatchPage Preview */}
         <Grid item xs={12}>
-          <Paper sx={{ p: 2, textAlign: 'center' }}>
+          <Paper 
+            sx={{ 
+              p: 2, 
+              textAlign: 'center',
+              transition: 'transform 0.3s ease, box-shadow 0.3s ease',
+              '&:hover': {
+                transform: 'translateY(-2px)',
+                boxShadow: `0 6px 20px ${theme.palette.secondary.dark}15`,
+              },
+            }}
+          >
             <Typography variant="h6" gutterBottom>
               🎮 Development Preview
             </Typography>
@@ -125,7 +145,13 @@ const HomeComponent = () => {
               variant="contained" 
               color="secondary"
               onClick={() => navigate('/match/test-preview')}
-              sx={{ mt: 1 }}
+              sx={{ 
+                mt: 1,
+                transition: 'transform 0.2s ease',
+                '&:hover': {
+                  transform: 'scale(1.05)',
+                },
+              }}
             >
               Preview MatchPage Design
             </Button>
