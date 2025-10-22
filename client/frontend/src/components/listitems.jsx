@@ -40,6 +40,7 @@ export const MainListItems = ({ setActiveComponent }) => {
     if (path.startsWith('/league')) return 'league';
     if (path.startsWith('/forum')) return 'forums';
     if (path.startsWith('/support') || path.startsWith('/faq')) return 'support';
+    if (path.startsWith('/tournaments')) return 'tournaments';
     if (path.startsWith('/download')) return 'client';
     return null; // Default: no accordion expanded on landing page
   };
@@ -143,6 +144,28 @@ export const MainListItems = ({ setActiveComponent }) => {
           <List>
             <CustomListItem text="FAQ" navigateTo="/faq" />
             <CustomListItem text="Support Tickets" navigateTo="/supporttickets" />
+          </List>
+      </AccordionDetails>
+    </Accordion>
+      <Accordion 
+        expanded={expandedAccordion === 'tournaments'}
+        onChange={handleAccordionChange('tournaments')}
+        sx={{ 
+          '&:before': { display: 'none' }, 
+          boxShadow: 'none', 
+          margin: '0 !important',
+          '&.MuiAccordion-root': { margin: '0 !important' },
+          '&.MuiAccordion-root:before': { display: 'none' }
+        }}>
+        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+          <ListItemText primary="Tournaments" />
+        </AccordionSummary>
+        <AccordionDetails>
+          <List>
+            <CustomListItem text="Browse Tournaments" navigateTo="/tournaments/browse" />
+            <CustomListItem text="My Tournaments" navigateTo="/tournaments/my" />
+            <CustomListItem text="Create Tournament" navigateTo="/tournaments/create" />
+            <CustomListItem text="Tournament History" navigateTo="/tournaments/history" />
           </List>
       </AccordionDetails>
     </Accordion>

@@ -31,6 +31,12 @@ import PostNew from './pages/forums/postnew';
 import FAQ from './pages/support/faq';
 import SupportTickets from './pages/support/tickets';
 
+// Tournament Pages
+import BrowseTournaments from './pages/tournaments/browse';
+import MyTournaments from './pages/tournaments/my';
+import CreateTournament from './pages/tournaments/create';
+import TournamentHistory from './pages/tournaments/history';
+
 // Client Page
 import Download from './pages/client/download';
 
@@ -74,6 +80,10 @@ const LayoutWrapper = () => {
         <Route path="/postnew" element={<PostNew />} />
         <Route path="/faq" element={<FAQ />} />
         <Route path="/supporttickets" element={<SupportTickets />} />
+        <Route path="/tournaments/browse" element={<BrowseTournaments />} />
+        <Route path="/tournaments/my" element={<MyTournaments />} />
+        <Route path="/tournaments/create" element={<CreateTournament />} />
+        <Route path="/tournaments/history" element={<TournamentHistory />} />
         <Route path="/download" element={<Download />} />
       </Routes>
     </Layout>
