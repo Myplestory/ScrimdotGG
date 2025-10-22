@@ -15,7 +15,7 @@ import {
   Alert,
   Container
 } from '@mui/material';
-import { useMode } from '../theme';
+import { useMode } from '../../theme';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import GavelIcon from '@mui/icons-material/Gavel';
 import WarningIcon from '@mui/icons-material/Warning';

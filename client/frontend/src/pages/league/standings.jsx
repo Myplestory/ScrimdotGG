@@ -19,7 +19,7 @@ import {
   LinearProgress,
   Container
 } from '@mui/material';
-import { useMode } from '../theme';
+import { useMode } from '../../theme';
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 
 const LeagueStandings = () => {

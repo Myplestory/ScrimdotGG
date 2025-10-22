@@ -49,7 +49,9 @@ export const MainListItems = ({ setActiveComponent }) => {
   // Update expanded accordion when route changes
   React.useEffect(() => {
     const newExpanded = getInitialExpanded();
-    if (newExpanded) {
+    // Only update if we explicitly found a matching section
+    // This prevents collapsing accordions when navigating to pages like /match/:matchId
+    if (newExpanded !== null) {
       setExpandedAccordion(newExpanded);
     }
   }, [location.pathname]);

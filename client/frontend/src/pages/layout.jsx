@@ -12,8 +12,11 @@ import Badge from '@mui/material/Badge';
 import List from '@mui/material/List';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import MenuIcon from '@mui/icons-material/Menu';
+import MinimizeIcon from '@mui/icons-material/Minimize';
+import CropSquareIcon from '@mui/icons-material/CropSquare';
 import { TextField, ButtonBase } from '@mui/material';
 import Autocomplete from '@mui/material/Autocomplete';
+import { useNavigate } from 'react-router-dom';
 import { ColorModeContext, useMode } from '../theme'; // Use your theme hook
 import { useWebSocket } from '../contexts/WebSocketContext';
 import { MainListItems } from '../components/listitems'; 
@@ -74,9 +77,32 @@ const Layout = ({ children, setActiveComponent }) => {
   const [theme, colorMode] = useMode(); // Use your predefined theme
   const [open, setOpen] = useState(true);
   const { connected, systemStatus, queueStatus, gameState } = useWebSocket();
+  const navigate = useNavigate();
 
   const toggleDrawer = () => {
     setOpen(!open);
+  };
+
+  const handleMinimize = () => {
+    if (window.electronAPI && window.electronAPI.minimizeWindow) {
+      window.electronAPI.minimizeWindow();
+    }
+  };
+
+  const handleMaximize = () => {
+    if (window.electronAPI && window.electronAPI.maximizeWindow) {
+      window.electronAPI.maximizeWindow();
+    }
+  };
+
+  const handleClose = () => {
+    if (window.electronAPI && window.electronAPI.closeApp) {
+      window.electronAPI.closeApp();
+    }
+  };
+
+  const handleHomeClick = () => {
+    navigate('/', { state: { activeComponent: 'home' } });
   };
 
   return (
@@ -159,25 +185,54 @@ const Layout = ({ children, setActiveComponent }) => {
             </Badge>
           </IconButton>
           
-          {/* Close Button */}
+          {/* Minimize Button */}
           <IconButton 
             color="inherit" 
             sx={{ 
               padding: '4px 8px',
               marginLeft: '8px',
-              fontSize: '1.6rem',
+              fontSize: '1.4rem',
               '&:hover': {
-                backgroundColor: 'transparent',
-                textShadow: '0 0 8px rgba(255, 255, 255, 0.8)',
-                transform: 'scale(1.1)',
+                backgroundColor: 'rgba(255, 255, 255, 0.1)',
               },
               transition: 'all 0.2s ease',
             }}
-            onClick={() => {
-              if (window.electronAPI && window.electronAPI.closeApp) {
-                window.electronAPI.closeApp();
-              }
+            onClick={handleMinimize}
+          >
+            <MinimizeIcon sx={{ fontSize: '1.2rem' }} />
+          </IconButton>
+
+          {/* Maximize/Restore Button */}
+          <IconButton 
+            color="inherit" 
+            sx={{ 
+              padding: '4px 8px',
+              marginLeft: '4px',
+              fontSize: '1.4rem',
+              '&:hover': {
+                backgroundColor: 'rgba(255, 255, 255, 0.1)',
+              },
+              transition: 'all 0.2s ease',
             }}
+            onClick={handleMaximize}
+          >
+            <CropSquareIcon sx={{ fontSize: '1rem' }} />
+          </IconButton>
+          
+          {/* Close Button */}
+          <IconButton 
+            color="inherit" 
+            sx={{ 
+              padding: '4px 8px',
+              marginLeft: '4px',
+              fontSize: '1.6rem',
+              '&:hover': {
+                backgroundColor: 'rgba(255, 0, 0, 0.3)',
+                color: '#ff4444',
+              },
+              transition: 'all 0.2s ease',
+            }}
+            onClick={handleClose}
           >
             ×
           </IconButton>
@@ -194,7 +249,7 @@ const Layout = ({ children, setActiveComponent }) => {
           }}
         >
           <ButtonBase
-            onClick={() => setActiveComponent('home')} // Redirect to the home page
+            onClick={handleHomeClick} // Navigate to the home page
             sx={{
               textAlign: 'center',
               color: theme.palette.secondary.main,

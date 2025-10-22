@@ -38,9 +38,9 @@ import {
   Search,
   Add
 } from '@mui/icons-material';
-import { useMode } from '../theme';
-import { useWebSocket } from '../contexts/WebSocketContext';
-import PlayerSlot from '../components/lobby/playerslot';
+import { useMode } from '../../theme';
+import { useWebSocket } from '../../contexts/WebSocketContext';
+import PlayerSlot from '../../components/lobby/playerslot';
 
 const PugQueue = () => {
   const [theme, colorMode] = useMode();

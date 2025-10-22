@@ -24,7 +24,7 @@ import {
   Container,
   IconButton
 } from '@mui/material';
-import { useMode } from '../theme';
+import { useMode } from '../../theme';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 
 const LeagueRegisterPay = () => {

@@ -1,5 +1,6 @@
 .App {
   text-align: center;
+  background: #0f0f0f;
 }
 
 .App-logo {
@@ -14,7 +15,7 @@
 }
 
 .App-header {
-  background-color: #282c34;
+  background-color: #0f0f0f;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -25,7 +26,12 @@
 }
 
 .App-link {
-  color: #61dafb;
+  color: #FF4655; /* Valorant red for links */
+  transition: color 0.3s ease;
+}
+
+.App-link:hover {
+  color: #ff1f31; /* Brighter red on hover */
 }
 
 @keyframes App-logo-spin {
@@ -35,4 +41,21 @@
   to {
     transform: rotate(360deg);
   }
+}
+
+/* Valorant-inspired glow effect for accents */
+.valorant-glow {
+  box-shadow: 0 0 10px rgba(255, 70, 85, 0.3),
+              0 0 20px rgba(255, 70, 85, 0.2),
+              0 0 30px rgba(255, 70, 85, 0.1);
+}
+
+/* Smooth transitions for interactive elements */
+button, a, .interactive {
+  transition: all 0.3s ease;
+}
+
+button:hover, .interactive:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 70, 85, 0.4);
 }

@@ -21,7 +21,7 @@ import {
   FormControl,
   InputLabel
 } from '@mui/material';
-import { useMode } from '../theme';
+import { useMode } from '../../theme';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 

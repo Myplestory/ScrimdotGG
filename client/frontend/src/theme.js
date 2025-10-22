@@ -1,147 +1,174 @@
 import { createContext, useState, useMemo } from "react";
 import { createTheme } from "@mui/material/styles";
 
-// color design tokens export
+// color design tokens export - VALORANT INSPIRED THEME
 export const tokens = (mode) => ({
   ...(mode === "dark"
     ? {
         grey: {
-          100: "#e0e0e0",
-          200: "#c2c2c2",
-          300: "#a3a3a3",
-          400: "#858585",
-          500: "#666666",
-          600: "#525252",
-          700: "#3d3d3d",
-          800: "#292929",
-          900: "#141414",
+          100: "#ececec",
+          200: "#d4d4d4",
+          300: "#a8a8a8",
+          400: "#7c7c7c",
+          500: "#505050",
+          600: "#3c3c3c",
+          700: "#282828",
+          800: "#1a1a1a",
+          900: "#0d0d0d",
         },
         primary: {
-          100: "#d0d1d5",
-          200: "#a1a4ab",
-          300: "#727681",
-          400: "#1F2A40",
-          500: "#141b2d",
-          600: "#101624",
-          700: "#0c101b",
-          800: "#080b12",
-          900: "#040509",
+          100: "#2a2a2a",
+          200: "#232323",
+          300: "#1c1c1c",
+          400: "#151515", // Card backgrounds
+          500: "#0f0f0f", // Main background - almost black
+          600: "#0a0a0a",
+          700: "#060606",
+          800: "#030303",
+          900: "#000000",
         },
-        greenAccent: {
-          200: '#F8E4F6',
-          300: '#F2CCF0',
-          400: '#E29CE5',
-          500: '#CB6CD8',
-          600: '#AE3BCB',
-          700: '#7E2A9F',
-          800: '#602383',
-          900: '#451B66',
-        },
-        seance: {
-          DEFAULT: '#EEDAFF',
-          50: '#F8E4F6',
-          100: '#F2CCF0',
-          200: '#E29CE5',
-          300: '#CB6CD8',
-          400: '#AE3BCB',
-          500: '#D4A0FF',
-          600: '#602383',
-          700: '#451B66',
-          800: '#2D144A',
-          900: '#190C2E'
-        },
+        // Valorant Red - Main accent
         redAccent: {
-          100: "#f8dcdb",
-          200: "#f1b9b7",
-          300: "#e99592",
-          400: "#e2726e",
-          500: "#db4f4a",
-          600: "#af3f3b",
-          700: "#832f2c",
-          800: "#58201e",
-          900: "#2c100f",
+          100: "#ffe5e8",
+          200: "#ffccd1",
+          300: "#ffb3ba",
+          400: "#ff99a3",
+          500: "#FF4655", // Signature Valorant red
+          600: "#ff1f31",
+          700: "#e6001a",
+          800: "#b30014",
+          900: "#80000e",
         },
-        
+        // Green for success states
+        greenAccent: {
+          100: "#e6f9f0",
+          200: "#b3ecda",
+          300: "#80dfc3",
+          400: "#4dd2ad",
+          500: "#1ac996",
+          600: "#15a077",
+          700: "#107759",
+          800: "#0b4e3a",
+          900: "#06251c",
+        },
+        // Subtle accent for highlights
+        greyAccent: {
+          100: "#f5f5f5",
+          200: "#e8e8e8",
+          300: "#d1d1d1",
+          400: "#b4b4b4",
+          500: "#6e6e6e", // Muted grey for secondary elements
+          600: "#525252",
+          700: "#3a3a3a",
+          800: "#242424",
+          900: "#121212",
+        },
+        // Keeping for compatibility
+        seance: {
+          DEFAULT: '#FF4655',
+          50: '#ffe5e8',
+          100: '#ffccd1',
+          200: '#ffb3ba',
+          300: '#ff99a3',
+          400: '#ff809c',
+          500: '#FF4655',
+          600: '#ff1f31',
+          700: '#e6001a',
+          800: '#b30014',
+          900: '#80000e'
+        },
         blueAccent: {
-          100: "#e1e2fe",
-          200: "#c3c6fd",
-          300: "#a4a9fc",
-          400: "#868dfb",
-          500: "#6870fa",
-          600: "#535ac8",
-          700: "#3e4396",
-          800: "#2a2d64",
-          900: "#151632",
+          100: "#e6f0ff",
+          200: "#cce0ff",
+          300: "#99c2ff",
+          400: "#66a3ff",
+          500: "#3385ff",
+          600: "#0066ff",
+          700: "#0052cc",
+          800: "#003d99",
+          900: "#002966",
         },
       }
     : {
+        // Light mode (inverted)
         grey: {
-          100: "#141414",
-          200: "#292929",
-          300: "#3d3d3d",
-          400: "#525252",
-          500: "#666666",
-          600: "#858585",
-          700: "#a3a3a3",
-          800: "#c2c2c2",
-          900: "#e0e0e0",
+          100: "#0d0d0d",
+          200: "#1a1a1a",
+          300: "#282828",
+          400: "#3c3c3c",
+          500: "#505050",
+          600: "#7c7c7c",
+          700: "#a8a8a8",
+          800: "#d4d4d4",
+          900: "#ececec",
         },
         primary: {
-          100: "#040509",
-          200: "#080b12",
-          300: "#0c101b",
-          400: "#f2f0f0", // manually changed
-          500: "#141b2d",
-          600: "#1F2A40",
-          700: "#727681",
-          800: "#a1a4ab",
-          900: "#d0d1d5",
-        },
-        greenAccent: {
-          50: '#F8E4F6',
-          100: '#F2CCF0',
-          200: '#E29CE5',
-          300: '#CB6CD8',
-          400: '#AE3BCB',
-          500: '#7E2A9F',
-          600: '#602383',
-          700: '#451B66',
-          800: '#2D144A',
-          900: '#190C2E'
+          100: "#000000",
+          200: "#030303",
+          300: "#060606",
+          400: "#0a0a0a",
+          500: "#0f0f0f",
+          600: "#151515",
+          700: "#1c1c1c",
+          800: "#232323",
+          900: "#2a2a2a",
         },
         redAccent: {
-          100: "#2c100f",
-          200: "#58201e",
-          300: "#832f2c",
-          400: "#af3f3b",
-          500: "#db4f4a",
-          600: "#e2726e",
-          700: "#e99592",
-          800: "#f1b9b7",
-          900: "#f8dcdb",
+          100: "#80000e",
+          200: "#b30014",
+          300: "#e6001a",
+          400: "#ff1f31",
+          500: "#FF4655",
+          600: "#ff99a3",
+          700: "#ffb3ba",
+          800: "#ffccd1",
+          900: "#ffe5e8",
+        },
+        greenAccent: {
+          100: "#06251c",
+          200: "#0b4e3a",
+          300: "#107759",
+          400: "#15a077",
+          500: "#1ac996",
+          600: "#4dd2ad",
+          700: "#80dfc3",
+          800: "#b3ecda",
+          900: "#e6f9f0",
+        },
+        greyAccent: {
+          100: "#121212",
+          200: "#242424",
+          300: "#3a3a3a",
+          400: "#525252",
+          500: "#6e6e6e",
+          600: "#b4b4b4",
+          700: "#d1d1d1",
+          800: "#e8e8e8",
+          900: "#f5f5f5",
         },
         seance: {
-          50: '#F8E4F6',
-          100: '#F2CCF0',
-          200: '#E29CE5',
-          300: '#CB6CD8',
-          400: '#AE3BCB',
-          500: '#7E2A9F',
-          600: '#602383',
-          700: '#451B66',
-          800: '#2D144A',
-          900: '#190C2E'
+          DEFAULT: '#FF4655',
+          50: '#80000e',
+          100: '#b30014',
+          200: '#e6001a',
+          300: '#ff1f31',
+          400: '#FF4655',
+          500: '#ff809c',
+          600: '#ff99a3',
+          700: '#ffb3ba',
+          800: '#ffccd1',
+          900: '#ffe5e8'
         },
         blueAccent: {
-          100: "#151632",
-          200: "#2a2d64",
-          300: "#3e4396",
-          400: "#535ac8",
-          500: "#6870fa",
-          600: "#868dfb",
-          700: "#a4a9fc",
-          800: "#c3c6fd",
-          900: "#e1e2fe",
+          100: "#002966",
+          200: "#003d99",
+          300: "#0052cc",
+          400: "#0066ff",
+          500: "#3385ff",
+          600: "#66a3ff",
+          700: "#99c2ff",
+          800: "#cce0ff",
+          900: "#e6f0ff",
         },
       }),
 });
@@ -154,21 +181,42 @@ export const themeSettings = (mode) => {
       mode: mode,
       ...(mode === "dark"
         ? {
-            // palette values for dark mode
+            // palette values for dark mode - VALORANT THEME
             primary: {
-              main: colors.primary[500],
+              main: colors.primary[500], // Almost black background
+              light: colors.primary[400], // Card backgrounds
+              dark: colors.primary[600],
             },
             secondary: {
-              main: colors.seance[500],
+              main: colors.redAccent[500], // Valorant red as main accent
+              light: colors.redAccent[400],
+              dark: colors.redAccent[600],
+            },
+            error: {
+              main: colors.redAccent[500],
+            },
+            warning: {
+              main: "#FFA726",
+            },
+            info: {
+              main: colors.greyAccent[500],
+            },
+            success: {
+              main: colors.greenAccent[500],
             },
             neutral: {
               dark: colors.grey[700],
               main: colors.grey[500],
-              light: colors.grey[100],
+              light: colors.grey[300],
             },
             background: {
-              default: colors.primary[500], 
-              dark: colors.grey[900],
+              default: colors.primary[500], // Main dark background
+              paper: colors.primary[400], // Card background
+              dark: colors.grey[900], // Darker sections
+            },
+            text: {
+              primary: colors.grey[100], // White text
+              secondary: colors.grey[400], // Muted text
             },
           }
         : {

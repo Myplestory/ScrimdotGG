@@ -11,7 +11,9 @@ function createWindow() {
   const win = new BrowserWindow({
     width: 1200,
     height: 800,
-    resizable: false,
+    minWidth: 800,
+    minHeight: 600,
+    resizable: true,
     frame: false,
     transparent: true, // Make window transparent initially
     opacity: 0, // Start with 0 opacity
@@ -31,6 +33,12 @@ function createWindow() {
         },
         fadeInWindow: () => {
           require('electron').ipcRenderer.send('react-ready');
+        },
+        minimizeWindow: () => {
+          require('electron').ipcRenderer.send('minimize-window');
+        },
+        maximizeWindow: () => {
+          require('electron').ipcRenderer.send('maximize-window');
         }
       };
     `);
@@ -39,6 +47,20 @@ function createWindow() {
   // Handle close app IPC
   ipcMain.on('close-app', () => {
     win.close();
+  });
+
+  // Handle minimize window
+  ipcMain.on('minimize-window', () => {
+    win.minimize();
+  });
+
+  // Handle maximize/restore window toggle
+  ipcMain.on('maximize-window', () => {
+    if (win.isMaximized()) {
+      win.unmaximize();
+    } else {
+      win.maximize();
+    }
   });
 
   // Handle fade in window when React is ready
