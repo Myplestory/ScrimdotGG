@@ -251,13 +251,13 @@ const AuthenticationScreen = ({ onAuthentication }) => {
           component="h1"
           variant="h4"
           sx={{
-            fontSize: "4rem",
+            fontSize: "5.5rem",
             fontWeight: 900,
             background: `linear-gradient(135deg, ${theme.palette.secondary.main} 0%, ${theme.palette.secondary.light} 100%)`,
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
             backgroundClip: 'text',
-            marginBottom: "3rem",
+            marginBottom: "2rem",
             letterSpacing: '0.1em',
             textTransform: 'uppercase',
           }}
@@ -272,11 +272,11 @@ const AuthenticationScreen = ({ onAuthentication }) => {
           noValidate
           sx={{ 
             width: "100%",
-            minWidth: '400px',
+            maxWidth: '300px',
             backgroundColor: theme.palette.background.paper,
             border: `1px solid ${theme.palette.divider}`,
-            borderRadius: '16px',
-            padding: '40px',
+            borderRadius: '10px',
+            padding: '24px 20px',
             boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
           }}
         >
@@ -297,18 +297,18 @@ const AuthenticationScreen = ({ onAuthentication }) => {
               background: `linear-gradient(135deg, ${theme.palette.secondary.dark} 0%, ${theme.palette.secondary.main} 100%)`,
               width: '100%',
               margin: "auto",
-              mb: 3,
-              py: 2,
-              fontSize: '1.1rem',
+              mb: 1.5,
+              py: 1.25,
+              fontSize: '0.95rem',
               fontWeight: 700,
               textTransform: 'uppercase',
-              letterSpacing: '0.15em',
+              letterSpacing: '0.1em',
               transition: 'all 0.3s ease',
               borderRadius: '8px',
-              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+              boxShadow: '0 3px 10px rgba(0, 0, 0, 0.3)',
               '&:hover': {
                 background: `linear-gradient(135deg, ${theme.palette.secondary.main} 0%, ${theme.palette.secondary.light} 100%)`,
-                boxShadow: '0 6px 16px rgba(0, 0, 0, 0.4)',
+                boxShadow: '0 5px 14px rgba(0, 0, 0, 0.4)',
                 transform: 'translateY(-2px)',
               },
               '&:active': {
@@ -321,7 +321,7 @@ const AuthenticationScreen = ({ onAuthentication }) => {
               },
             }}
           >
-            {loading ? <CircularProgress size={24} color="inherit" /> : 'Authenticate'}
+            {loading ? <CircularProgress size={20} color="inherit" /> : 'Authenticate'}
           </Button>
           
           <FormControl sx={{ mb: 0, width: '100%' }}>
@@ -345,7 +345,7 @@ const AuthenticationScreen = ({ onAuthentication }) => {
               size="small"
               sx={{ 
                 backgroundColor: theme.palette.background.default + '80',
-                height: '56px',
+                height: '44px',
                 borderRadius: '8px',
                 '& .MuiOutlinedInput-notchedOutline': {
                   borderColor: theme.palette.divider,
@@ -359,7 +359,7 @@ const AuthenticationScreen = ({ onAuthentication }) => {
                   borderColor: theme.palette.secondary.main,
                 },
                 '& .MuiSelect-select': {
-                  padding: '16px 14px',
+                  padding: '10px 14px',
                   display: 'flex',
                   alignItems: 'center',
                   textAlign: 'left',

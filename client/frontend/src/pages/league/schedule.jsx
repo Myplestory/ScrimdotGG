@@ -9,12 +9,22 @@ import {
   Tab,
   Chip,
   Avatar,
-  Container
+  Container,
+  IconButton,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  TextField,
+  InputAdornment
 } from '@mui/material';
 import { useMode } from '../../theme';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import SearchIcon from '@mui/icons-material/Search';
 import { gsap } from 'gsap';
 import { usePageEnter } from '../../animations/useGSAP';
 import { staggerIn, fadeIn, ease } from '../../animations/gsapUtils';
@@ -22,6 +32,10 @@ import { staggerIn, fadeIn, ease } from '../../animations/gsapUtils';
 const LeagueSchedule = () => {
   const [theme] = useMode();
   const [selectedWeek, setSelectedWeek] = useState(6);
+  const [selectedLeague, setSelectedLeague] = useState('advanced');
+  const [selectedPhase, setSelectedPhase] = useState('regular');
+  const [searchQuery, setSearchQuery] = useState('');
+  const currentWeek = 6; // Week 7 is the current week
 
   // Animation refs
   const containerRef = useRef(null);
@@ -29,107 +43,134 @@ const LeagueSchedule = () => {
   const tabsRef = useRef(null);
   const matchesRef = useRef(null);
 
+  // League structure similar to FACEIT/ESEA
+  const leagues = [
+    { id: 'open', name: 'Open Division', skill: 'Entry Level' },
+    { id: 'intermediate', name: 'Intermediate Division', skill: 'Mid Level' },
+    { id: 'advanced', name: 'Advanced Division', skill: 'High Level' },
+    { id: 'premier', name: 'Premier Division', skill: 'Elite' }
+  ];
+
+  // Season phases like FACEIT/ESEA
+  const phases = [
+    { id: 'regular', name: 'Regular Season' },
+    { id: 'playoffs', name: 'Playoffs' },
+    { id: 'finals', name: 'Finals' }
+  ];
+
   const weeks = [
     'Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5', 
     'Week 6', 'Week 7', 'Week 8', 'Week 9', 'Week 10',
-    'Week 11', 'Week 12', 'Week 13', 'Week 14', 'Playoffs'
+    'Week 11', 'Week 12', 'Week 13', 'Week 14'
   ];
 
+  // Helper to generate matches for weeks
+  const generateWeekMatches = (weekNum, teams, startId) => {
+    const dates = ['2025-10-22', '2025-10-23'];
+    const times = ['18:00 EST', '19:00 EST', '20:00 EST'];
+    const maps = ['Ascent', 'Haven', 'Bind', 'Split', 'Icebox', 'Breeze', 'TBD'];
+    const statuses = weekNum < 6 ? ['completed'] : weekNum === 6 ? ['completed', 'live', 'scheduled'] : ['scheduled'];
+    
+    const matches = [];
+    for (let i = 0; i < teams.length; i += 2) {
+      if (i + 1 < teams.length) {
+        const status = statuses[Math.floor(Math.random() * statuses.length)];
+        matches.push({
+          id: startId + i,
+          homeTeam: teams[i].name,
+          homeTag: teams[i].tag,
+          homeHistory: teams[i].history,
+          awayTeam: teams[i + 1].name,
+          awayTag: teams[i + 1].tag,
+          awayHistory: teams[i + 1].history,
+          date: dates[Math.floor(i / 2) % dates.length],
+          time: times[i % times.length],
+          status: status,
+          map: status === 'scheduled' ? 'TBD' : maps[Math.floor(Math.random() * (maps.length - 1))],
+          ...(status === 'completed' && { score: `2-${Math.floor(Math.random() * 2)}` }),
+          ...(status === 'live' && { score: `1-1` })
+        });
+      }
+    }
+    return matches;
+  };
+
+  const advancedTeams = [
+    { name: 'Cloud9 Blue', tag: 'C9B', history: ['W', 'W', 'L', 'W', 'W'] },
+    { name: 'Sentinels', tag: 'SEN', history: ['W', 'W', 'W', 'L', 'W'] },
+    { name: '100 Thieves', tag: '100T', history: ['L', 'W', 'W', 'L', 'W'] },
+    { name: 'Team Liquid', tag: 'TL', history: ['W', 'L', 'W', 'W', 'L'] },
+    { name: 'XSET', tag: 'XSET', history: ['L', 'L', 'W', 'L', 'W'] },
+    { name: 'OpTic Gaming', tag: 'OG', history: ['W', 'W', 'W', 'W', 'L'] },
+    { name: 'FaZe Clan', tag: 'FAZE', history: ['W', 'L', 'L', 'W', 'W'] },
+    { name: 'NRG', tag: 'NRG', history: ['L', 'W', 'W', 'L', 'L'] },
+    { name: 'The Guard', tag: 'TGRD', history: ['W', 'L', 'W', 'L', 'W'] },
+    { name: 'Evil Geniuses', tag: 'EG', history: ['L', 'L', 'W', 'W', 'L'] },
+    { name: 'Version1', tag: 'V1', history: ['W', 'W', 'W', 'L', 'L'] },
+    { name: 'Ghost Gaming', tag: 'GG', history: ['L', 'W', 'L', 'W', 'W'] },
+  ];
+
+  const intermediateTeams = [
+    { name: 'Rebels Gaming', tag: 'RBL', history: ['W', 'L', 'W', 'W', 'L'] },
+    { name: 'Phoenix Squad', tag: 'PHX', history: ['L', 'W', 'L', 'W', 'W'] },
+    { name: 'Apex Legends', tag: 'APEX', history: ['W', 'W', 'L', 'L', 'W'] },
+    { name: 'Titan Force', tag: 'TF', history: ['L', 'W', 'W', 'L', 'W'] },
+    { name: 'Storm Surge', tag: 'SS', history: ['W', 'L', 'L', 'W', 'W'] },
+    { name: 'Nova Elite', tag: 'NE', history: ['W', 'W', 'L', 'W', 'L'] },
+    { name: 'Cipher Squad', tag: 'CS', history: ['L', 'W', 'W', 'W', 'L'] },
+    { name: 'Vortex Gaming', tag: 'VG', history: ['W', 'L', 'W', 'L', 'W'] },
+  ];
+
+  // Schedule organized by league -> phase -> week
   const scheduleData = {
-    0: [
-      { 
-        id: 1, 
-        homeTeam: 'Cloud9 Blue', 
-        homeTag: 'C9B',
-        awayTeam: 'Sentinels', 
-        awayTag: 'SEN',
-        date: '2025-10-22',
-        time: '18:00 EST',
-        status: 'scheduled',
-        map: 'TBD'
-      },
-      { 
-        id: 2, 
-        homeTeam: '100 Thieves', 
-        homeTag: '100T',
-        awayTeam: 'Team Liquid', 
-        awayTag: 'TL',
-        date: '2025-10-22',
-        time: '19:00 EST',
-        status: 'scheduled',
-        map: 'TBD'
-      },
-      { 
-        id: 3, 
-        homeTeam: 'XSET', 
-        homeTag: 'XSET',
-        awayTeam: 'OpTic Gaming', 
-        awayTag: 'OG',
-        date: '2025-10-23',
-        time: '18:00 EST',
-        status: 'scheduled',
-        map: 'TBD'
-      },
-      { 
-        id: 4, 
-        homeTeam: 'FaZe Clan', 
-        homeTag: 'FAZE',
-        awayTeam: 'NRG', 
-        awayTag: 'NRG',
-        date: '2025-10-23',
-        time: '19:00 EST',
-        status: 'scheduled',
-        map: 'TBD'
-      },
-    ],
-    6: [
-      { 
-        id: 13, 
-        homeTeam: 'Cloud9 Blue', 
-        homeTag: 'C9B',
-        awayTeam: 'XSET', 
-        awayTag: 'XSET',
-        date: '2025-10-21',
-        time: '18:00 EST',
-        status: 'completed',
-        score: '2-0',
-        map: 'Ascent'
-      },
-      { 
-        id: 14, 
-        homeTeam: 'Sentinels', 
-        homeTag: 'SEN',
-        awayTeam: '100 Thieves', 
-        awayTag: '100T',
-        date: '2025-10-21',
-        time: '19:00 EST',
-        status: 'live',
-        score: '1-1',
-        map: 'Haven'
-      },
-      { 
-        id: 15, 
-        homeTeam: 'Team Liquid', 
-        homeTag: 'TL',
-        awayTeam: 'OpTic Gaming', 
-        awayTag: 'OG',
-        date: '2025-10-22',
-        time: '18:00 EST',
-        status: 'scheduled',
-        map: 'Bind'
-      },
-      { 
-        id: 16, 
-        homeTeam: 'FaZe Clan', 
-        homeTag: 'FAZE',
-        awayTeam: 'NRG', 
-        awayTag: 'NRG',
-        date: '2025-10-22',
-        time: '19:00 EST',
-        status: 'scheduled',
-        map: 'Split'
-      },
-    ],
+    advanced: {
+      regular: Object.fromEntries(
+        weeks.map((_, index) => [
+          index,
+          generateWeekMatches(index, advancedTeams, index * 100)
+        ])
+      ),
+      playoffs: {
+        0: [
+          {
+            id: 1400,
+            homeTeam: 'Cloud9 Blue',
+            homeTag: 'C9B',
+            homeHistory: ['W', 'W', 'W', 'L', 'W'],
+            awayTeam: 'Sentinels',
+            awayTag: 'SEN',
+            awayHistory: ['W', 'L', 'W', 'W', 'W'],
+            date: '2025-11-15',
+            time: '18:00 EST',
+            status: 'scheduled',
+            map: 'TBD',
+            round: 'Quarterfinals'
+          },
+          {
+            id: 1401,
+            homeTeam: '100 Thieves',
+            homeTag: '100T',
+            homeHistory: ['W', 'W', 'L', 'W', 'W'],
+            awayTeam: 'Team Liquid',
+            awayTag: 'TL',
+            awayHistory: ['L', 'W', 'W', 'W', 'L'],
+            date: '2025-11-15',
+            time: '19:00 EST',
+            status: 'scheduled',
+            map: 'TBD',
+            round: 'Quarterfinals'
+          }
+        ]
+      }
+    },
+    intermediate: {
+      regular: Object.fromEntries(
+        weeks.map((_, index) => [
+          index,
+          generateWeekMatches(index, intermediateTeams, index * 100 + 2000)
+        ])
+      )
+    }
   };
 
   const handleTabChange = (event, newValue) => {
@@ -150,7 +191,26 @@ const LeagueSchedule = () => {
   };
 
   const getCurrentWeekData = () => {
-    return scheduleData[selectedWeek] || scheduleData[0];
+    const leagueData = scheduleData[selectedLeague];
+    if (!leagueData) return [];
+    
+    const phaseData = leagueData[selectedPhase];
+    if (!phaseData) return [];
+    
+    let matches = phaseData[selectedWeek] || [];
+    
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      matches = matches.filter(match => 
+        match.homeTeam.toLowerCase().includes(query) ||
+        match.homeTag.toLowerCase().includes(query) ||
+        match.awayTeam.toLowerCase().includes(query) ||
+        match.awayTag.toLowerCase().includes(query)
+      );
+    }
+    
+    return matches;
   };
 
   // Page enter animations
@@ -203,22 +263,127 @@ const LeagueSchedule = () => {
           height: '100%',
           backgroundColor: theme.palette.background.dark,
           padding: theme.spacing(4),
+          paddingTop: theme.spacing(2),
           overflow: 'hidden'
         }}
       >
-        <Typography 
-          ref={titleRef}
-          variant="h4" 
-          sx={{ 
-            mb: 4, 
-            color: theme.palette.secondary.main, 
-            flexShrink: 0,
-            fontWeight: 700,
-            letterSpacing: '0.02em',
-          }}
-        >
-          League Schedule
-        </Typography>
+        {/* Top Row: Title + Week Navigation */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexShrink: 0 }}>
+          <Typography 
+            ref={titleRef}
+            variant="h4" 
+            sx={{ 
+              color: theme.palette.secondary.main, 
+              fontWeight: 700,
+              letterSpacing: '0.02em',
+            }}
+          >
+            League Schedule
+          </Typography>
+
+          {/* Week Selector */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Chip 
+              label="Current Week"
+              size="small"
+              onClick={() => setSelectedWeek(currentWeek)}
+              sx={{ 
+                cursor: 'pointer',
+                fontWeight: 600,
+                backgroundColor: selectedWeek === currentWeek 
+                  ? theme.palette.secondary.main 
+                  : theme.palette.background.paper,
+                color: selectedWeek === currentWeek 
+                  ? '#fff' 
+                  : theme.palette.text.secondary,
+                '&:hover': {
+                  backgroundColor: theme.palette.secondary.main,
+                  color: '#fff'
+                }
+              }}
+            />
+            <IconButton 
+              onClick={() => setSelectedWeek(prev => Math.max(0, prev - 1))}
+              disabled={selectedWeek === 0}
+              sx={{ 
+                color: theme.palette.secondary.main,
+                '&:disabled': { color: theme.palette.text.disabled }
+              }}
+            >
+              <ChevronLeftIcon />
+            </IconButton>
+            <Typography variant="h6" sx={{ minWidth: 120, textAlign: 'center', fontWeight: 600 }}>
+              {weeks[selectedWeek]}
+            </Typography>
+            <IconButton 
+              onClick={() => setSelectedWeek(prev => Math.min(weeks.length - 1, prev + 1))}
+              disabled={selectedWeek === weeks.length - 1}
+              sx={{ 
+                color: theme.palette.secondary.main,
+                '&:disabled': { color: theme.palette.text.disabled }
+              }}
+            >
+              <ChevronRightIcon />
+            </IconButton>
+          </Box>
+        </Box>
+
+        {/* Bottom Row: Search + Dropdowns */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexShrink: 0 }}>
+          {/* Search Function */}
+          <TextField
+            placeholder="Search teams..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            size="small"
+            sx={{ 
+              minWidth: 300,
+              '& .MuiOutlinedInput-root': {
+                backgroundColor: theme.palette.background.paper,
+              }
+            }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon sx={{ color: theme.palette.text.secondary }} />
+                </InputAdornment>
+              ),
+            }}
+          />
+
+          {/* Division and Phase Dropdowns */}
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <FormControl sx={{ minWidth: 200 }} size="small">
+              <InputLabel>Division</InputLabel>
+              <Select
+                value={selectedLeague}
+                onChange={(e) => setSelectedLeague(e.target.value)}
+                label="Division"
+              >
+                {leagues.map((league) => (
+                  <MenuItem key={league.id} value={league.id}>
+                    {league.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <FormControl sx={{ minWidth: 200 }} size="small">
+              <InputLabel>Phase</InputLabel>
+              <Select
+                value={selectedPhase}
+                onChange={(e) => setSelectedPhase(e.target.value)}
+                label="Phase"
+              >
+                {phases.map((phase) => (
+                  <MenuItem key={phase.id} value={phase.id}>
+                    {phase.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Box>
+        </Box>
 
       <Box sx={{ flex: 1, overflow: 'auto', pr: 1 }}>
       <Card 
@@ -235,45 +400,6 @@ const LeagueSchedule = () => {
         }}
       >
         <CardContent>
-          <Tabs 
-            value={selectedWeek} 
-            onChange={handleTabChange}
-            variant="scrollable"
-            scrollButtons="auto"
-            sx={{ 
-              mb: 3,
-              '& .MuiTabs-indicator': {
-                backgroundColor: theme.palette.secondary.main,
-                height: 3
-              },
-              '& .MuiTab-root': {
-                color: theme.palette.text.secondary,
-                fontWeight: 600,
-                textTransform: 'uppercase',
-                fontSize: '0.875rem',
-                '&.Mui-selected': {
-                  color: theme.palette.secondary.main
-                },
-                '&:hover': {
-                  color: theme.palette.secondary.light
-                }
-              }
-            }}
-          >
-            {weeks.map((week, index) => (
-              <Tab 
-                key={index} 
-                label={week}
-                icon={index === 6 ? <Chip label="Current" size="small" color="secondary" /> : null}
-                iconPosition="end"
-              />
-            ))}
-          </Tabs>
-
-          <Typography variant="h5" sx={{ mb: 2, color: theme.palette.secondary.main }}>
-            {weeks[selectedWeek]}
-          </Typography>
-
           <Grid container spacing={2}>
             {getCurrentWeekData().map((match) => (
               <Grid item xs={12} key={match.id}>
@@ -314,6 +440,19 @@ const LeagueSchedule = () => {
                             <Typography variant="caption" color="text.secondary">
                               [{match.homeTag}]
                             </Typography>
+                            {match.homeHistory && (
+                              <Typography 
+                                variant="caption" 
+                                sx={{ 
+                                  display: 'block',
+                                  mt: 0.5,
+                                  fontWeight: 600,
+                                  color: theme.palette.text.secondary
+                                }}
+                              >
+                                {match.homeHistory.filter(r => r === 'W').length}W - {match.homeHistory.filter(r => r === 'L').length}L
+                              </Typography>
+                            )}
                           </Box>
                           <Avatar 
                             sx={{ 
@@ -369,6 +508,19 @@ const LeagueSchedule = () => {
                             <Typography variant="caption" color="text.secondary">
                               [{match.awayTag}]
                             </Typography>
+                            {match.awayHistory && (
+                              <Typography 
+                                variant="caption" 
+                                sx={{ 
+                                  display: 'block',
+                                  mt: 0.5,
+                                  fontWeight: 600,
+                                  color: theme.palette.text.secondary
+                                }}
+                              >
+                                {match.awayHistory.filter(r => r === 'W').length}W - {match.awayHistory.filter(r => r === 'L').length}L
+                              </Typography>
+                            )}
                           </Box>
                         </Box>
                       </Grid>

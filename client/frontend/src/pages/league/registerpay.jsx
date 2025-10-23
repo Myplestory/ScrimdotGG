@@ -187,6 +187,7 @@ const LeagueRegisterPay = () => {
           height: '100%',
           backgroundColor: theme.palette.background.dark,
           padding: theme.spacing(4),
+          paddingTop: theme.spacing(2),
           overflow: 'hidden'
         }}
       >
@@ -238,7 +239,7 @@ const LeagueRegisterPay = () => {
         ref={stepperRef}
         activeStep={activeStep} 
         sx={{ 
-          mb: 4,
+          mb: 2,
           '& .MuiStepLabel-root .Mui-completed': {
             color: theme.palette.secondary.main,
           },

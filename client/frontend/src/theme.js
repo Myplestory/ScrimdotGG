@@ -265,6 +265,56 @@ export const themeSettings = (mode) => {
         fontSize: 14,
       },
     },
+    components: {
+      MuiSelect: {
+        styleOverrides: {
+          root: {
+            '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+              borderColor: mode === 'dark' ? colors.redAccent[500] : colors.redAccent[500],
+            },
+            '&:hover .MuiOutlinedInput-notchedOutline': {
+              borderColor: mode === 'dark' ? colors.redAccent[400] : colors.redAccent[400],
+            },
+          },
+        },
+      },
+      MuiOutlinedInput: {
+        styleOverrides: {
+          root: {
+            '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+              borderColor: mode === 'dark' ? colors.redAccent[500] : colors.redAccent[500],
+            },
+            '&:hover .MuiOutlinedInput-notchedOutline': {
+              borderColor: mode === 'dark' ? colors.redAccent[400] : colors.redAccent[400],
+            },
+          },
+        },
+      },
+      MuiInputLabel: {
+        styleOverrides: {
+          root: {
+            '&.Mui-focused': {
+              color: mode === 'dark' ? colors.redAccent[500] : colors.redAccent[500],
+            },
+          },
+        },
+      },
+      MuiMenuItem: {
+        styleOverrides: {
+          root: {
+            '&.Mui-selected': {
+              backgroundColor: mode === 'dark' ? `${colors.redAccent[500]}20` : `${colors.redAccent[500]}20`,
+              '&:hover': {
+                backgroundColor: mode === 'dark' ? `${colors.redAccent[500]}30` : `${colors.redAccent[500]}30`,
+              },
+            },
+            '&:hover': {
+              backgroundColor: mode === 'dark' ? `${colors.redAccent[500]}10` : `${colors.redAccent[500]}10`,
+            },
+          },
+        },
+      },
+    },
   };
 };
 

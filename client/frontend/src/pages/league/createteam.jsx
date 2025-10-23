@@ -19,11 +19,14 @@ import {
   Select,
   MenuItem,
   FormControl,
-  InputLabel
+  InputLabel,
+  Stack,
+  Tooltip
 } from '@mui/material';
 import { useMode } from '../../theme';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
+import SwapVertIcon from '@mui/icons-material/SwapVert';
 import { gsap } from 'gsap';
 import { usePageEnter } from '../../animations/useGSAP';
 import { staggerIn, fadeIn, scaleIn, ease } from '../../animations/gsapUtils';
@@ -36,7 +39,9 @@ const LeagueCreateTeam = () => {
   const [teamLogoPreview, setTeamLogoPreview] = useState('');
   const [teamMembers, setTeamMembers] = useState([]);
   const [newMemberName, setNewMemberName] = useState('');
-  const [newMemberRole, setNewMemberRole] = useState('IGL');
+  const [newMemberPrimaryRole, setNewMemberPrimaryRole] = useState('Duelist');
+  const [newMemberSecondaryRole, setNewMemberSecondaryRole] = useState('');
+  const [newMemberTertiaryRole, setNewMemberTertiaryRole] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -47,7 +52,7 @@ const LeagueCreateTeam = () => {
   const rosterCardRef = useRef(null);
   const buttonsRef = useRef(null);
 
-  const availableRoles = ['IGL', 'Lurk', 'AWP', 'Entry', 'Support', 'Substitute'];
+  const availableRoles = ['Duelist', 'Controller', 'Initiator', 'Sentinel', 'Fill'];
 
   // Page enter animations
   usePageEnter(containerRef, () => {
@@ -115,10 +120,14 @@ const LeagueCreateTeam = () => {
 
     setTeamMembers([...teamMembers, { 
       name: newMemberName, 
-      role: newMemberRole 
+      primaryRole: newMemberPrimaryRole,
+      secondaryRole: newMemberSecondaryRole || null,
+      tertiaryRole: newMemberTertiaryRole || null
     }]);
     setNewMemberName('');
-    setNewMemberRole('IGL');
+    setNewMemberPrimaryRole('Duelist');
+    setNewMemberSecondaryRole('');
+    setNewMemberTertiaryRole('');
     setError('');
   };
 
@@ -127,10 +136,13 @@ const LeagueCreateTeam = () => {
     setTeamMembers(newMembers);
   };
 
-  const handleRoleChange = (index, newRole) => {
-    const updatedMembers = teamMembers.map((member, i) => 
-      i === index ? { ...member, role: newRole } : member
-    );
+  const handleRoleChange = (index, roleType, newRole) => {
+    const updatedMembers = teamMembers.map((member, i) => {
+      if (i === index) {
+        return { ...member, [roleType]: newRole || null };
+      }
+      return member;
+    });
     setTeamMembers(updatedMembers);
   };
 
@@ -178,14 +190,15 @@ const LeagueCreateTeam = () => {
           height: '100%',
           overflow: 'auto',
           backgroundColor: theme.palette.background.dark,
-          padding: theme.spacing(4)
+          padding: theme.spacing(4),
+          paddingTop: theme.spacing(2)
         }}
       >
         <Typography 
           ref={titleRef}
           variant="h4" 
           sx={{ 
-            mb: 4, 
+            mb: 2, 
             color: theme.palette.secondary.main,
             fontWeight: 700,
             letterSpacing: '0.02em',
@@ -206,7 +219,7 @@ const LeagueCreateTeam = () => {
         </Alert>
       )}
 
-      <Grid container spacing={3}>
+      <Grid container spacing={3} sx={{ mt: -8 }}>
         <Grid item xs={12} md={6}>
           <Card 
             ref={teamInfoCardRef}
@@ -350,7 +363,10 @@ const LeagueCreateTeam = () => {
                   • Maximum 7 players (5 starters + 2 substitutes)
                 </Typography>
                 <Typography variant="caption" display="block">
-                  • All players must be registered
+                  • Each player must have at least a primary role
+                </Typography>
+                <Typography variant="caption" display="block" sx={{ mt: 1.5, fontStyle: 'italic', color: theme.palette.secondary.light }}>
+                  💡 Tip: Set role preferences (Primary → Secondary → Tertiary) for flexible team compositions
                 </Typography>
               </Box>
             </CardContent>
@@ -383,7 +399,7 @@ const LeagueCreateTeam = () => {
                 Team Roster ({teamMembers.length}/7)
               </Typography>
 
-              <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+              <Box sx={{ mb: 2 }}>
                 <TextField
                   fullWidth
                   label="Player Name"
@@ -393,6 +409,7 @@ const LeagueCreateTeam = () => {
                   placeholder="Enter player name or tag"
                   size="small"
                   sx={{
+                    mb: 1.5,
                     '& .MuiOutlinedInput-root': {
                       transition: 'all 0.3s ease',
                       '&:hover fieldset': {
@@ -401,31 +418,71 @@ const LeagueCreateTeam = () => {
                     },
                   }}
                 />
-                <FormControl size="small" sx={{ minWidth: 140 }}>
-                  <InputLabel>Role</InputLabel>
-                  <Select
-                    value={newMemberRole}
-                    label="Role"
-                    onChange={(e) => setNewMemberRole(e.target.value)}
+                
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1, fontWeight: 600 }}>
+                  Role Preferences (Primary → Secondary → Tertiary)
+                </Typography>
+                
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <FormControl size="small" sx={{ flex: 1 }}>
+                    <InputLabel>Primary</InputLabel>
+                    <Select
+                      value={newMemberPrimaryRole}
+                      label="Primary"
+                      onChange={(e) => setNewMemberPrimaryRole(e.target.value)}
+                    >
+                      {availableRoles.map((role) => (
+                        <MenuItem key={role} value={role}>{role}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  
+                  <SwapVertIcon sx={{ color: theme.palette.text.disabled, fontSize: '1rem' }} />
+                  
+                  <FormControl size="small" sx={{ flex: 1 }}>
+                    <InputLabel>Secondary</InputLabel>
+                    <Select
+                      value={newMemberSecondaryRole}
+                      label="Secondary"
+                      onChange={(e) => setNewMemberSecondaryRole(e.target.value)}
+                    >
+                      <MenuItem value="">None</MenuItem>
+                      {availableRoles.filter(r => r !== newMemberPrimaryRole).map((role) => (
+                        <MenuItem key={role} value={role}>{role}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  
+                  <SwapVertIcon sx={{ color: theme.palette.text.disabled, fontSize: '1rem' }} />
+                  
+                  <FormControl size="small" sx={{ flex: 1 }}>
+                    <InputLabel>Tertiary</InputLabel>
+                    <Select
+                      value={newMemberTertiaryRole}
+                      label="Tertiary"
+                      onChange={(e) => setNewMemberTertiaryRole(e.target.value)}
+                    >
+                      <MenuItem value="">None</MenuItem>
+                      {availableRoles.filter(r => r !== newMemberPrimaryRole && r !== newMemberSecondaryRole).map((role) => (
+                        <MenuItem key={role} value={role}>{role}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  
+                  <IconButton 
+                    color="secondary" 
+                    onClick={handleAddMember}
+                    disabled={teamMembers.length >= 7}
+                    sx={{
+                      transition: 'transform 0.2s ease',
+                      '&:hover': {
+                        transform: 'scale(1.1) rotate(90deg)',
+                      },
+                    }}
                   >
-                    {availableRoles.map((role) => (
-                      <MenuItem key={role} value={role}>{role}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                <IconButton 
-                  color="secondary" 
-                  onClick={handleAddMember}
-                  disabled={teamMembers.length >= 7}
-                  sx={{
-                    transition: 'transform 0.2s ease',
-                    '&:hover': {
-                      transform: 'scale(1.1) rotate(90deg)',
-                    },
-                  }}
-                >
-                  <AddCircleOutlineIcon />
-                </IconButton>
+                    <AddCircleOutlineIcon />
+                  </IconButton>
+                </Stack>
               </Box>
 
               <Paper 
@@ -454,25 +511,15 @@ const LeagueCreateTeam = () => {
                           '&:hover': {
                             backgroundColor: theme.palette.action.hover,
                           },
+                          flexDirection: 'column',
+                          alignItems: 'flex-start',
+                          py: 2,
                         }}
                       >
-                        <ListItemText 
-                          primary={member.name}
-                          secondary={
-                            <FormControl size="small" sx={{ minWidth: 120, mt: 1 }}>
-                              <Select
-                                value={member.role}
-                                onChange={(e) => handleRoleChange(index, e.target.value)}
-                                variant="standard"
-                              >
-                                {availableRoles.map((role) => (
-                                  <MenuItem key={role} value={role}>{role}</MenuItem>
-                                ))}
-                              </Select>
-                            </FormControl>
-                          }
-                        />
-                        <ListItemSecondaryAction>
+                        <Box sx={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                            {member.name}
+                          </Typography>
                           <IconButton 
                             edge="end" 
                             onClick={() => handleRemoveMember(index)}
@@ -487,7 +534,86 @@ const LeagueCreateTeam = () => {
                           >
                             <DeleteIcon />
                           </IconButton>
-                        </ListItemSecondaryAction>
+                        </Box>
+                        
+                        <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block', fontWeight: 600 }}>
+                          Role Preferences
+                        </Typography>
+                        
+                        <Stack direction="row" spacing={1} sx={{ width: '100%' }}>
+                          <FormControl size="small" sx={{ flex: 1 }}>
+                            <InputLabel>Primary</InputLabel>
+                            <Select
+                              value={member.primaryRole}
+                              label="Primary"
+                              onChange={(e) => handleRoleChange(index, 'primaryRole', e.target.value)}
+                              variant="standard"
+                            >
+                              {availableRoles.map((role) => (
+                                <MenuItem key={role} value={role}>{role}</MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                          
+                          <SwapVertIcon sx={{ color: theme.palette.text.disabled, fontSize: '0.9rem', mt: 2 }} />
+                          
+                          <FormControl size="small" sx={{ flex: 1 }}>
+                            <InputLabel>Secondary</InputLabel>
+                            <Select
+                              value={member.secondaryRole || ''}
+                              label="Secondary"
+                              onChange={(e) => handleRoleChange(index, 'secondaryRole', e.target.value)}
+                              variant="standard"
+                            >
+                              <MenuItem value="">None</MenuItem>
+                              {availableRoles.filter(r => r !== member.primaryRole).map((role) => (
+                                <MenuItem key={role} value={role}>{role}</MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                          
+                          <SwapVertIcon sx={{ color: theme.palette.text.disabled, fontSize: '0.9rem', mt: 2 }} />
+                          
+                          <FormControl size="small" sx={{ flex: 1 }}>
+                            <InputLabel>Tertiary</InputLabel>
+                            <Select
+                              value={member.tertiaryRole || ''}
+                              label="Tertiary"
+                              onChange={(e) => handleRoleChange(index, 'tertiaryRole', e.target.value)}
+                              variant="standard"
+                            >
+                              <MenuItem value="">None</MenuItem>
+                              {availableRoles.filter(r => r !== member.primaryRole && r !== member.secondaryRole).map((role) => (
+                                <MenuItem key={role} value={role}>{role}</MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                        </Stack>
+                        
+                        <Box sx={{ mt: 1.5, display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                          <Chip 
+                            label={member.primaryRole} 
+                            size="small" 
+                            color="secondary"
+                            sx={{ fontWeight: 600 }}
+                          />
+                          {member.secondaryRole && (
+                            <Chip 
+                              label={member.secondaryRole} 
+                              size="small" 
+                              variant="outlined"
+                              color="secondary"
+                            />
+                          )}
+                          {member.tertiaryRole && (
+                            <Chip 
+                              label={member.tertiaryRole} 
+                              size="small" 
+                              variant="outlined"
+                              sx={{ opacity: 0.7 }}
+                            />
+                          )}
+                        </Box>
                       </ListItem>
                     ))
                   )}

@@ -92,6 +92,7 @@ const LeagueRules = () => {
           height: '100%',
           backgroundColor: theme.palette.background.dark,
           padding: theme.spacing(4),
+          paddingTop: theme.spacing(2),
           overflow: 'auto'
         }}
       >
