@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -10,9 +10,11 @@ import {
   FormControl,
   InputLabel,
   Alert,
+  CircularProgress,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { useNavigate } from 'react-router-dom';
+import { useWebSocket } from '../../contexts/WebSocketContext';
 import SendIcon from '@mui/icons-material/Send';
 import CancelIcon from '@mui/icons-material/Cancel';
 import { gsap } from 'gsap';
@@ -22,6 +24,7 @@ import { staggerIn, fadeIn, ease } from '../../animations/gsapUtils';
 const PostNew = () => {
   const theme = useTheme();
   const navigate = useNavigate();
+  const { connected, sendEvent, on } = useWebSocket();
 
   // Animation refs
   const containerRef = useRef(null);
@@ -36,14 +39,45 @@ const PostNew = () => {
 
   const [errors, setErrors] = useState({});
   const [showSuccess, setShowSuccess] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [categories, setCategories] = useState([]);
 
-  const categories = [
-    'General Discussion',
-    'League Discussion',
-    'Team Recruitment',
-    'Bug Reports',
-    'Suggestions & Feedback',
-  ];
+  // Fetch categories on mount
+  useEffect(() => {
+    if (connected) {
+      console.log('[FORUM] Fetching categories for new thread');
+      sendEvent('get_forum_categories', {});
+    }
+  }, [connected, sendEvent]);
+
+  // WebSocket event listeners
+  useEffect(() => {
+    const unsubscribeCategories = on('forum_categories', (payload) => {
+      console.log('[FORUM] Received categories:', payload);
+      setCategories(payload.categories || []);
+    });
+
+    const unsubscribeThreadCreated = on('thread_created', (payload) => {
+      console.log('[FORUM] Thread created:', payload);
+      setShowSuccess(true);
+      setSubmitting(false);
+      setTimeout(() => {
+        navigate(`/forum/${payload.thread.category.slug}`);
+      }, 2000);
+    });
+
+    const unsubscribeError = on('error', (payload) => {
+      console.error('[FORUM] Error:', payload.message);
+      setErrors({ submit: payload.message });
+      setSubmitting(false);
+    });
+
+    return () => {
+      unsubscribeCategories();
+      unsubscribeThreadCreated();
+      unsubscribeError();
+    };
+  }, [on, navigate]);
 
   const handleChange = (field) => (event) => {
     setFormData({
@@ -82,12 +116,18 @@ const PostNew = () => {
 
   const handleSubmit = () => {
     if (validateForm()) {
-      // TODO: Submit to backend
-      console.log('Submitting post:', formData);
-      setShowSuccess(true);
-      setTimeout(() => {
-        navigate('/forumindex');
-      }, 2000);
+      setSubmitting(true);
+      
+      // Find selected category object
+      const selectedCategory = categories.find(cat => cat.name === formData.category);
+      
+      console.log('[FORUM] Creating thread:', formData);
+      sendEvent('create_forum_thread', {
+        category_slug: selectedCategory?.slug || formData.category.toLowerCase().replace(/\s+/g, '-'),
+        title: formData.title,
+        content: formData.content,
+        tags: [] // Can add tag selection later
+      });
     }
   };
 
@@ -160,19 +200,25 @@ const PostNew = () => {
             value={formData.category}
             label="Category"
             onChange={handleChange('category')}
+            disabled={categories.length === 0}
             sx={{
               backgroundColor: theme.palette.background.default,
             }}
           >
             {categories.map((category) => (
-              <MenuItem key={category} value={category}>
-                {category}
+              <MenuItem key={category.id} value={category.name}>
+                {category.name}
               </MenuItem>
             ))}
           </Select>
           {errors.category && (
             <Typography variant="caption" sx={{ color: 'error.main', mt: 0.5 }}>
               {errors.category}
+            </Typography>
+          )}
+          {categories.length === 0 && (
+            <Typography variant="caption" sx={{ color: 'text.secondary', mt: 0.5 }}>
+              Loading categories...
             </Typography>
           )}
         </FormControl>
@@ -232,6 +278,7 @@ const PostNew = () => {
             variant="outlined"
             startIcon={<CancelIcon />}
             onClick={handleCancel}
+            disabled={submitting}
             sx={{
               px: 3,
               py: 1,
@@ -249,8 +296,9 @@ const PostNew = () => {
           <Button
             variant="contained"
             color="secondary"
-            startIcon={<SendIcon />}
+            startIcon={submitting ? <CircularProgress size={20} color="inherit" /> : <SendIcon />}
             onClick={handleSubmit}
+            disabled={submitting}
             sx={{
               px: 3,
               py: 1,
@@ -258,9 +306,16 @@ const PostNew = () => {
               fontWeight: 'bold',
             }}
           >
-            Post Topic
+            {submitting ? 'Creating...' : 'Post Topic'}
           </Button>
         </Box>
+        
+        {/* Submit Error */}
+        {errors.submit && (
+          <Alert severity="error" sx={{ mt: 2 }}>
+            {errors.submit}
+          </Alert>
+        )}
       </Paper>
 
       {/* Guidelines */}

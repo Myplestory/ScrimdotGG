@@ -73,6 +73,7 @@ async def handle_join_pug_queue(payload: dict, client_id: int, ws, mgr):
     except Exception as e:
         await mgr.send(ws, 'error', {'message': f"Failed to join queue: {str(e)}"})
 
+
 @on("leave_pug_queue")
 async def handle_leave_pug_queue(payload: dict, client_id: int, ws, mgr):
     """Player leaves PUG queue."""
