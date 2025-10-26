@@ -82,6 +82,20 @@ const PugQueue = () => {
   const [activeTab, setActiveTab] = useState('maps'); // 'maps', 'match_type', 'servers'
   const [queueStartTime, setQueueStartTime] = useState(null);
   const messagesEndRef = useRef(null);
+  
+  // ============================================
+  // INVITE DIALOG STATE - Added for player invitation feature
+  // ============================================
+  const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [availablePlayers, setAvailablePlayers] = useState([
+    // Mock data for testing - will be replaced with API call
+    { puuid: '1', alias: 'Player1', rank: 'Diamond 2', elo: 1850, status: 'online' },
+    { puuid: '2', alias: 'Player2', rank: 'Platinum 3', elo: 1650, status: 'online' },
+    { puuid: '3', alias: 'Player3', rank: 'Diamond 1', elo: 1800, status: 'in_game' },
+    { puuid: '4', alias: 'Player4', rank: 'Ascendant 1', elo: 1950, status: 'online' },
+  ]);
+  const [invitingPlayer, setInvitingPlayer] = useState(null); // Track which player is being invited
 
   // Use WebSocket context
   const { 
@@ -249,6 +263,31 @@ const PugQueue = () => {
       setChatMessages(prev => [...prev, payload]);
     });
 
+    // ============================================
+    // INVITE EVENT LISTENERS - Handle invite responses
+    // ============================================
+    const unsubscribeInviteSent = on('invite_sent', (payload) => {
+      console.log('Invite sent successfully:', payload);
+      setInvitingPlayer(null);
+      // Optional: Show success notification
+    });
+
+    const unsubscribeInviteAccepted = on('invite_accepted', (payload) => {
+      console.log('Player accepted invite:', payload);
+      // Player will be added to lobby via other events
+      setInviteDialogOpen(false);
+    });
+
+    const unsubscribeInviteDeclined = on('invite_declined', (payload) => {
+      console.log('Player declined invite:', payload);
+      // Optional: Show notification that player declined
+    });
+
+    const unsubscribeLobbyFull = on('lobby_full', (payload) => {
+      console.log('Lobby is full:', payload);
+      setInviteDialogOpen(false);
+    });
+
     return () => {
       if (typeof unsubscribeQueueJoined === 'function') unsubscribeQueueJoined();
       if (typeof unsubscribeQueueLeft === 'function') unsubscribeQueueLeft();
@@ -258,6 +297,11 @@ const PugQueue = () => {
       if (typeof unsubscribeMatchConfirmed === 'function') unsubscribeMatchConfirmed();
       if (typeof unsubscribeMatchTimeout === 'function') unsubscribeMatchTimeout();
       if (typeof unsubscribeLobbyMessage === 'function') unsubscribeLobbyMessage();
+      // Cleanup invite event listeners
+      if (typeof unsubscribeInviteSent === 'function') unsubscribeInviteSent();
+      if (typeof unsubscribeInviteAccepted === 'function') unsubscribeInviteAccepted();
+      if (typeof unsubscribeInviteDeclined === 'function') unsubscribeInviteDeclined();
+      if (typeof unsubscribeLobbyFull === 'function') unsubscribeLobbyFull();
     };
   }, [on]);
 
@@ -432,10 +476,45 @@ const PugQueue = () => {
     setNewMessage('');
   };
 
+  // ============================================
+  // INVITE DIALOG HANDLERS - Open dialog and manage invitations
+  // ============================================
   const handleEmptySlotClick = (slotIndex) => {
     console.log('Empty slot clicked:', slotIndex);
-    // Implement invite logic when ready
+    setInviteDialogOpen(true);
+    setSearchQuery(''); // Reset search when opening
+    
+    // TODO: Fetch available players from API when backend is ready
+    // if (api.getAvailablePlayers) {
+    //   api.getAvailablePlayers().then(players => {
+    //     setAvailablePlayers(players);
+    //   });
+    // }
   };
+
+  const handleInvitePlayer = (playerPuuid, playerAlias) => {
+    console.log('Inviting player:', playerPuuid, playerAlias);
+    setInvitingPlayer(playerPuuid);
+    
+    // TODO: Call API to send invite when backend is ready
+    if (lobbyData?.id && api.inviteLobby) {
+      api.inviteLobby(lobbyData.id, playerPuuid);
+    } else {
+      console.warn('Cannot invite player - lobby data or API method not available');
+      setInvitingPlayer(null);
+    }
+  };
+
+  const handleCloseInviteDialog = () => {
+    setInviteDialogOpen(false);
+    setSearchQuery('');
+    setInvitingPlayer(null);
+  };
+
+  // Filter players based on search query
+  const filteredPlayers = availablePlayers.filter(player =>
+    player.alias.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const handleAcceptMatch = () => {
     if (matchData?.match_id) {
@@ -518,6 +597,7 @@ const PugQueue = () => {
       </Box>
     );
   };
+  
 
   return (
     <Container maxWidth="md" sx={{ height: '100%', overflow: 'hidden' }}>
@@ -902,6 +982,218 @@ const PugQueue = () => {
             </Button>
           </Box>
         </Box>
+
+        {/* ============================================ */}
+        {/* INVITE PLAYER DIALOG - New feature for inviting players to lobby */}
+        {/* ============================================ */}
+        <Dialog
+          open={inviteDialogOpen}
+          onClose={handleCloseInviteDialog}
+          maxWidth="sm"
+          fullWidth
+          PaperProps={{
+            sx: {
+              backgroundColor: theme.palette.background.dark,
+              border: '2px solid #333',
+              borderRadius: '8px',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.8)'
+            }
+          }}
+        >
+          <DialogTitle sx={{ 
+            pb: 1, 
+            borderBottom: '1px solid #333',
+            color: '#fff'
+          }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <People sx={{ color: theme.palette.secondary.main }} />
+                <Typography variant="h6" sx={{ fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                  Invite Player
+                </Typography>
+              </Box>
+              <IconButton
+                onClick={handleCloseInviteDialog}
+                sx={{
+                  color: '#888',
+                  '&:hover': {
+                    color: '#fff',
+                    backgroundColor: 'rgba(255,255,255,0.1)'
+                  }
+                }}
+              >
+                ✕
+              </IconButton>
+            </Box>
+          </DialogTitle>
+          
+          <DialogContent sx={{ p: 2 }}>
+            {/* Search Bar */}
+            <Box sx={{ mb: 2 }}>
+              <TextField
+                fullWidth
+                size="small"
+                placeholder="Search players..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                InputProps={{
+                  startAdornment: <Search sx={{ mr: 1, color: '#888' }} />,
+                  sx: {
+                    backgroundColor: '#0f0f0f',
+                    borderRadius: '4px',
+                    color: '#fff',
+                    '& .MuiOutlinedInput-notchedOutline': {
+                      borderColor: '#333'
+                    },
+                    '&:hover .MuiOutlinedInput-notchedOutline': {
+                      borderColor: theme.palette.secondary.main
+                    },
+                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                      borderColor: theme.palette.secondary.main
+                    }
+                  }
+                }}
+              />
+            </Box>
+
+            {/* Player List */}
+            <List sx={{ 
+              maxHeight: '400px', 
+              overflowY: 'auto',
+              '&::-webkit-scrollbar': {
+                width: '8px'
+              },
+              '&::-webkit-scrollbar-track': {
+                backgroundColor: '#0f0f0f'
+              },
+              '&::-webkit-scrollbar-thumb': {
+                backgroundColor: '#333',
+                borderRadius: '4px',
+                '&:hover': {
+                  backgroundColor: '#444'
+                }
+              }
+            }}>
+              {filteredPlayers.length === 0 ? (
+                <Box sx={{ textAlign: 'center', py: 4 }}>
+                  <Typography variant="body2" color="text.secondary">
+                    {searchQuery ? 'No players found matching your search' : 'No available players'}
+                  </Typography>
+                </Box>
+              ) : (
+                filteredPlayers.map((player) => (
+                  <ListItem
+                    key={player.puuid}
+                    sx={{
+                      mb: 1,
+                      backgroundColor: '#0f0f0f',
+                      borderRadius: '4px',
+                      border: '1px solid #222',
+                      '&:hover': {
+                        backgroundColor: '#1a1a1a',
+                        borderColor: theme.palette.secondary.main
+                      },
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    <ListItemAvatar>
+                      <Badge
+                        overlap="circular"
+                        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                        badgeContent={
+                          <Box
+                            sx={{
+                              width: 12,
+                              height: 12,
+                              borderRadius: '50%',
+                              backgroundColor: player.status === 'online' ? '#4caf50' : '#ff9800',
+                              border: '2px solid #1a1a1a'
+                            }}
+                          />
+                        }
+                      >
+                        <Avatar
+                          sx={{
+                            width: 48,
+                            height: 48,
+                            backgroundColor: theme.palette.secondary.main,
+                            color: '#000',
+                            fontWeight: 'bold'
+                          }}
+                        >
+                          {player.alias.charAt(0).toUpperCase()}
+                        </Avatar>
+                      </Badge>
+                    </ListItemAvatar>
+                    
+                    <ListItemText
+                      primary={
+                        <Typography variant="body1" sx={{ color: '#fff', fontWeight: 'bold' }}>
+                          {player.alias}
+                        </Typography>
+                      }
+                      secondary={
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                          <Chip
+                            label={player.rank}
+                            size="small"
+                            sx={{
+                              backgroundColor: theme.palette.secondary.main,
+                              color: '#000',
+                              fontWeight: 'bold',
+                              fontSize: '0.7rem',
+                              height: '20px'
+                            }}
+                          />
+                          <Typography variant="caption" sx={{ color: '#888' }}>
+                            {player.elo} ELO
+                          </Typography>
+                          {player.status === 'in_game' && (
+                            <Chip
+                              label="In Game"
+                              size="small"
+                              sx={{
+                                backgroundColor: '#ff9800',
+                                color: '#000',
+                                fontSize: '0.65rem',
+                                height: '18px'
+                              }}
+                            />
+                          )}
+                        </Box>
+                      }
+                    />
+                    
+                    <Button
+                      variant="contained"
+                      size="small"
+                      disabled={invitingPlayer === player.puuid || player.status === 'in_game'}
+                      onClick={() => handleInvitePlayer(player.puuid, player.alias)}
+                      startIcon={invitingPlayer === player.puuid ? null : <Add />}
+                      sx={{
+                        backgroundColor: theme.palette.secondary.main,
+                        color: theme.palette.getContrastText(theme.palette.secondary.main),
+                        fontWeight: 'bold',
+                        textTransform: 'uppercase',
+                        fontSize: '0.75rem',
+                        px: 2,
+                        '&:hover': {
+                          backgroundColor: theme.palette.secondary.dark
+                        },
+                        '&:disabled': {
+                          backgroundColor: theme.palette.action.disabled,
+                          color: theme.palette.action.disabledBackground
+                        }
+                      }}
+                    >
+                      {invitingPlayer === player.puuid ? 'Inviting...' : 'Invite'}
+                    </Button>
+                  </ListItem>
+                ))
+              )}
+            </List>
+          </DialogContent>
+        </Dialog>
 
         {/* Match Found Dialog - ESEA Style */}
         <Dialog 
