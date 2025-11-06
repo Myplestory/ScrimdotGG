@@ -60,7 +60,7 @@ class BotWebSocketClient:
     def __init__(self, bot_puuid: str, bot_alias: str):
         self.bot_puuid = bot_puuid
         self.bot_alias = bot_alias
-        logger.info(f"🤖 [INIT] Bot {bot_alias} initialized with PUUID: '{bot_puuid}' (type: {type(bot_puuid)})")
+        logger.info(f"[INIT] Bot {bot_alias} initialized with PUUID: '{bot_puuid}' (type: {type(bot_puuid)})")
         self.websocket = None
         self.lobby_id = None
         self.connected = False
@@ -161,13 +161,13 @@ class BotWebSocketClient:
             self.current_match_id = payload.get('match_id')
             logger.info(f" Bot {self.bot_alias} match confirmed! Match ID: {self.current_match_id[:8] if self.current_match_id else 'Unknown'}")
             
-            # 🔧 FIX: Don't request match_data here - server now broadcasts it automatically
+            # FIX: Don't request match_data here - server now broadcasts it automatically
             # The server will send match_data event immediately after match_confirmed
             logger.info(f" Bot {self.bot_alias} waiting for automatic match_data broadcast...")
         
         elif event == 'match_data':
             # Handle match data (veto phase initialization)
-            logger.info(f"🔧 [FIX] Bot {self.bot_alias} received match_data event from server broadcast!")
+            logger.info(f"[FIX] Bot {self.bot_alias} received match_data event from server broadcast!")
             await self._handle_match_data(payload)
 
         elif event == 'veto_update':
@@ -259,7 +259,7 @@ class BotWebSocketClient:
         
         try:
             await self.websocket.send(message)
-            logger.debug(f"📤 Bot {self.bot_alias} sent: {event}")
+            logger.debug(f"Bot {self.bot_alias} sent: {event}")
         except Exception as e:
             logger.error(f" Bot {self.bot_alias} failed to send {event}: {e}")
     
@@ -332,11 +332,11 @@ class BotWebSocketClient:
         """Handle match data (veto phase initialization)"""
         logger.info(f" Bot {self.bot_alias} received match data")
         
-        # 🔧 FIX: The server should have already added us to the match group
+        # FIX: The server should have already added us to the match group
         # when it sent the match_data event
         logger.info(f"Payload: {payload}")
         # DEBUG: Log PUUID information
-        logger.info(f"🔍 [DEBUG] Bot {self.bot_alias} PUUID investigation:")
+        logger.info(f"[DEBUG] Bot {self.bot_alias} PUUID investigation:")
         logger.info(f"   Bot's self.bot_puuid: '{self.bot_puuid}' (type: {type(self.bot_puuid)})")
         
         # Initialize veto state from match data
@@ -410,7 +410,7 @@ class BotWebSocketClient:
             team_b_players = payload.get('team_b_players', [])
             
             # DEBUG: Log team player PUUIDs for map veto
-            logger.info(f"🔍 [DEBUG] Bot {self.bot_alias} MAP VETO PUUID investigation:")
+            logger.info(f"[DEBUG] Bot {self.bot_alias} MAP VETO PUUID investigation:")
             logger.info(f"   Bot's self.bot_puuid: '{self.bot_puuid}' (type: {type(self.bot_puuid)})")
             logger.info(f"   Team A players ({len(team_a_players)}):")
             for i, player in enumerate(team_a_players):
@@ -516,7 +516,7 @@ class BotWebSocketClient:
             # Veto phase is complete
             self.veto_complete = True
             logger.info(f"   Final map: {final_map}")
-            # 🔧 FIX: Don't reset captain/team info - preserve it for side selection
+            # FIX: Don't reset captain/team info - preserve it for side selection
             # Reset only veto-specific state
             self.available_maps = []
             self.vetoed_maps = []
@@ -634,10 +634,10 @@ class BotWebSocketClient:
         self.veto_deadline = payload.get('veto_deadline')
         self.vetoed_maps = []
         
-        # 🔧 FIX: PRESERVE captain/team info instead of re-initializing
+        # FIX: PRESERVE captain/team info instead of re-initializing
         # The server_veto_complete payload doesn't contain team player data,
         # so we must preserve the existing captain/team information
-        logger.info(f"🔧 [FIX] Preserving captain/team info:")
+        logger.info(f"[FIX] Preserving captain/team info:")
         logger.info(f"   Before: is_captain={self.is_captain}, my_team={self.my_team}")
         
         # Don't reset is_captain and my_team - keep the values from match_data
@@ -685,10 +685,10 @@ class BotWebSocketClient:
             self.veto_deadline = payload.get('veto_deadline')
             self.vetoed_maps = []
             
-            # 🔧 FIX: PRESERVE captain/team info instead of re-initializing
+            # FIX: PRESERVE captain/team info instead of re-initializing
             # The server_veto_timeout payload doesn't contain team player data,
             # so we must preserve the existing captain/team information
-            logger.info(f"🔧 [FIX] Preserving captain/team info (timeout):")
+            logger.info(f"[FIX] Preserving captain/team info (timeout):")
             logger.info(f"   Before: is_captain={self.is_captain}, my_team={self.my_team}")
             # Don't reset is_captain and my_team - keep the values from match_data
             logger.info(f"   After: is_captain={self.is_captain}, my_team={self.my_team}")
@@ -808,7 +808,7 @@ class BotWebSocketClient:
         else:  # random
             map_to_veto = self._random_veto()
         
-        logger.info(f"🗺️ Bot {self.bot_alias} vetoing map: {map_to_veto} (strategy: {self.veto_strategy})")
+        logger.info(f"Bot {self.bot_alias} vetoing map: {map_to_veto} (strategy: {self.veto_strategy})")
         
         # Add some realistic delay (1-3 seconds)
         delay = random.uniform(1.0, 3.0)
@@ -829,7 +829,7 @@ class BotWebSocketClient:
         # Choose server to veto (random for now, could add strategy later)
         server_to_veto = random.choice(self.available_servers)
         
-        logger.info(f"🌐 Bot {self.bot_alias} vetoing server: {server_to_veto}")
+        logger.info(f"Bot {self.bot_alias} vetoing server: {server_to_veto}")
         
         # Add some realistic delay (1-3 seconds)
         delay = random.uniform(1.0, 3.0)
@@ -1020,7 +1020,7 @@ async def create_bot_with_websocket(bot_num: int, base_elo: int, base_mmr: int, 
         return bot
     
     bot_player = await sync_to_async(create_bot)()
-    logger.info(f"👤 Created bot player: {bot_alias} (PUUID: {bot_puuid[:8]}...)")
+    logger.info(f"Created bot player: {bot_alias} (PUUID: {bot_puuid[:8]}...)")
     
     # Create WebSocket client
     bot_client = BotWebSocketClient(bot_puuid, bot_alias)
@@ -1094,7 +1094,7 @@ async def wait_for_match_or_timeout(bot_clients: List[BotWebSocketClient], timeo
         elapsed = current_time - start_time
         
         if elapsed >= timeout_seconds:
-            print(f"   ⏰ Timeout reached ({timeout_seconds}s)")
+            print(f"   Timeout reached ({timeout_seconds}s)")
             return False
         
         # Check if any bot found a match
@@ -1106,7 +1106,7 @@ async def wait_for_match_or_timeout(bot_clients: List[BotWebSocketClient], timeo
         # Show progress every 10 seconds
         if int(elapsed) % 10 == 0 and int(elapsed) > 0:
             remaining = timeout_seconds - int(elapsed)
-            print(f"   ⏳ Still waiting... ({remaining}s remaining)")
+            print(f"   Still waiting... ({remaining}s remaining)")
         
         await asyncio.sleep(1)
 
@@ -1122,7 +1122,7 @@ async def wait_for_veto_completion(bot_clients: List[BotWebSocketClient], timeou
         elapsed = current_time - start_time
         
         if elapsed >= timeout_seconds:
-            print(f"   ⏰ Veto timeout reached ({timeout_seconds}s)")
+            print(f"   Veto timeout reached ({timeout_seconds}s)")
             return False
         
         # Check if veto is complete (at least one bot should have veto_complete)
@@ -1136,7 +1136,7 @@ async def wait_for_veto_completion(bot_clients: List[BotWebSocketClient], timeou
         if int(elapsed) % 5 == 0 and int(elapsed) > 0:
             remaining = timeout_seconds - int(elapsed)
             confirmed = sum(1 for bot in bot_clients if bot.match_confirmed)
-            print(f"   ⏳ Waiting for veto... {confirmed}/{len(bot_clients)} bots confirmed match ({remaining}s remaining)")
+            print(f"   Waiting for veto... {confirmed}/{len(bot_clients)} bots confirmed match ({remaining}s remaining)")
         
         await asyncio.sleep(1)
 
@@ -1152,7 +1152,7 @@ async def wait_for_game_constructor_completion(bot_clients: List[BotWebSocketCli
         elapsed = current_time - start_time
         
         if elapsed >= timeout_seconds:
-            print(f"   ⏰ Game constructor timeout reached ({timeout_seconds}s)")
+            print(f"   Game constructor timeout reached ({timeout_seconds}s)")
             return False
         
         # Check if game started (constructor bot should have game_started = True)
@@ -1172,14 +1172,13 @@ async def wait_for_game_constructor_completion(bot_clients: List[BotWebSocketCli
             remaining = timeout_seconds - int(elapsed)
             joined_count = sum(1 for bot in bot_clients if bot.joined_custom_game)
             constructor_count = sum(1 for bot in bot_clients if bot.is_constructor)
-            print(f"   ⏳ Waiting for game start... {joined_count}/{len(bot_clients)} bots joined, {constructor_count} constructor(s) ({remaining}s remaining)")
-        
+            print(f"   Waiting for game start... {joined_count}/{len(bot_clients)} bots joined,{constructor_count} constructor(s) ({remaining}s remaining)")
         await asyncio.sleep(1)
 
 
 async def cleanup_bots(bot_clients: List[BotWebSocketClient]):
     """Clean up bot WebSocket connections"""
-    print("\n🧹 Cleaning up bot connections...")
+    print("\nCleaning up bot connections...")
     
     for bot in bot_clients:
         try:
@@ -1251,19 +1250,19 @@ async def main():
         match_found = await wait_for_match_or_timeout(bot_clients, timeout_seconds=300)
         
         if match_found:
-            print("\n🎉 SUCCESS! Match was found and bots auto-accepted")
+            print("\nSUCCESS! Match was found and bots auto-accepted")
             print("    Check your client - you should see the match confirmation")
             print("    Accept the match to proceed to veto phase")
             
             # Wait for veto phase to complete (with extended timeout)
-            print("\n   ⏳ Waiting for veto phase to complete...")
+            print("\n   Waiting for veto phase to complete...")
             veto_completed = await wait_for_veto_completion(bot_clients, timeout_seconds=300)
             
             if veto_completed:
                 print("\n    Veto phase completed successfully!")
                 
                 # Wait for game constructor phase to complete
-                print("\n   ⏳ Waiting for game constructor phase to complete...")
+                print("\n   Waiting for game constructor phase to complete...")
                 game_started = await wait_for_game_constructor_completion(bot_clients, timeout_seconds=180)
                 
                 if game_started:
@@ -1282,7 +1281,7 @@ async def main():
                 await asyncio.sleep(10)
             
         else:
-            print("\n⏰ No match found within timeout period")
+            print("\nNo match found within timeout period")
             print("    Make sure you join queue with your client")
             print("    Check that Celery worker is running for matchmaking")
     
@@ -1298,7 +1297,7 @@ async def main():
         await cleanup_bots(bot_clients)
         
         print("\n" + "=" * 80)
-        print("🏁 Test completed!")
+        print("Test completed!")
         print("=" * 80)
         print(" Use cleanup_bots_simple.py to clean up database entries")
         print(" Restart Daphne if you see connection issues")
