@@ -1,0 +1,283 @@
+/* Valorant-Inspired Theme Utilities */
+
+/* Red accent gradient backgrounds */
+.val-gradient-bg {
+  background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%);
+}
+
+.val-gradient-red {
+  background: linear-gradient(135deg, #FF4655 0%, #ff1f31 100%);
+}
+
+.val-gradient-subtle {
+  background: linear-gradient(135deg, #151515 0%, #1c1c1c 100%);
+}
+
+/* Red glow effects */
+.val-glow-sm {
+  box-shadow: 0 0 5px rgba(255, 70, 85, 0.3);
+}
+
+.val-glow-md {
+  box-shadow: 0 0 10px rgba(255, 70, 85, 0.4),
+              0 0 20px rgba(255, 70, 85, 0.2);
+}
+
+.val-glow-lg {
+  box-shadow: 0 0 15px rgba(255, 70, 85, 0.5),
+              0 0 30px rgba(255, 70, 85, 0.3),
+              0 0 45px rgba(255, 70, 85, 0.1);
+}
+
+/* Hover effects */
+.val-hover-glow {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.val-hover-glow:hover {
+  box-shadow: 0 0 20px rgba(255, 70, 85, 0.6),
+              0 0 40px rgba(255, 70, 85, 0.4);
+  transform: translateY(-2px);
+}
+
+/* Card styles */
+.val-card {
+  background: #151515;
+  border: 1px solid #282828;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.val-card:hover {
+  border-color: #FF4655;
+  box-shadow: 0 0 15px rgba(255, 70, 85, 0.2);
+}
+
+.val-card-active {
+  background: #1c1c1c;
+  border: 1px solid #FF4655;
+  box-shadow: 0 0 20px rgba(255, 70, 85, 0.3);
+}
+
+/* Button styles */
+.val-button-primary {
+  background: linear-gradient(135deg, #FF4655 0%, #ff1f31 100%);
+  border: none;
+  color: white;
+  padding: 10px 24px;
+  border-radius: 4px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.val-button-primary:hover {
+  background: linear-gradient(135deg, #ff1f31 0%, #e6001a 100%);
+  box-shadow: 0 0 20px rgba(255, 70, 85, 0.5);
+  transform: translateY(-2px);
+}
+
+.val-button-secondary {
+  background: transparent;
+  border: 2px solid #FF4655;
+  color: #FF4655;
+  padding: 10px 24px;
+  border-radius: 4px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.val-button-secondary:hover {
+  background: rgba(255, 70, 85, 0.1);
+  box-shadow: 0 0 15px rgba(255, 70, 85, 0.3);
+}
+
+.val-button-ghost {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid #3c3c3c;
+  color: #ececec;
+  padding: 10px 24px;
+  border-radius: 4px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.val-button-ghost:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: #6e6e6e;
+}
+
+/* Text styles */
+.val-text-primary {
+  color: #ececec;
+}
+
+.val-text-secondary {
+  color: #a8a8a8;
+}
+
+.val-text-muted {
+  color: #6e6e6e;
+}
+
+.val-text-accent {
+  color: #FF4655;
+  font-weight: 600;
+}
+
+/* Dividers */
+.val-divider {
+  height: 1px;
+  background: linear-gradient(90deg, 
+    transparent 0%, 
+    #3c3c3c 50%, 
+    transparent 100%);
+  margin: 16px 0;
+}
+
+.val-divider-red {
+  height: 2px;
+  background: linear-gradient(90deg, 
+    transparent 0%, 
+    #FF4655 50%, 
+    transparent 100%);
+  margin: 16px 0;
+}
+
+/* Badges */
+.val-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.val-badge-primary {
+  background: rgba(255, 70, 85, 0.2);
+  color: #FF4655;
+  border: 1px solid #FF4655;
+}
+
+.val-badge-success {
+  background: rgba(26, 201, 150, 0.2);
+  color: #1ac996;
+  border: 1px solid #1ac996;
+}
+
+.val-badge-neutral {
+  background: rgba(110, 110, 110, 0.2);
+  color: #a8a8a8;
+  border: 1px solid #6e6e6e;
+}
+
+/* Input fields */
+.val-input {
+  background: #151515;
+  border: 1px solid #282828;
+  color: #ececec;
+  padding: 12px 16px;
+  border-radius: 4px;
+  outline: none;
+  transition: all 0.3s ease;
+  font-family: 'Source Sans Pro', sans-serif;
+}
+
+.val-input:focus {
+  border-color: #FF4655;
+  box-shadow: 0 0 0 3px rgba(255, 70, 85, 0.1);
+}
+
+.val-input::placeholder {
+  color: #6e6e6e;
+}
+
+/* Progress bars */
+.val-progress {
+  width: 100%;
+  height: 4px;
+  background: #1a1a1a;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.val-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #FF4655 0%, #ff1f31 100%);
+  transition: width 0.3s ease;
+  box-shadow: 0 0 10px rgba(255, 70, 85, 0.5);
+}
+
+/* Animations */
+@keyframes val-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.val-pulse {
+  animation: val-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes val-glow-pulse {
+  0%, 100% {
+    box-shadow: 0 0 10px rgba(255, 70, 85, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(255, 70, 85, 0.8);
+  }
+}
+
+.val-glow-pulse {
+  animation: val-glow-pulse 2s ease-in-out infinite;
+}
+
+/* Container backgrounds */
+.val-bg-primary {
+  background: #0f0f0f;
+}
+
+.val-bg-secondary {
+  background: #151515;
+}
+
+.val-bg-tertiary {
+  background: #1c1c1c;
+}
+
+/* Border utilities */
+.val-border {
+  border: 1px solid #282828;
+}
+
+.val-border-accent {
+  border: 1px solid #FF4655;
+}
+
+.val-border-subtle {
+  border: 1px solid #1a1a1a;
+}
+
+/* Transitions */
+.val-transition {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.val-transition-fast {
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.val-transition-slow {
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}

@@ -15,8 +15,11 @@ trueskill = "*"
 channels = "*"
 channels-redis = "*"
 django = "*"
+django-celery-beat = "*"
+celery = "*"
+websockets = "*"
+gevent = "*"
 daphne = "*"
-celery = {extras = ["redis"], version = "*"}
 
 [dev-packages]
 

@@ -13,14 +13,18 @@
       "pearl":"/Game/Maps/Pitt/Pitt",
       "split":"/Game/Maps/Bonsai/Bonsai",
       "lotus":"/Game/Maps/Jam/Jam",
-      "alley":"/Game/Maps/HURM/HURM_Alley/HURM_Alley",
-      "bowl":"/Game/Maps/HURM/HURM_Bowl/HURM_Bowl",
-      "yard":"/Game/Maps/HURM/HURM_Yard/HURM_Yard"
+      "abyss":"/Game/Maps/Infinity/Infinity",
+      "sunset":"/Game/Maps/Juliett/Juliett",
+      "corrode":"/Game/Maps/Rook/Rook"
   },
   "serverPreferences": {
     "North America": {
-      "Virginia": "aresriot.aws-rclusterprod-use1-1.na-gp-ashburn-awsedge-1",
-      "Illinois": "aresriot.aws-rclusterprod-use1-1.na-gp-chicago-awsedge-1"
+      "Virginia": "aresriot.aws-use1-prod.na-gp-ashburn-1",
+      "Illinois": "aresriot.aws-chi2-prod.na-gp-chicago-2",
+      "Georgia": "aresriot.aws-atl2-prod.na-gp-atlanta-2",
+      "California": "aresriot.aws-usw1-prod.na-gp-norcal-1",
+      "Dallas": "aresriot.aws-dfw2-prod.na-gp-dallas-2",
+      "Oregon": "aresriot.aws-usw2-prod.na-gp-oregon-1"
     },
     "Europe West": {},
     "Europe East": {},

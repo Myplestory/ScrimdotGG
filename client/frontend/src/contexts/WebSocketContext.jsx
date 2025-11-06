@@ -6,6 +6,8 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 
 const WebSocketContext = createContext(null);
 
+export { WebSocketContext };
+
 export const useWebSocket = () => {
   const context = useContext(WebSocketContext);
   if (!context) {
@@ -37,11 +39,20 @@ export const WebSocketProvider = ({ children }) => {
   const [queueStatus, setQueueStatus] = useState({ in_queue: false, estimated_wait: 0 });
   const [chatMessages, setChatMessages] = useState([]);
   
+  // Match state validation tracking
+  const [matchStateInfo, setMatchStateInfo] = useState({
+    inActiveMatch: false,
+    matchId: null,
+    matchState: null,
+    canQueue: true,
+    blockedReason: null
+  });
+  
   // Event handlers registry
   const eventHandlers = useRef({});
   const reconnectAttempts = useRef(0);
   const reconnectTimeout = useRef(null);
-  const maxReconnectAttempts = 5;
+  const maxReconnectAttempts = 10; // Increased from 5 to 10 for better resilience
   const WS_URL = 'ws://localhost:5888/ws';
 
   // Connect to WebSocket
@@ -59,6 +70,20 @@ export const WebSocketProvider = ({ children }) => {
       setConnected(true);
       setReconnecting(false);
       setSocket(ws);
+      
+      // Show success notification if this was a reconnection
+      if (reconnectAttempts.current > 0) {
+        console.log(`✅ Successfully reconnected after ${reconnectAttempts.current} attempts`);
+        if (window.showNotification) {
+          window.showNotification({
+            type: 'success',
+            title: 'Reconnected',
+            message: 'Connection to server restored',
+            duration: 3000
+          });
+        }
+      }
+      
       reconnectAttempts.current = 0;
       
       // Send connected event to backend
@@ -77,6 +102,16 @@ export const WebSocketProvider = ({ children }) => {
         console.log(`🔄 Reconnecting in ${delay}ms (attempt ${reconnectAttempts.current + 1}/${maxReconnectAttempts})...`);
         setReconnecting(true);
         
+        // Show user notification about reconnection
+        if (window.showNotification) {
+          window.showNotification({
+            type: 'warning',
+            title: 'Connection Lost',
+            message: `Reconnecting... (${reconnectAttempts.current + 1}/${maxReconnectAttempts})`,
+            duration: delay
+          });
+        }
+        
         reconnectTimeout.current = setTimeout(() => {
           reconnectAttempts.current++;
           connectWebSocket();
@@ -84,6 +119,16 @@ export const WebSocketProvider = ({ children }) => {
       } else if (reconnectAttempts.current >= maxReconnectAttempts) {
         console.error('❌ Max reconnection attempts reached');
         setReconnecting(false);
+        
+        // Show user notification about failed reconnection
+        if (window.showNotification) {
+          window.showNotification({
+            type: 'error',
+            title: 'Connection Failed',
+            message: 'Unable to reconnect to server. Please refresh the page.',
+            duration: 0 // Persistent notification
+          });
+        }
       } else {
         // Clean close, don't reconnect
         console.log('✅ WebSocket closed cleanly, not reconnecting');
@@ -196,6 +241,50 @@ export const WebSocketProvider = ({ children }) => {
         setMatchData(payload);
         break;
         
+      case 'queue_eligibility':
+        console.log('📥 [FRONTEND] Queue eligibility check:', payload);
+        setMatchStateInfo(prev => ({
+          ...prev,
+          canQueue: payload.can_queue,
+          blockedReason: payload.reason || null,
+          inActiveMatch: !payload.can_queue,
+          matchId: payload.match_id || null,
+          matchState: payload.match_state || null
+        }));
+        break;
+        
+      case 'queue_blocked':
+        console.log('📥 [FRONTEND] Queue blocked:', payload);
+        setMatchStateInfo(prev => ({
+          ...prev,
+          canQueue: false,
+          blockedReason: payload.message,
+          inActiveMatch: true
+        }));
+        
+        // Show notification to user
+        if (window.showNotification) {
+          window.showNotification({
+            type: 'error',
+            title: 'Cannot Queue',
+            message: payload.message,
+            details: payload.blocked_players ? 
+              `Blocked players: ${payload.blocked_players.join(', ')}` : null
+          });
+        }
+        break;
+        
+      case 'match_state_changed':
+        console.log('📥 [FRONTEND] Match state changed:', payload);
+        setMatchStateInfo(prev => ({
+          ...prev,
+          inActiveMatch: !payload.can_queue,
+          matchId: payload.match_id,
+          matchState: payload.state,
+          canQueue: payload.can_queue
+        }));
+        break;
+        
       case 'match_acceptance_required':
         setMatchData(prev => ({
           ...prev,
@@ -233,6 +322,173 @@ export const WebSocketProvider = ({ children }) => {
           status: 'completed',
           results: payload.results
         }));
+        break;
+        
+      case 'match_data':
+        console.log('📥 [FRONTEND] Received match data:', payload);
+        setMatchData(payload);
+        // Call custom event handler if registered
+        if (eventHandlers.current['match_data']) {
+          eventHandlers.current['match_data'](payload);
+        }
+        break;
+        
+      case 'server_veto_complete':
+        console.log('📥 [FRONTEND] Server veto phase completed:', payload);
+        setMatchData(prev => ({
+          ...prev,
+          state: 'VETO', // Transition to map veto phase
+          final_server: payload.final_server,
+          map_pool: payload.available_maps,
+          veto_turn: payload.current_turn,
+          veto_deadline: payload.veto_deadline,
+          vetoed_maps: [], // Reset vetoed maps for map veto phase
+          veto_state: {
+            ...prev?.veto_state,
+            server_veto_complete: true,
+            final_server: payload.final_server,
+            current_turn: payload.current_turn,
+            available_maps: payload.available_maps,
+            veto_deadline: payload.veto_deadline,
+            last_update: Date.now()
+          }
+        }));
+        // Call custom event handler if registered
+        if (eventHandlers.current['server_veto_complete']) {
+          eventHandlers.current['server_veto_complete'](payload);
+        }
+        break;
+        
+      case 'map_veto_started':
+        console.log('📥 [FRONTEND] Map veto phase started:', payload);
+        setMatchData(prev => ({
+          ...prev,
+          state: 'VETO', // Ensure we're in map veto phase
+          map_pool: payload.available_maps || prev?.map_pool,
+          veto_turn: payload.current_turn,
+          veto_deadline: payload.deadline,
+          vetoed_maps: [], // Reset vetoed maps for map veto phase
+          veto_state: {
+            ...prev?.veto_state,
+            map_veto_started: true,
+            current_turn: payload.current_turn,
+            available_maps: payload.available_maps || prev?.map_pool,
+            veto_deadline: payload.deadline,
+            last_update: Date.now()
+          }
+        }));
+        // Call custom event handler if registered
+        if (eventHandlers.current['map_veto_started']) {
+          eventHandlers.current['map_veto_started'](payload);
+        }
+        break;
+        
+      case 'map_vetoed':
+        console.log('📥 [FRONTEND] Received map vetoed:', payload);
+        console.log('🔄 [WEBSOCKET] Before state update - matchData:', matchData);
+        console.log('🔄 [WEBSOCKET] Before state update - veto_state:', matchData?.veto_state);
+        
+        setMatchData(prev => {
+          const newState = {
+            ...prev,
+            veto_state: {
+              ...prev?.veto_state,
+              vetoed_map: payload.map,
+              vetoed_by: payload.vetoed_by,
+              current_turn: payload.next_turn,
+              remaining_maps: payload.remaining_maps,
+              last_update: Date.now()
+            }
+          };
+          
+          console.log('🔄 [WEBSOCKET] After state update - newState:', newState);
+          console.log('🔄 [WEBSOCKET] After state update - veto_state:', newState.veto_state);
+          
+          return newState;
+        });
+        
+        // Call custom event handler if registered
+        if (eventHandlers.current['map_vetoed']) {
+          eventHandlers.current['map_vetoed'](payload);
+        }
+        break;
+        
+      case 'veto_complete':
+        console.log('📥 [FRONTEND] Veto phase completed:', payload);
+        setMatchData(prev => ({
+          ...prev,
+          veto_state: {
+            ...prev?.veto_state,
+            completed: true,
+            final_map: payload.final_map
+          }
+        }));
+        // Call custom event handler if registered
+        if (eventHandlers.current['veto_complete']) {
+          eventHandlers.current['veto_complete'](payload);
+        }
+        break;
+        
+      case 'server_veto_timeout':
+        console.log('📥 [FRONTEND] Server veto timeout:', payload);
+        setMatchData(prev => ({
+          ...prev,
+          veto_state: {
+            ...prev?.veto_state,
+            server_veto_timeout: true,
+            auto_vetoed_server: payload.auto_vetoed_server,
+            server_veto_complete: payload.server_veto_complete,
+            final_server: payload.final_server,
+            current_turn: payload.current_turn,
+            available_maps: payload.available_maps,
+            veto_deadline: payload.veto_deadline,
+            last_update: Date.now()
+          }
+        }));
+        // Call custom event handler if registered
+        if (eventHandlers.current['server_veto_timeout']) {
+          eventHandlers.current['server_veto_timeout'](payload);
+        }
+        break;
+        
+      case 'map_veto_timeout':
+        console.log('📥 [FRONTEND] Map veto timeout:', payload);
+        setMatchData(prev => ({
+          ...prev,
+          veto_state: {
+            ...prev?.veto_state,
+            map_veto_timeout: true,
+            auto_vetoed_map: payload.auto_vetoed_map,
+            veto_complete: payload.veto_complete,
+            current_turn: payload.next_turn,
+            remaining_maps: payload.remaining_maps,
+            final_map: payload.final_map,
+            last_update: Date.now()
+          }
+        }));
+        // Call custom event handler if registered
+        if (eventHandlers.current['map_veto_timeout']) {
+          eventHandlers.current['map_veto_timeout'](payload);
+        }
+        break;
+        
+      case 'side_selection_timeout':
+        console.log('📥 [FRONTEND] Side selection timeout:', payload);
+        setMatchData(prev => ({
+          ...prev,
+          veto_state: {
+            ...prev?.veto_state,
+            side_selection_timeout: true,
+            auto_selected_side: payload.auto_selected_side,
+            side_selection_complete: payload.side_selection_complete,
+            match_ready: payload.match_ready,
+            last_update: Date.now()
+          }
+        }));
+        // Call custom event handler if registered
+        if (eventHandlers.current['side_selection_timeout']) {
+          eventHandlers.current['side_selection_timeout'](payload);
+        }
         break;
         
       case 'error':
@@ -299,6 +555,17 @@ export const WebSocketProvider = ({ children }) => {
     leavePugQueue: () => sendEvent('leave_pug_queue', {}),
   };
 
+  // Helper function to check queue eligibility
+  const checkQueueEligibility = useCallback((lobbyId = null, playerPuuid = null) => {
+    if (!connected) return;
+    
+    const payload = {};
+    if (lobbyId) payload.lobby_id = lobbyId;
+    if (playerPuuid) payload.player_puuid = playerPuuid;
+    
+    sendEvent('check_queue_eligibility', payload);
+  }, [connected, sendEvent]);
+
   const value = {
     // Connection state
     connected,
@@ -313,14 +580,31 @@ export const WebSocketProvider = ({ children }) => {
     matchData,
     queueStatus,
     chatMessages,
+    matchStateInfo,
     
     // Methods
     sendEvent,
     on,
     api,
+    checkQueueEligibility,
     
     // Manual reconnect
-    reconnect: connectWebSocket,
+    reconnect: () => {
+      // Reset reconnection attempts for manual reconnect
+      reconnectAttempts.current = 0;
+      setReconnecting(false);
+      connectWebSocket();
+    },
+    
+    // Reset reconnection state
+    resetReconnection: () => {
+      reconnectAttempts.current = 0;
+      setReconnecting(false);
+      if (reconnectTimeout.current) {
+        clearTimeout(reconnectTimeout.current);
+        reconnectTimeout.current = null;
+      }
+    },
   };
 
   return (

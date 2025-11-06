@@ -2,6 +2,9 @@ import requests, os, json, time, asyncio
 from valclient import Client
 from datetime import datetime
 from pugapi import PugSocketClient
+from app.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 folder_name = 'data'
@@ -21,7 +24,7 @@ class ValorantAPI(object):
                 data = json.load(file)
                 self.args = data
         except Exception as e:
-            print(f"An error occurred while reading the JSON file: {e}")
+            logger.error(f"An error occurred while reading the JSON file: {e}")
     
     ### LOGIN ###
     async def login(self, region):
@@ -81,9 +84,289 @@ class ValorantAPI(object):
             print(f"Attempting WebSocket connection [Attempt {attempt}/{max_retries}] to {self.pugsocket_url}")
             connection_status = await self.pugsocket.start_connection(self.pugsocket_url)
             if connection_status["status"] == "success":
-                print("WebSocket connection established.")
-                await asyncio.sleep(1)
-                return connection_status
+                    print("WebSocket connection established.")
+                    
+                    # Store reference to self for callback closure
+                    api_instance = self
+                    
+                    # Set up the match_found callback to forward to main WebSocket
+                    async def match_found_callback(data):
+                        """Forward match_found event to main WebSocket connection"""
+                        try:
+                            print(f"[MATCH_FOUND_CALLBACK] Received match_found event: {data}")
+                            
+                            # Get the match data and store it temporarily
+                            api_instance._pending_match_data = data
+                            
+                            print(f"[MATCH_FOUND_CALLBACK] Stored pending match data, will be picked up by main loop")
+                        except Exception as e:
+                            print(f"[MATCH_FOUND_CALLBACK] Error storing match_found: {e}")
+                            import traceback
+                            traceback.print_exc()
+                    
+                    # Set up the match_proposed callback to forward to main WebSocket
+                    async def match_proposed_callback(data):
+                        """Forward match_proposed event to main WebSocket connection"""
+                        try:
+                            print(f"[MATCH_PROPOSED_CALLBACK] Received match_proposed event: {data}")
+                            
+                            # Store the match proposed data temporarily
+                            api_instance._pending_match_proposed_data = data
+                            
+                            print(f"[MATCH_PROPOSED_CALLBACK] Stored pending match proposed data, will be picked up by main loop")
+                        except Exception as e:
+                            print(f"[MATCH_PROPOSED_CALLBACK] Error storing match_proposed: {e}")
+                            import traceback
+                            traceback.print_exc()
+                    
+                    # Set up the player_accepted callback to forward to main WebSocket
+                    async def player_accepted_callback(data):
+                        """Forward player_accepted event to main WebSocket connection"""
+                        try:
+                            print(f"[PLAYER_ACCEPTED_CALLBACK] Received player_accepted event: {data}")
+                            
+                            # Store the player accepted data temporarily
+                            api_instance._pending_player_accepted_data = data
+                            
+                            print(f"[PLAYER_ACCEPTED_CALLBACK] Stored pending player accepted data, will be picked up by main loop")
+                        except Exception as e:
+                            print(f"[PLAYER_ACCEPTED_CALLBACK] Error storing player_accepted: {e}")
+                            import traceback
+                            traceback.print_exc()
+                    
+                    # Set up the match_ready callback to forward to main WebSocket
+                    async def match_ready_callback(data):
+                        """Forward match_ready event to main WebSocket connection"""
+                        try:
+                            print(f"[MATCH_READY_CALLBACK] Received match_ready event: {data}")
+                            
+                            # Store the match ready data temporarily
+                            api_instance._pending_match_ready_data = data
+                            
+                            print(f"[MATCH_READY_CALLBACK] Stored pending match ready data, will be picked up by main loop")
+                        except Exception as e:
+                            print(f"[MATCH_READY_CALLBACK] Error storing match_ready: {e}")
+                            import traceback
+                            traceback.print_exc()
+                    
+                    # Set up the match_confirmed callback to forward to main WebSocket
+                    async def match_confirmed_callback(data):
+                        """Forward match_confirmed event to main WebSocket connection"""
+                        try:
+                            print(f"[MATCH_CONFIRMED_CALLBACK] Received match_confirmed event: {data}")
+                            
+                            # Store the match confirmed data temporarily
+                            api_instance._pending_match_confirmed_data = data
+                            
+                            print(f"[MATCH_CONFIRMED_CALLBACK] Stored pending match confirmed data, will be picked up by main loop")
+                        except Exception as e:
+                            print(f"[MATCH_CONFIRMED_CALLBACK] Error storing match_confirmed: {e}")
+                            import traceback
+                            traceback.print_exc()
+                    
+                    # Set up the map_veto_started callback to forward to main WebSocket
+                    async def map_veto_started_callback(data):
+                        """Forward map_veto_started event to main WebSocket connection (IMMEDIATE)"""
+                        try:
+                            print(f"[MAP_VETO_STARTED_CALLBACK] Received map_veto_started event: {data}")
+                            
+                            # Immediately broadcast to all connected frontend clients
+                            from quart import current_app
+                            await current_app.conn_mgr.broadcast('map_veto_started', data)
+                            
+                            print(f"[MAP_VETO_STARTED_CALLBACK] Immediately broadcasted map_veto_started to all clients")
+                        except Exception as e:
+                            print(f"[MAP_VETO_STARTED_CALLBACK] Error broadcasting map_veto_started: {e}")
+                            import traceback
+                            traceback.print_exc()
+                    
+                    # Set up the match_data callback to forward to main WebSocket
+                    async def match_data_callback(data):
+                        """Forward match_data event to main WebSocket connection"""
+                        try:
+                            print(f"[MATCH_DATA_CALLBACK] Received match_data event: {data}")
+                            
+                            # Store the match data response temporarily
+                            api_instance._pending_match_data_response = data
+                            
+                            print(f"[MATCH_DATA_CALLBACK] Stored pending match data response, will be picked up by main loop")
+                        except Exception as e:
+                            print(f"[MATCH_DATA_CALLBACK] Error storing match_data: {e}")
+                            import traceback
+                            traceback.print_exc()
+                    
+                    # Set up the veto_complete callback to forward to main WebSocket
+                    async def veto_complete_callback(data):
+                        """Forward veto_complete event to main WebSocket connection (IMMEDIATE)"""
+                        try:
+                            print(f"[VETO_COMPLETE_CALLBACK] Received veto_complete event: {data}")
+                            
+                            # Immediately broadcast to all connected frontend clients
+                            from quart import current_app
+                            await current_app.conn_mgr.broadcast('veto_complete', data)
+                            
+                            print(f"[VETO_COMPLETE_CALLBACK] Immediately broadcasted veto_complete to all clients")
+                        except Exception as e:
+                            print(f"[VETO_COMPLETE_CALLBACK] Error broadcasting veto_complete: {e}")
+                            import traceback
+                            traceback.print_exc()
+                    
+                    # Set up the veto_acknowledged callback to forward to main WebSocket
+                    async def veto_acknowledged_callback(data):
+                        """Forward veto_acknowledged event to main WebSocket connection (IMMEDIATE)"""
+                        try:
+                            print(f"[VETO_ACKNOWLEDGED_CALLBACK] Received veto_acknowledged event: {data}")
+                            
+                            # Immediately broadcast to all connected frontend clients
+                            from quart import current_app
+                            await current_app.conn_mgr.broadcast('veto_acknowledged', data)
+                            
+                            print(f"[VETO_ACKNOWLEDGED_CALLBACK] Immediately broadcasted veto_acknowledged to all clients")
+                        except Exception as e:
+                            print(f"[VETO_ACKNOWLEDGED_CALLBACK] Error broadcasting veto_acknowledged: {e}")
+                            import traceback
+                            traceback.print_exc()
+                    
+                    # Set up the map_vetoed callback to forward to main WebSocket
+                    async def map_vetoed_callback(data):
+                        """Forward map_vetoed event to main WebSocket connection (IMMEDIATE)"""
+                        try:
+                            print(f"[MAP_VETOED_CALLBACK] Received map_vetoed event: {data}")
+                            
+                            # Immediately broadcast to all connected frontend clients
+                            from quart import current_app
+                            await current_app.conn_mgr.broadcast('map_vetoed', data)
+                            
+                            print(f"[MAP_VETOED_CALLBACK] Immediately broadcasted map_vetoed to all clients")
+                        except Exception as e:
+                            print(f"[MAP_VETOED_CALLBACK] Error broadcasting map_vetoed: {e}")
+                            import traceback
+                            traceback.print_exc()
+                    
+                    # Set up the server_veto_started callback to forward to main WebSocket
+                    async def server_veto_started_callback(data):
+                        """Forward server_veto_started event to main WebSocket connection (IMMEDIATE)"""
+                        try:
+                            print(f"[SERVER_VETO_STARTED_CALLBACK] Received server_veto_started event: {data}")
+                            
+                            # Immediately broadcast to all connected frontend clients
+                            from quart import current_app
+                            await current_app.conn_mgr.broadcast('server_veto_started', data)
+                            
+                            print(f"[SERVER_VETO_STARTED_CALLBACK] Immediately broadcasted server_veto_started to all clients")
+                        except Exception as e:
+                            print(f"[SERVER_VETO_STARTED_CALLBACK] Error broadcasting server_veto_started: {e}")
+                            import traceback
+                            traceback.print_exc()
+                    
+                    # Set up the server_veto_update callback to forward to main WebSocket
+                    async def server_veto_update_callback(data):
+                        """Forward server_veto_update event to main WebSocket connection (IMMEDIATE)"""
+                        try:
+                            print(f"[SERVER_VETO_UPDATE_CALLBACK] Received server_veto_update event: {data}")
+                            
+                            # Immediately broadcast to all connected frontend clients
+                            from quart import current_app
+                            await current_app.conn_mgr.broadcast('server_veto_update', data)
+                            
+                            print(f"[SERVER_VETO_UPDATE_CALLBACK] Immediately broadcasted server_veto_update to all clients")
+                        except Exception as e:
+                            print(f"[SERVER_VETO_UPDATE_CALLBACK] Error broadcasting server_veto_update: {e}")
+                            import traceback
+                            traceback.print_exc()
+                    
+                    # Set up the server_veto_complete callback to forward to main WebSocket
+                    async def server_veto_complete_callback(data):
+                        """Forward server_veto_complete event to main WebSocket connection (IMMEDIATE)"""
+                        try:
+                            print(f"[SERVER_VETO_COMPLETE_CALLBACK] Received server_veto_complete event: {data}")
+                            
+                            # Immediately broadcast to all connected frontend clients
+                            from quart import current_app
+                            await current_app.conn_mgr.broadcast('server_veto_complete', data)
+                            
+                            print(f"[SERVER_VETO_COMPLETE_CALLBACK] Immediately broadcasted server_veto_complete to all clients")
+                        except Exception as e:
+                            print(f"[SERVER_VETO_COMPLETE_CALLBACK] Error broadcasting server_veto_complete: {e}")
+                            import traceback
+                            traceback.print_exc()
+                    
+                    # Set up the server_veto_acknowledged callback to forward to main WebSocket
+                    async def server_veto_acknowledged_callback(data):
+                        """Forward server_veto_acknowledged event to main WebSocket connection (IMMEDIATE)"""
+                        try:
+                            print(f"[SERVER_VETO_ACKNOWLEDGED_CALLBACK] Received server_veto_acknowledged event: {data}")
+                            
+                            # Immediately broadcast to all connected frontend clients
+                            from quart import current_app
+                            await current_app.conn_mgr.broadcast('server_veto_acknowledged', data)
+                            
+                            print(f"[SERVER_VETO_ACKNOWLEDGED_CALLBACK] Immediately broadcasted server_veto_acknowledged to all clients")
+                        except Exception as e:
+                            print(f"[SERVER_VETO_ACKNOWLEDGED_CALLBACK] Error broadcasting server_veto_acknowledged: {e}")
+                            import traceback
+                            traceback.print_exc()
+                    
+                    # Set up the side_selected callback to forward to main WebSocket
+                    async def side_selected_callback(data):
+                        """Forward side_selected event to main WebSocket connection (IMMEDIATE)"""
+                        try:
+                            print(f"[SIDE_SELECTED_CALLBACK] Received side_selected event: {data}")
+                            
+                            # Immediately broadcast to all connected frontend clients
+                            from quart import current_app
+                            await current_app.conn_mgr.broadcast('side_selected', data)
+                            
+                            print(f"[SIDE_SELECTED_CALLBACK] Immediately broadcasted side_selected to all clients")
+                        except Exception as e:
+                            print(f"[SIDE_SELECTED_CALLBACK] Error broadcasting side_selected: {e}")
+                            import traceback
+                            traceback.print_exc()
+                    
+                    # Set up the side_acknowledged callback to forward to main WebSocket
+                    async def side_acknowledged_callback(data):
+                        """Forward side_acknowledged event to main WebSocket connection (IMMEDIATE)"""
+                        try:
+                            print(f"[SIDE_ACKNOWLEDGED_CALLBACK] Received side_acknowledged event: {data}")
+                            
+                            # Immediately broadcast to all connected frontend clients
+                            from quart import current_app
+                            await current_app.conn_mgr.broadcast('side_acknowledged', data)
+                            
+                            print(f"[SIDE_ACKNOWLEDGED_CALLBACK] Immediately broadcasted side_acknowledged to all clients")
+                        except Exception as e:
+                            print(f"[SIDE_ACKNOWLEDGED_CALLBACK] Error broadcasting side_acknowledged: {e}")
+                            import traceback
+                            traceback.print_exc()
+                    
+                    self.pugsocket.match_found_callback = match_found_callback
+                    self.pugsocket.match_proposed_callback = match_proposed_callback
+                    self.pugsocket.player_accepted_callback = player_accepted_callback
+                    self.pugsocket.match_ready_callback = match_ready_callback
+                    self.pugsocket.match_confirmed_callback = match_confirmed_callback
+                    self.pugsocket.map_veto_started_callback = map_veto_started_callback
+                    self.pugsocket.match_data_callback = match_data_callback
+                    self.pugsocket.veto_complete_callback = veto_complete_callback
+                    self.pugsocket.veto_acknowledged_callback = veto_acknowledged_callback
+                    self.pugsocket.map_vetoed_callback = map_vetoed_callback
+                    self.pugsocket.server_veto_started_callback = server_veto_started_callback
+                    self.pugsocket.server_veto_update_callback = server_veto_update_callback
+                    self.pugsocket.server_veto_complete_callback = server_veto_complete_callback
+                    self.pugsocket.server_veto_acknowledged_callback = server_veto_acknowledged_callback
+                    self.pugsocket.side_selected_callback = side_selected_callback
+                    self.pugsocket.side_acknowledged_callback = side_acknowledged_callback
+                    self._pending_match_data = None
+                    self._pending_match_proposed_data = None
+                    self._pending_player_accepted_data = None
+                    self._pending_match_ready_data = None
+                    self._pending_match_confirmed_data = None
+                    self._pending_veto_started_data = None
+                    self._pending_match_data_response = None
+                    self._pending_veto_complete_data = None
+                    self._pending_veto_acknowledged_data = None
+                    
+                    await asyncio.sleep(1)
+                    return connection_status
             print(f"Connection failed: {connection_status.get('message', 'No message provided')}")
             if attempt < max_retries:
                 sleep_time = backoff * attempt
@@ -208,127 +491,6 @@ class ValorantAPI(object):
             print(f"Error sending 'create_lobby' message: {e}")
             return {"error": f"Error sending 'create_lobby' message: {str(e)}"}
           
-    # def queueup():
-        
-    def queueupbypass(self,lobbyid,mapchoices,serverchoices):
-        url = 'http://127.0.0.1:8000/matchmaking/queueup/'
-        jsonargs = {
-                    'puuid':self.client.puuid,
-                    'lobbyid':lobbyid,
-                    'mapchoices':mapchoices,
-                    'serverchoices':serverchoices
-            }
-        response = requests.post(url, json=jsonargs)
-        if response.status_code in [200, 201]:
-            data = response.json()
-            if data["status"] == 'build':
-                if data["constructor"] == self.client.puuid:
-                    partyid = self.client.party_fetch_player()
-                    custom = self.client.party_change_to_custom()
-                    buildargs = {
-                        "Map": self.args['mapPreferences'][data["match_map"]],
-                        "Mode": "/Game/GameModes/Bomb/BombGameMode.BombGameMode_C",
-                        "GamePod": self._get_server_url(data["match_server"]),
-                        "UseBots":False,
-                        "GameRules":{
-                            "AllowGameModifiers": "true",
-                            "PlayOutAllRounds": "true",
-                            "SkipMatchHistory": "true",
-                            "TournamentMode": "false",
-                            "IsOvertimeWinByTwo": "true",
-                        },
-                    }
-                    setroom = 'http://127.0.0.1:8000/matchmaking/setroom/'
-                    jsonargs = {
-                            'pregame_id':custom["ID"],
-                            'match_id':data['match_id']
-                    }
-                    response = requests.post(setroom, json=jsonargs)
-                    if response.status_code in [200, 201]:
-                        data = response.json()
-                        settings = self.client.party_set_custom_game_settings(buildargs)
-                        time.sleep(4)
-                        self.client.party_start_custom_game()
-                        return {"status": "success", "message": f"Matchroom successfully set for : {self.client.puuid}", 'data': data, 'buildargs': buildargs, 'custom_info':settings,'party_id':partyid}
-                    else:
-                        return {"error": "Request failed", "status_code": response.status_code}
-                else:
-                    time.sleep(2)
-                    matchid = data["match_id"]
-                    fetchroom = 'http://127.0.0.1:8000/matchmaking/fetchroom/'
-                    jsonargs = {
-                            'match':matchid,
-                    }
-                    response = requests.post(fetchroom, json=jsonargs)
-                    if response.status_code in [200, 201]:
-                        data = response.json()
-                        self.client.party_join(data['pregame_id'])
-                        return {"status": "success", "message": f"Matchroom successfully set for : {self.client.puuid}", 'data': data,}           
-            else:
-                    return data
-        else:
-                return {"error": "Request failed", "status_code": response.status_code}
-              
-              
-    def matchfound(self,lobbyid,mapchoices,serverchoices):
-        url = 'http://127.0.0.1:8000/matchmaking/queueup/'
-        jsonargs = {
-                    'puuid':self.client.puuid,
-                    'lobbyid':lobbyid,
-                    'mapchoices':mapchoices,
-                    'serverchoices':serverchoices
-            }
-        response = requests.post(url, json=jsonargs)
-        if response.status_code in [200, 201]:
-            data = response.json()
-            if data["status"] == 'build':
-                if data["constructor"] == self.client.puuid:
-                    partyid = self.client.party_fetch_player()
-                    custom = self.client.party_change_to_custom()
-                    buildargs = {
-                        "Map": self.args['mapPreferences'][data["match_map"]],
-                        "Mode": "/Game/GameModes/Bomb/BombGameMode.BombGameMode_C",
-                        "GamePod": self._get_server_url(data["match_server"]),
-                        "UseBots":False,
-                        "GameRules":{
-                            "AllowGameModifiers": "true",
-                            "PlayOutAllRounds": "true",
-                            "SkipMatchHistory": "true",
-                            "TournamentMode": "false",
-                            "IsOvertimeWinByTwo": "true",
-                        },
-                    }
-                    setroom = 'http://127.0.0.1:8000/matchmaking/setroom/'
-                    jsonargs = {
-                            'pregame_id':custom["ID"],
-                            'match_id':data['match_id']
-                    }
-                    response = requests.post(setroom, json=jsonargs)
-                    if response.status_code in [200, 201]:
-                        data = response.json()
-                        settings = self.client.party_set_custom_game_settings(buildargs)
-                        time.sleep(4)
-                        self.client.party_start_custom_game()
-                        return {"status": "success", "message": f"Matchroom successfully set for : {self.client.puuid}", 'data': data, 'buildargs': buildargs, 'custom_info':settings,'party_id':partyid}
-                    else:
-                        return {"error": "Request failed", "status_code": response.status_code}
-                else:
-                    time.sleep(2)
-                    matchid = data["match_id"]
-                    fetchroom = 'http://127.0.0.1:8000/matchmaking/fetchroom/'
-                    jsonargs = {
-                            'match':matchid,
-                    }
-                    response = requests.post(fetchroom, json=jsonargs)
-                    if response.status_code in [200, 201]:
-                        data = response.json()
-                        self.client.party_join(data['pregame_id'])
-                        return {"status": "success", "message": f"Matchroom successfully set for : {self.client.puuid}", 'data': data,}           
-            
-            else:
-                    return data
-        else:
-                return {"error": "Request failed", "status_code": response.status_code}
     
     def _get_server_url(self, server_name):
         """Helper method to get server URL from nested serverPreferences structure"""
@@ -363,4 +525,138 @@ class ValorantAPI(object):
             return self.args['serverPreferences'].get(region_name, {})
         
         return {}
+    
+    
+    # ============================================================
+    # Match Monitoring (Phase 3)
+    # ============================================================
+    
+    async def monitor_match(self, match_id: str, coregame_id: str):
+        """
+        Monitor live match and send updates to Django server.
+        
+        Performance Strategy:
+        - Only constructor client monitors the match
+        - Poll ValClient every 30 seconds (not 3 seconds)
+        - Send only delta updates (score changes)
+        - Stop monitoring when match completes
+        
+        This runs in background without blocking main thread.
+        """
+        logger.info(f"Starting match monitoring for {match_id}")
+        
+        last_score = {'team_a': 0, 'team_b': 0, 'round': 0}
+        
+        while True:
+            try:
+                # Fetch current match state from ValClient
+                match_data = self.client.coregame_fetch_match(coregame_id)
+                
+                if not match_data:
+                    logger.warning("No match data returned - match may have ended")
+                    break
+                
+                # Parse score data
+                current_score = self._parse_match_score(match_data)
+                
+                # Only send update if score changed
+                if current_score != last_score:
+                    await self._send_score_update(match_id, current_score)
+                    last_score = current_score
+                
+                # Check if match completed
+                if self._is_match_complete(match_data):
+                    logger.info(f"Match {match_id} completed")
+                    await self._send_match_complete(match_id, match_data)
+                    break
+                
+                # Wait 30 seconds before next poll (performance optimization)
+                await asyncio.sleep(30)
+                
+            except Exception as e:
+                logger.error(f"Error monitoring match: {str(e)}")
+                await asyncio.sleep(30)  # Continue monitoring despite errors
+        
+        logger.info(f"Match monitoring ended for {match_id}")
+    
+    
+    def _parse_match_score(self, match_data: dict) -> dict:
+        """
+        Extract current score from ValClient match data.
+        
+        Performance: O(1) - direct field access
+        """
+        # Parse Valorant API response format
+        teams = match_data.get('Teams', [])
+        
+        team_a_score = 0
+        team_b_score = 0
+        
+        if len(teams) >= 2:
+            team_a_score = teams[0].get('RoundsWon', 0)
+            team_b_score = teams[1].get('RoundsWon', 0)
+        
+        current_round = match_data.get('RoundNumber', 0)
+        
+        return {
+            'team_a': team_a_score,
+            'team_b': team_b_score,
+            'round': current_round
+        }
+    
+    
+    async def _send_score_update(self, match_id: str, score: dict):
+        """
+        Send score update to Django server via WebSocket.
+        
+        Performance: Single WebSocket message
+        """
+        if not self.pugsocket or not self.pugsocket.is_connected():
+            return
+        
+        await self.pugsocket.send_message('match_score_update', {
+            'match_id': match_id,
+            'team_a_score': score['team_a'],
+            'team_b_score': score['team_b'],
+            'current_round': score['round']
+        })
+    
+    
+    def _is_match_complete(self, match_data: dict) -> bool:
+        """
+        Check if match is complete (team reached 13 rounds).
+        
+        Performance: O(1)
+        """
+        teams = match_data.get('Teams', [])
+        if len(teams) < 2:
+            return False
+        
+        team_a_score = teams[0].get('RoundsWon', 0)
+        team_b_score = teams[1].get('RoundsWon', 0)
+        
+        # Standard match: first to 13
+        # Overtime: win by 2 (if enabled in game rules)
+        return team_a_score >= 13 or team_b_score >= 13
+    
+    
+    async def _send_match_complete(self, match_id: str, match_data: dict):
+        """
+        Send match completion event to Django server.
+        """
+        if not self.pugsocket or not self.pugsocket.is_connected():
+            return
+        
+        # Parse final scores
+        final_score = self._parse_match_score(match_data)
+        
+        # Send completion event
+        await self.pugsocket.send_message('match_completed', {
+            'match_id': match_id,
+            'final_data': {
+                'team_a_score': final_score['team_a'],
+                'team_b_score': final_score['team_b'],
+                'total_rounds': final_score['round']
+            }
+        })
               

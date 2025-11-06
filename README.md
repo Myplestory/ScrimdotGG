@@ -6,52 +6,52 @@
 ![Status](https://img.shields.io/badge/Status-In%20Development-yellow?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 
-**A third-party competitive matchmaking and scrim service for Valorant, similar to FACEIT.**
+**A third-party competitive matchmaking and scrim service for Valorant, tailored specifically for serious players who want to elevate their gameplay to the next level.**
 
 </div>
 
 ---
 
-## 🎯 Overview
+## Overview
 
-Scrim.GG is a comprehensive matchmaking platform for Valorant that provides:
-- 🎮 ELO-based competitive matchmaking
-- 🏆 Organized 5v5 custom game matches
-- 📊 Detailed player statistics and rankings
-- 💬 Real-time lobby chat and communication
-- 🗺️ Interactive map/server veto system
-- ⚡ WebSocket-based real-time updates
+Scrim.GG is a comprehensive matchmaking platform that provides highly engaged players with:
+- ELO/MMR-based competitive matchmaking with TrueSkill integration
+- Organized 5v5 PUG matches
+- Scrim finder and organizer
+- Detailed player statistics and rankings
+- Real-time lobby chat and communication
+- Clans and team support
+- Tournament capabilities
+- Monthly elo ladders with cash rewards
+- Admin support for dispute resolution, player assistance, and fair play
+- Karma and social/matchmaking block system for community self governance
+- Forums for team recruitment, community growth, and networking for players of all skill levels
 
-## 🏗️ Architecture
 
-The platform consists of three main components:
+## Architecture
 
-### 1. **Django Server** (`ScrimGG/`)
-- Centralized matchmaking service
-- Django Channels for WebSocket support
-- Redis for caching and state management
-- PostgreSQL/SQLite database
-- RESTful API + WebSocket consumers
+### 1. Django ASGI Server (`server/`)
+- MMR-based matchmaking with time tolerance and priority requeue bias
+- Django Channels for WebSocket consumer support
+- Redis for caching, queues, state management, and async to sync support
+- PostgreSQL database
+- Celery for concurrent batched synchronous tasks
 
-### 2. **Electron Client** (`Scrim.GG_Client/`)
-- Desktop application for players
+### 2. User Client (`client/`)
+- ElectronJs Desktop application
 - React frontend with Material-UI
-- Local Python backend (Quart)
-- Interfaces with Valorant's local API
-- WebSocket communication
+- Lightweight ASGI Python backend (Quart)
+- WebSocket communication with server
+- Valorant local client API
 
-### 3. **Web Frontend** (Optional - `ScrimGG/react-frontend/`)
-- Web-based interface
-- Admin panel
-- Match statistics viewer
-
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
 - **Python 3.10+**
 - **Node.js 16+**
 - **Redis Server**
+- **PostgreSQL**
 - **Valorant** (for client testing)
 
 ### Installation
@@ -95,52 +95,61 @@ npm install
 npm start
 ```
 
-## 📖 Documentation
+## Documentation
 
-| Document | Description |
+**[📚 Complete Documentation →](./docs/README.md)**
+
+### Quick Links
+
+| Category | Description |
 |----------|-------------|
-| [Quick Start](QUICK_START.md) | Get up and running quickly |
-| [Architecture](docs/ARCHITECTURE_IMPROVEMENTS.md) | System design and architecture |
-| [Implementation Roadmap](docs/IMPLEMENTATION_ROADMAP.md) | 9-week development plan |
-| [WebSocket Refactor](docs/WEBSOCKET_REFACTOR_SUMMARY.md) | WebSocket implementation details |
+| **[Architecture](./docs/architecture/)** | System design, matchmaking, and architecture docs |
+| **[Client](./docs/Client/)** | Frontend and backend client documentation |
+| **[Server](./docs/Server/)** | Server-side app documentation |
+| **[Implementation](./docs/implementation/)** | Implementation guides and technical docs |
+| **[Testing & Bots](./docs/testing/)** | Bot framework, testing commands |
+| **[Troubleshooting](./docs/troubleshooting/)** | Common issues and quick fixes |
+| **[Setup Guide](./docs/setup/)** | Installation and configuration |
 
-## 🎮 Features
+## Features
 
-### Current (Phase 1) ✅
-- [x] WebSocket-based communication
-- [x] Valorant client integration
-- [x] Lobby creation and management
-- [x] Real-time chat system
-- [x] Queue system
-- [x] Player authentication
-- [x] ELO-based player tracking
+### Client Features
+- WebSocket-based real-time communication
+- Valorant client integration
+- Lobby creation and party management
+- Real-time chat system
+- Player authentication
+- Game state monitoring
+- Automatic match detection
+- Map/server veto system
+- Player verification (all 10 joined custom game)
+- Automated match result collection
+- Post-match ELO/MMR updates
+- Comprehensive stats tracking
+- Friend system
+- Team management
+- Tournament system
+- Anti-cheat integration
+- Admin moderation panel
 
-### In Development (Phase 2-3) 🚧
-- [ ] Game state monitoring
-- [ ] Automatic match detection
-- [ ] Map/server veto system
-- [ ] Match acceptance flow
-- [ ] Player verification (all 10 joined)
+### Server Features
+- Queue system with Redis backend
+- MMR/ELO hybrid rating system
+- TrueSkill integration for skill estimation
+- Time-based matchmaking tolerance
+- Match acceptance flow (30s timeout)
+- Automatic requeueing on timeout
+- Rank-aware matchmaking (5 MMR tiers)
 
-### Planned (Phase 4-8) 📋
-- [ ] Automated match result collection
-- [ ] ELO calculation and updates
-- [ ] Comprehensive stats tracking
-- [ ] Friend system
-- [ ] Team management
-- [ ] Tournament system
-- [ ] Anti-cheat measures
-- [ ] Admin moderation panel
-
-## 🔧 Tech Stack
+## Tech Stack
 
 ### Backend
 - **Django 5.0** - Web framework
-- **Django Channels** - WebSocket support
-- **Django REST Framework** - API
-- **Redis** - Caching and channel layer
-- **Celery** - Background tasks
-- **PostgreSQL/SQLite** - Database
+- **Django Channels** - WebSocket support (via Daphne ASGI server)
+- **Redis** - Caching, queues, and channel layer
+- **Celery + Beat** - Background tasks and scheduling
+- **PostgreSQL** - Primary database
+- **TrueSkill** - Skill rating algorithm
 
 ### Client
 - **Electron** - Desktop app framework
@@ -150,22 +159,24 @@ npm start
 - **valclient** - Valorant local API wrapper
 
 ### Infrastructure
+- **Daphne** - ASGI server for WebSockets
+- **Redis Server** - In-memory data store
 - **Docker** (optional) - Containerization
 - **Nginx** (production) - Reverse proxy
-- **Daphne** - ASGI server
 
-## 📊 Performance
+## Performance
 
 Optimized for running alongside Valorant:
 
-- **Memory Usage:** ~30-50MB (client)
+- **Memory Usage:** ~30-50MB (client), ~150-200MB (server)
 - **CPU Usage:** <1% idle, ~3% active
-- **Latency:** ~12ms average (WebSocket)
+- **WebSocket Latency:** ~10-15ms average
+- **Matchmaking Speed:** ~10-50ms per run
 - **FPS Impact:** <1 frame drop
 
-## 🤝 Contributing
+## Contributing
 
-Contributions are welcome! Please read our contributing guidelines first.
+Contributions are welcome!
 
 1. Fork the repository
 2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
@@ -173,7 +184,9 @@ Contributions are welcome! Please read our contributing guidelines first.
 4. Push to the branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
 
-## 📝 Development Status
+See [DEVELOPMENT_SETUP.md](./docs/DEVELOPMENT_SETUP.md) for development environment setup.
+
+## Development Status
 
 | Component | Status | Progress |
 |-----------|--------|----------|
@@ -181,36 +194,36 @@ Contributions are welcome! Please read our contributing guidelines first.
 | Lobby System | ✅ Complete | 100% |
 | Chat System | ✅ Complete | 100% |
 | Queue System | ✅ Complete | 100% |
-| Game Monitor | 🚧 In Progress | 30% |
-| Match Coordinator | 📋 Planned | 0% |
+| **Matchmaking (MMR/ELO)** | ✅ Complete | 100% |
+| **Match Acceptance Flow** | ✅ Complete | 100% |
+| **Requeueing System** | ✅ Complete | 100% |
+| Game Monitor | 🚧 In Progress | 40% |
+| Match Coordinator | 🚧 In Progress | 30% |
 | Veto System | 📋 Planned | 0% |
-| Stats/ELO System | 📋 Planned | 0% |
+| Post-Match Stats/Updates | 📋 Planned | 0% |
 
-## ⚠️ Disclaimer
+**Current Focus:** Game state monitoring and custom game coordination
+
+## Disclaimer
 
 This is a third-party application and is not affiliated with, endorsed by, or connected to Riot Games. Use at your own risk. This project is for educational purposes.
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - Inspired by [FACEIT](https://www.faceit.com)
 - Built with [valclient](https://github.com/colinhartigan/valclient-python)
-- UI design inspired by Valorant's aesthetic
-
-## 📞 Contact
-
-Project Link: [https://github.com/yourusername/scrimgg](https://github.com/yourusername/scrimgg)
+- UI design inspired by ESEA
+- TrueSkill algorithm by Microsoft Research
 
 ---
 
 <div align="center">
 
-**Made with ❤️ for the Valorant competitive community**
-
-⭐ Star this repo if you find it useful!
+**Made for the Valorant competitive community**
 
 </div>
 

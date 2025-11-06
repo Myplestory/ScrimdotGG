@@ -1,18 +1,27 @@
 import React from 'react';
-import Layout from '../pages/layout'; // Adjust the path to where you placed Layout.jsx
+import { useLocation } from 'react-router-dom';
 import HomeComponent from '../components/home/home';
 import Lobby from '../components/lobby/lobby';
-import PugQueue from './PugQueue';
+import Play from './matchmake/play';
 
 const LandingPage = () => {
-  const [activeComponent, setActiveComponent] = React.useState('home');
+  const location = useLocation();
+  const initialComponent = location.state?.activeComponent || 'home';
+  const [activeComponent, setActiveComponent] = React.useState(initialComponent);
+
+  // Update activeComponent when location state changes
+  React.useEffect(() => {
+    if (location.state?.activeComponent) {
+      setActiveComponent(location.state.activeComponent);
+    }
+  }, [location.state?.activeComponent]);
 
   return (
-    <Layout setActiveComponent={setActiveComponent}>
+    <>
       {activeComponent === 'home' && <HomeComponent />}
       {activeComponent === 'lobby' && <Lobby />}
-      {activeComponent === 'pug' && <PugQueue />}
-    </Layout>
+      {activeComponent === 'pug' && <Play />}
+    </>
   );
 };
 

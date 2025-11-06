@@ -20,7 +20,8 @@ from django.urls import re_path
 
 django.setup()
 
-from matchmaking.routing import websocket_urlpatterns 
+# UPDATED: Import from realtime app instead of matchmaking
+from realtime.routing import websocket_urlpatterns 
 
 application = ProtocolTypeRouter({
     "http": get_asgi_application(), 

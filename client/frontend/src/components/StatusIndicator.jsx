@@ -1,5 +1,25 @@
 import React from 'react';
-import { Typography } from '@mui/material';
+import { Typography, keyframes } from '@mui/material';
+
+const subtlePulse = keyframes`
+  0%, 100% {
+    opacity: 1;
+    filter: brightness(1);
+  }
+  50% {
+    opacity: 0.8;
+    filter: brightness(1.1);
+  }
+`;
+
+const subtleGlow = keyframes`
+  0%, 100% {
+    text-shadow: 0 0 3px currentColor;
+  }
+  50% {
+    text-shadow: 0 0 6px currentColor, 0 0 8px currentColor;
+  }
+`;
 
 const StatusIndicator = ({ connected, systemStatus, queueStatus = { in_queue: false }, gameState = { status: 'disconnected' }, position = 'bottom-left' }) => {
   // Determine the position styling
@@ -64,7 +84,15 @@ const StatusIndicator = ({ connected, systemStatus, queueStatus = { in_queue: fa
         zIndex: 1000,
       }}
     >
-      <span style={{ color: statusInfo.color }}>{statusInfo.text}</span>
+      <span 
+        style={{ 
+          color: statusInfo.color,
+          animation: `${subtlePulse} 2s ease-in-out infinite, ${subtleGlow} 3s ease-in-out infinite`,
+          display: 'inline-block',
+        }}
+      >
+        {statusInfo.text}
+      </span>
     </Typography>
   );
 };

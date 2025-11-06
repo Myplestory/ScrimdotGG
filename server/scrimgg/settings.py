@@ -47,14 +47,29 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'corsheaders',
+    'django_celery_beat',
+    'channels',
+    
+    # Core utilities (no dependencies)
+    'core',
+    
+    # Main domain apps
     'scrimgg',
     'riotlogin',
     'users',
+    
+    # Matchmaking system
     'lobby',
+    'matchmaking',
+    'match_system',         # NEW: Post-acceptance match flow
+    'match_execution',      # NEW: Live game management
+    
+    # Realtime communication (depends on all above)
+    'realtime',            # NEW: WebSocket layer
+    
+    # Legacy/utility apps
     'maps',
     'match',
-    'matchmaking',
-    'channels',
 ]
 
 MIDDLEWARE = [
@@ -68,29 +83,50 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-# Celery background worker 
+# Celery Configuration
 CELERY_BROKER_URL = 'redis://localhost:6379/0'
 CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'UTC'
+CELERY_ENABLE_UTC = True
+
+# Celery Beat (Periodic Tasks) Configuration
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+
+# Task routing and execution
+CELERY_TASK_ROUTES = {
+    'matchmaking.tasks.*': {'queue': 'matchmaking'},
+    'matchmaking.tasks.periodic_matchmaking': {'queue': 'matchmaking'},
+    'matchmaking.tasks.cleanup_expired_matches': {'queue': 'cleanup'},
+}
+
+# Task time limits
+CELERY_TASK_TIME_LIMIT = 300  # 5 minutes
+CELERY_TASK_SOFT_TIME_LIMIT = 240  # 4 minutes
+
+# Worker configuration
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+CELERY_WORKER_MAX_TASKS_PER_CHILD = 1000
 
 
-# # Set up the channel layer to use Redis as the backing store
-# CHANNEL_LAYERS = {
-#     'default': {
-#         'BACKEND': 'channels_redis.core.RedisChannelLayer',
-#         'CONFIG': {
-#             "hosts": [('127.0.0.1', 6379)],  # Adjust this to your Redis server address/port
-#         },
-#     },
-# }
-
-# WebSocket configuration (optional)
+# Set up the channel layer to use Redis as the backing store
 CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels.layers.InMemoryChannelLayer",
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            "hosts": [('127.0.0.1', 6379)],  # Adjust this to your Redis server address/port
+        },
     },
 }
+
+# WebSocket configuration (optional) - DISABLED for production
+# CHANNEL_LAYERS = {
+#     "default": {
+#         "BACKEND": "channels.layers.InMemoryChannelLayer",
+#     },
+# }
 
 ASGI_APPLICATION = 'scrimgg.asgi.application'
 
@@ -189,3 +225,256 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+# ============================================================
+# LOGGING CONFIGURATION
+# ============================================================
+# Centralized logging setup for all server components:
+# - Django apps, middleware, and views
+# - Redis/Channels WebSocket connections
+# - Celery workers and tasks
+# - Database queries
+# - Third-party libraries
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    
+    # ==================== FORMATTERS ====================
+    'formatters': {
+        # Verbose format for file logs with all details
+        'verbose': {
+            'format': '[{levelname}] {asctime} | {name} | {funcName}:{lineno} | {message}',
+            'style': '{',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
+        },
+        # Concise format for console with essential info
+        'concise': {
+            'format': '[{levelname:8}] {name:30} | {message}',
+            'style': '{',
+        },
+        # Simple format for general messages
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+        # Special format for Celery tasks
+        'celery': {
+            'format': '[CELERY] [{levelname}] {asctime} | {name} | Task: {funcName} | {message}',
+            'style': '{',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
+        },
+    },
+    
+    # ==================== FILTERS ====================
+    'filters': {
+        'require_debug_false': {
+            '()': 'django.utils.log.RequireDebugFalse',
+        },
+        'require_debug_true': {
+            '()': 'django.utils.log.RequireDebugTrue',
+        },
+    },
+    
+    # ==================== HANDLERS ====================
+    'handlers': {
+        # Console output - use in development
+        'console': {
+            'level': 'INFO',
+            'class': 'logging.StreamHandler',
+            'formatter': 'concise',
+        },
+        
+        # Console for debug mode only
+        'console_debug': {
+            'level': 'DEBUG',
+            'filters': ['require_debug_true'],
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+        
+        # File handler for all logs with rotation
+        'file_all': {
+            'level': 'INFO',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': os.path.join(BASE_DIR, 'logs', 'scrimgg.log'),
+            'maxBytes': 10 * 1024 * 1024,  # 10 MB
+            'backupCount': 5,
+            'formatter': 'verbose',
+        },
+        
+        # File handler for errors only
+        'file_error': {
+            'level': 'ERROR',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': os.path.join(BASE_DIR, 'logs', 'errors.log'),
+            'maxBytes': 10 * 1024 * 1024,  # 10 MB
+            'backupCount': 5,
+            'formatter': 'verbose',
+        },
+        
+        # File handler for matchmaking logs
+        'file_matchmaking': {
+            'level': 'INFO',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': os.path.join(BASE_DIR, 'logs', 'matchmaking.log'),
+            'maxBytes': 10 * 1024 * 1024,  # 10 MB
+            'backupCount': 5,
+            'formatter': 'verbose',
+        },
+        
+        # File handler for Celery tasks
+        'file_celery': {
+            'level': 'INFO',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': os.path.join(BASE_DIR, 'logs', 'celery.log'),
+            'maxBytes': 10 * 1024 * 1024,  # 10 MB
+            'backupCount': 5,
+            'formatter': 'celery',
+        },
+        
+        # File handler for WebSocket/Channels
+        'file_websocket': {
+            'level': 'INFO',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': os.path.join(BASE_DIR, 'logs', 'websocket.log'),
+            'maxBytes': 10 * 1024 * 1024,  # 10 MB
+            'backupCount': 5,
+            'formatter': 'verbose',
+        },
+        
+        # Null handler to discard logs
+        'null': {
+            'class': 'logging.NullHandler',
+        },
+    },
+    
+    # ==================== LOGGERS ====================
+    'loggers': {
+        # Root logger - catches everything not explicitly configured
+        '': {
+            'handlers': ['console', 'file_all', 'file_error'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        
+        # Django core loggers
+        'django': {
+            'handlers': ['console', 'file_all'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'django.request': {
+            'handlers': ['console', 'file_error'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+        'django.server': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        
+        # Database queries - only log in DEBUG mode
+        'django.db.backends': {
+            'handlers': ['console_debug'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        
+        # Redis/Channels - reduce verbosity
+        'channels': {
+            'handlers': ['console', 'file_websocket'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'channels.server': {
+            'handlers': ['console', 'file_websocket'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'channels_redis': {
+            'handlers': ['console'],
+            'level': 'WARNING',  # Only warnings and errors
+            'propagate': False,
+        },
+        'aioredis': {
+            'handlers': ['console'],
+            'level': 'WARNING',  # Reduce Redis noise
+            'propagate': False,
+        },
+        
+        # Celery - detailed logging for background tasks
+        'celery': {
+            'handlers': ['console', 'file_celery'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'celery.task': {
+            'handlers': ['console', 'file_celery'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'celery.worker': {
+            'handlers': ['console', 'file_celery'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        
+        # Application-specific loggers
+        'matchmaking': {
+            'handlers': ['console', 'file_matchmaking', 'file_error'],
+            'level': 'DEBUG' if DEBUG else 'INFO',
+            'propagate': False,
+        },
+        'matchmaking.consumers': {
+            'handlers': ['console', 'file_websocket', 'file_error'],
+            'level': 'DEBUG' if DEBUG else 'INFO',
+            'propagate': False,
+        },
+        'matchmaking.tasks': {
+            'handlers': ['console', 'file_celery', 'file_error'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        
+        # Your apps
+        'scrimgg': {
+            'handlers': ['console', 'file_all', 'file_error'],
+            'level': 'DEBUG' if DEBUG else 'INFO',
+            'propagate': False,
+        },
+        'lobby': {
+            'handlers': ['console', 'file_all', 'file_error'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'match': {
+            'handlers': ['console', 'file_all', 'file_error'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'users': {
+            'handlers': ['console', 'file_all', 'file_error'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        
+        # Third-party libraries - reduce noise
+        'urllib3': {
+            'handlers': ['null'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        'asyncio': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+    },
+}
+
+# Create logs directory if it doesn't exist
+LOGS_DIR = os.path.join(BASE_DIR, 'logs')
+os.makedirs(LOGS_DIR, exist_ok=True)
