@@ -4,13 +4,13 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-quart = "*"
 quart-cors = "*"
 valclient = "*"
 websockets = "*"
 requests = "*"
 psutil = "*"
 pydantic = "*"
+quart = "*"
 
 [dev-packages]
 

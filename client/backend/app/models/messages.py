@@ -20,10 +20,3 @@ class StatusUpdate(BaseModel):
     valorant: dict
     authenticated: bool
 
-class MatchFoundPayload(BaseModel):
-    """Match found notification."""
-    match_id: str
-    match_confirmation_id: str
-    timeout_seconds: int = 30
-    message: str = "Match found! Please accept to continue."
-

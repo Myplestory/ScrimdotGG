@@ -1,17 +1,18 @@
 @import url("https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@400;600;700&display=swap");
+@import "./valorant-theme.css";
 
 html,
 body,
 #root,
 .app {
-  background: transparent;
+  background: #0f0f0f; /* Match the theme's primary background */
 }
 
 body, html {
   overflow: hidden;
   margin: 0;
   padding: 0;
-  background: transparent;
+  background: #0f0f0f;
 }
 
 main {
@@ -31,21 +32,32 @@ main {
   min-height: 100vh;
 }
 
+/* Custom scrollbar - Valorant inspired */
 ::-webkit-scrollbar {
-  width: 10px;
+  width: 8px;
+  height: 8px;
 }
 
 /* Track */
 ::-webkit-scrollbar-track {
-  background: #e0e0e0;
+  background: #1a1a1a;
+  border-radius: 4px;
 }
 
 /* Handle */
 ::-webkit-scrollbar-thumb {
-  background: #888;
+  background: #3c3c3c;
+  border-radius: 4px;
+  transition: background 0.3s ease;
 }
 
 /* Handle on hover */
 ::-webkit-scrollbar-thumb:hover {
-  background: #555;
+  background: #FF4655; /* Valorant red on hover */
+}
+
+/* Selection color */
+::selection {
+  background: rgba(255, 70, 85, 0.3); /* Red tint on text selection */
+  color: #ffffff;
 }

@@ -1,5 +1,5 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
-const { spawn, exec } = require('child_process');
+const { spawn, exec, execSync } = require('child_process');
 const path = require('path');
 const process = require('process');
 
@@ -11,7 +11,9 @@ function createWindow() {
   const win = new BrowserWindow({
     width: 1200,
     height: 800,
-    resizable: false,
+    minWidth: 800,
+    minHeight: 600,
+    resizable: true,
     frame: false,
     transparent: true, // Make window transparent initially
     opacity: 0, // Start with 0 opacity
@@ -31,6 +33,12 @@ function createWindow() {
         },
         fadeInWindow: () => {
           require('electron').ipcRenderer.send('react-ready');
+        },
+        minimizeWindow: () => {
+          require('electron').ipcRenderer.send('minimize-window');
+        },
+        maximizeWindow: () => {
+          require('electron').ipcRenderer.send('maximize-window');
         }
       };
     `);
@@ -39,6 +47,20 @@ function createWindow() {
   // Handle close app IPC
   ipcMain.on('close-app', () => {
     win.close();
+  });
+
+  // Handle minimize window
+  ipcMain.on('minimize-window', () => {
+    win.minimize();
+  });
+
+  // Handle maximize/restore window toggle
+  ipcMain.on('maximize-window', () => {
+    if (win.isMaximized()) {
+      win.unmaximize();
+    } else {
+      win.maximize();
+    }
   });
 
   // Handle fade in window when React is ready
@@ -67,39 +89,51 @@ function createWindow() {
     console.log('📁 Backend directory:', backendDir);
     console.log('🐍 Backend script:', backendPath);
     
-    try {
-        // Determine Python command based on environment
-        const isDev = process.env.NODE_ENV === 'development';
-        const pipenvVenvPath = 'C:\\Users\\Charl\\.virtualenvs\\backend--754moSM\\Scripts\\python.exe';
-        
-        let pythonCommand, pythonArgs;
-        
-        if (isDev) {
-            // Development: use pipenv virtual environment
-            try {
-                require('fs').accessSync(pipenvVenvPath);
-                pythonCommand = pipenvVenvPath;
-                pythonArgs = ['run.py'];
-                console.log(`✅ [DEV] Using pipenv virtual environment Python: ${pythonCommand}`);
-            } catch (e) {
-                console.log(`❌ [DEV] Pipenv virtual environment not found, falling back to pipenv command`);
-                pythonCommand = 'pipenv';
-                pythonArgs = ['run', 'python', 'run.py'];
-            }
+  try {
+    // Determine Python command based on environment
+    const isDev = process.env.NODE_ENV === 'development';
+    let pythonCommand, pythonArgs;
+
+    if (isDev) {
+      // Development: try to detect pipenv venv dynamically
+      try {
+        // Ask pipenv for the venv path for the backend directory
+        const venvPath = execSync('pipenv --venv', { cwd: backendDir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+        if (venvPath) {
+          const candidate = path.join(venvPath, 'Scripts', 'python.exe');
+          try {
+            require('fs').accessSync(candidate);
+            pythonCommand = candidate;
+            pythonArgs = ['run.py'];
+            console.log(`✅ [DEV] Resolved pipenv venv Python: ${pythonCommand}`);
+          } catch (err) {
+            // venv exists but python binary not found where expected
+            console.log(`⚠️ [DEV] pipenv venv found but python.exe missing at ${candidate}: ${err.message}`);
+            throw err;
+          }
         } else {
-            // Production: use system Python or compiled executable
-            const compiledExe = path.join(backendDir, 'backend.exe');
-            try {
-                require('fs').accessSync(compiledExe);
-                pythonCommand = compiledExe;
-                pythonArgs = [];
-                console.log(`✅ [PROD] Using compiled executable: ${pythonCommand}`);
-            } catch (e) {
-                pythonCommand = 'python';
-                pythonArgs = ['run.py'];
-                console.log(`✅ [PROD] Using system Python: ${pythonCommand}`);
-            }
+          throw new Error('pipenv returned empty venv path');
         }
+      } catch (err) {
+        // Fallback: run via pipenv run ... (requires pipenv on PATH)
+        console.log(`❌ [DEV] Could not resolve pipenv venv automatically (${err.message}), falling back to 'pipenv run'`);
+        pythonCommand = 'pipenv';
+        pythonArgs = ['run', 'python', 'run.py'];
+      }
+    } else {
+      // Production: use system Python or compiled executable
+      const compiledExe = path.join(backendDir, 'backend.exe');
+      try {
+        require('fs').accessSync(compiledExe);
+        pythonCommand = compiledExe;
+        pythonArgs = [];
+        console.log(`✅ [PROD] Using compiled executable: ${pythonCommand}`);
+      } catch (e) {
+        pythonCommand = 'python';
+        pythonArgs = ['run.py'];
+        console.log(`✅ [PROD] Using system Python: ${pythonCommand}`);
+      }
+    }
         
         pythonProcess = spawn(pythonCommand, pythonArgs, {
             cwd: backendDir,

@@ -12,8 +12,36 @@ import LandingPage from './pages/landing';
 import MatchPage from './pages/MatchPage';
 import Layout from './pages/layout';
 
+// Matchmake Pages
+import Play from './pages/matchmake/play';
+import Scrim from './pages/matchmake/scrim';
+
+// League Pages
+import LeagueCreateTeam from './pages/league/createteam';
+import LeagueRegisterPay from './pages/league/registerpay';
+import LeagueStandings from './pages/league/standings';
+import LeagueSchedule from './pages/league/schedule';
+import LeagueRules from './pages/league/rules';
+
+// Forum Pages
+import ForumIndex from './pages/forums/index';
+import PostNew from './pages/forums/postnew';
+
+// Support Pages
+import FAQ from './pages/support/faq';
+import SupportTickets from './pages/support/tickets';
+
+// Tournament Pages
+import BrowseTournaments from './pages/tournaments/browse';
+import MyTournaments from './pages/tournaments/my';
+import CreateTournament from './pages/tournaments/create';
+import TournamentHistory from './pages/tournaments/history';
+
+// Client Page
+import Download from './pages/client/download';
+
 // Routings
-import {Routes, Route, Navigate, useNavigate } from "react-router-dom"; // Make sure you are using BrowserRouter
+import {Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom"; // Make sure you are using BrowserRouter
 
 // Logout scene
 const Logout = ({ setAuthenticated }) => {
@@ -23,25 +51,41 @@ const Logout = ({ setAuthenticated }) => {
   return <Navigate to="/Logout" />; // Redirect the user back to the authentication screen
 };
 
-// MatchPage wrapper to handle navigation
-const MatchPageWrapper = () => {
+// Shared Layout wrapper for ALL authenticated pages
+const LayoutWrapper = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   
   const handleSetActiveComponent = (component) => {
     if (component === 'home') {
       navigate('/landingpage');
     } else if (component === 'pug') {
-      // Navigate to landing page with pug component active
       navigate('/landingpage', { state: { activeComponent: 'pug' } });
     } else if (component === 'lobby') {
-      // Navigate to landing page with lobby component active
       navigate('/landingpage', { state: { activeComponent: 'lobby' } });
     }
   };
 
   return (
     <Layout setActiveComponent={handleSetActiveComponent}>
-      <MatchPage />
+      <Routes>
+        <Route path="/landingpage" element={<LandingPage />} />
+        <Route path="/match/:matchId" element={<MatchPage />} />
+        <Route path="/leaguecreateteam" element={<LeagueCreateTeam />} />
+        <Route path="/leagueregteam" element={<LeagueRegisterPay />} />
+        <Route path="/leaguestandings" element={<LeagueStandings />} />
+        <Route path="/leagueschedule" element={<LeagueSchedule />} />
+        <Route path="/leaguerules" element={<LeagueRules />} />
+        <Route path="/forumindex" element={<ForumIndex />} />
+        <Route path="/postnew" element={<PostNew />} />
+        <Route path="/faq" element={<FAQ />} />
+        <Route path="/supporttickets" element={<SupportTickets />} />
+        <Route path="/tournaments/browse" element={<BrowseTournaments />} />
+        <Route path="/tournaments/my" element={<MyTournaments />} />
+        <Route path="/tournaments/create" element={<CreateTournament />} />
+        <Route path="/tournaments/history" element={<TournamentHistory />} />
+        <Route path="/download" element={<Download />} />
+      </Routes>
     </Layout>
   );
 };
@@ -133,10 +177,9 @@ function App() {
                   <Routes>
                     <Route path="/" element={<Navigate to="/landingpage" replace />} />
                     <Route path="/Logout" element={<Logout setAuthenticated={setAuthenticated} />} />
-                    <Route path="/landingpage" element={<LandingPage />} />
-                    <Route path="/match/:matchId" element={
-                      <MatchPageWrapper />
-                    } />
+                    
+                    {/* All authenticated routes wrapped in shared Layout */}
+                    <Route path="/*" element={<LayoutWrapper />} />
                   </Routes>
                 </Suspense>
               )}

@@ -6,7 +6,7 @@ import ListSubheader from '@mui/material/ListSubheader';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { Accordion, AccordionSummary, AccordionDetails, List } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
 import { ColorModeContext, useMode } from '../theme';
 
@@ -32,7 +32,30 @@ const CustomListItem = ({ text, onClick, navigateTo }) => {
 };
 
 export const MainListItems = ({ setActiveComponent }) => {
-  const [expandedAccordion, setExpandedAccordion] = React.useState(null);
+  const location = useLocation();
+  
+  // Determine which accordion should be expanded based on current route
+  const getInitialExpanded = () => {
+    const path = location.pathname;
+    if (path.startsWith('/league')) return 'league';
+    if (path.startsWith('/forum')) return 'forums';
+    if (path.startsWith('/support') || path.startsWith('/faq')) return 'support';
+    if (path.startsWith('/tournaments')) return 'tournaments';
+    if (path.startsWith('/download')) return 'client';
+    return null; // Default: no accordion expanded on landing page
+  };
+
+  const [expandedAccordion, setExpandedAccordion] = React.useState(getInitialExpanded);
+
+  // Update expanded accordion when route changes
+  React.useEffect(() => {
+    const newExpanded = getInitialExpanded();
+    // Only update if we explicitly found a matching section
+    // This prevents collapsing accordions when navigating to pages like /match/:matchId
+    if (newExpanded !== null) {
+      setExpandedAccordion(newExpanded);
+    }
+  }, [location.pathname]);
 
   const handleAccordionChange = (panel) => (event, isExpanded) => {
     setExpandedAccordion(isExpanded ? panel : null);
@@ -121,6 +144,28 @@ export const MainListItems = ({ setActiveComponent }) => {
           <List>
             <CustomListItem text="FAQ" navigateTo="/faq" />
             <CustomListItem text="Support Tickets" navigateTo="/supporttickets" />
+          </List>
+      </AccordionDetails>
+    </Accordion>
+      <Accordion 
+        expanded={expandedAccordion === 'tournaments'}
+        onChange={handleAccordionChange('tournaments')}
+        sx={{ 
+          '&:before': { display: 'none' }, 
+          boxShadow: 'none', 
+          margin: '0 !important',
+          '&.MuiAccordion-root': { margin: '0 !important' },
+          '&.MuiAccordion-root:before': { display: 'none' }
+        }}>
+        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+          <ListItemText primary="Tournaments" />
+        </AccordionSummary>
+        <AccordionDetails>
+          <List>
+            <CustomListItem text="Browse Tournaments" navigateTo="/tournaments/browse" />
+            <CustomListItem text="My Tournaments" navigateTo="/tournaments/my" />
+            <CustomListItem text="Create Tournament" navigateTo="/tournaments/create" />
+            <CustomListItem text="Tournament History" navigateTo="/tournaments/history" />
           </List>
       </AccordionDetails>
     </Accordion>

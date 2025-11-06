@@ -15,11 +15,11 @@ trueskill = "*"
 channels = "*"
 channels-redis = "*"
 django = "*"
-daphne = "*"
 django-celery-beat = "*"
 celery = "*"
 websockets = "*"
 gevent = "*"
+daphne = "*"
 
 [dev-packages]
 
