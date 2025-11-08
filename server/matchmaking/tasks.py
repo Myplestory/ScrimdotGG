@@ -14,6 +14,7 @@ from .matchmaker_v2 import MatchmakerV2  # New MMR-based matchmaker
 from .match_confirmation import MatchConfirmationManager
 # Match models moved to match_system app
 from match_system.models import Match
+from match_system.managers.match_manager import MatchManager
 
 logger = get_task_logger(__name__)
 
@@ -482,6 +483,7 @@ def check_map_veto_timeouts(self):
                             'veto_complete': result.get('veto_complete', False),
                             'final_map': result.get('final_map'),
                             'side_selector': result.get('side_selector'),
+                            'side_selection_deadline': result.get('side_selection_deadline'),
                             # Side selection fields
                             'auto_selected_side': result.get('auto_selected_side'),
                             'side_selection_complete': result.get('side_selection_complete', False),
@@ -495,6 +497,17 @@ def check_map_veto_timeouts(self):
                     )
                     
                     logger.info(f"Match {match.id}: {event_type} handled successfully")
+
+                    if result.get('veto_complete'):
+                        async_to_sync(channel_layer.group_send)(
+                            f"match_{match.id}",
+                            {
+                                'type': 'side_selection_started',
+                                'match_id': str(match.id),
+                                'side_selector': result.get('side_selector'),
+                                'deadline': result.get('side_selection_deadline')
+                            }
+                        )
                 else:
                     logger.error(f"Match {match.id}: Timeout handling failed - {result.get('message')}")
                     

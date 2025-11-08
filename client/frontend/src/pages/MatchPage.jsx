@@ -494,6 +494,7 @@ export default function MatchPage() {
   const [sideSelectionPhase, setSideSelectionPhase] = useState(false);
   const [sideSelector, setSideSelector] = useState(null);
   const [selectedSide, setSelectedSide] = useState(null);
+  const [sideSelectionDeadline, setSideSelectionDeadline] = useState(null);
   const [sideTimeLeft, setSideTimeLeft] = useState(null);
   // Post match setup state
   const [postMatchSetupPhase, setPostMatchSetupPhase] = useState(false);
@@ -636,10 +637,14 @@ export default function MatchPage() {
         console.log('🎮 [MATCH PAGE] SIDE SELECTION PHASE DETECTED - Initializing side selection component');
         console.log('   Final map:', payload.final_map);
         console.log('   Side selector:', payload.side_selector);
+        console.log('   Deadline:', payload.side_selection_deadline);
         
         setSideSelectionPhase(true);
         setSideSelector(payload.side_selector);
         setSelectedSide(payload.selected_side);
+        const selectionDeadline = payload.side_selection_deadline || null;
+        setSideSelectionDeadline(selectionDeadline);
+        setSideTimeLeft(selectionDeadline ? null : 30);
         // Stop loading when side selection component is mounted
         setLoading(false);
       } else {
@@ -655,14 +660,17 @@ export default function MatchPage() {
       setVetoDeadline(null); // Clear map veto deadline
       setSideSelectionPhase(true);
       setSideSelector(payload.side_selector);
-      setSideTimeLeft(30);
+      const selectionDeadline = payload.side_selection_deadline || null;
+      setSideSelectionDeadline(selectionDeadline);
+      setSideTimeLeft(selectionDeadline ? null : 30);
       // Stop loading when side selection component is mounted
       setLoading(false);
       setMatchData(prev => ({
         ...prev,
         state: 'SIDE_SELECTION',
         final_map: payload.final_map,
-        side_selector: payload.side_selector
+        side_selector: payload.side_selector,
+        side_selection_deadline: selectionDeadline
       }));
       
       console.log('🎮 [MATCH PAGE] Transitioning to side selection phase:', {
@@ -684,14 +692,17 @@ export default function MatchPage() {
         setVetoDeadline(null); // Clear map veto deadline
         setSideSelectionPhase(true);
         setSideSelector(payload.side_selector);
-        setSideTimeLeft(30);
+        const selectionDeadline = payload.side_selection_deadline || null;
+        setSideSelectionDeadline(selectionDeadline);
+        setSideTimeLeft(selectionDeadline ? null : 30);
         // Stop loading when side selection component is mounted
         setLoading(false);
         setMatchData(prev => ({
           ...prev,
           state: 'SIDE_SELECTION',
           final_map: payload.final_map,
-          side_selector: payload.side_selector
+          side_selector: payload.side_selector,
+          side_selection_deadline: selectionDeadline
         }));
       } else {
         // Auto-veto occurred, update state
@@ -986,6 +997,7 @@ export default function MatchPage() {
         
         setSelectedSide(autoSelectedSide);
         setSideSelectionPhase(false);
+        setSideSelectionDeadline(null);
         setSideTimeLeft(null);
         // Begin post-match setup phase
         setPostMatchSetupPhase(true);
@@ -994,7 +1006,8 @@ export default function MatchPage() {
         setMatchData(prev => ({
           ...prev,
           state: 'READY',
-          selected_side: autoSelectedSide
+          selected_side: autoSelectedSide,
+          side_selection_deadline: null
         }));
         
         console.log('✅ [MATCH PAGE] Match ready after side selection timeout');
@@ -1004,6 +1017,24 @@ export default function MatchPage() {
       }
     });
 
+    const unsubscribeSideSelectionStarted = on('side_selection_started', (payload) => {
+      console.log('📥 [MATCH PAGE] Side selection started:', payload);
+
+      const selectionDeadline = payload.deadline || null;
+      setSideSelectionPhase(true);
+      setSideSelector(payload.side_selector);
+      setSideSelectionDeadline(selectionDeadline);
+      setSideTimeLeft(selectionDeadline ? null : 30);
+      setLoading(false);
+
+      setMatchData(prev => ({
+        ...prev,
+        state: 'SIDE_SELECTION',
+        side_selector: payload.side_selector,
+        side_selection_deadline: selectionDeadline
+      }));
+    });
+
     const unsubscribeSideSelected = on('side_selected', (payload) => {
       console.log('📥 [MATCH PAGE] Side selected:', payload);
       
@@ -1011,11 +1042,13 @@ export default function MatchPage() {
       setMatchData(prev => ({
         ...prev,
         selected_side: payload.side,
-        state: payload.side_complete ? 'READY' : 'SIDE_SELECTION'
+        state: payload.side_complete ? 'READY' : 'SIDE_SELECTION',
+        side_selection_deadline: payload.side_complete ? null : prev?.side_selection_deadline
       }));
       
       if (payload.side_complete) {
         setSideSelectionPhase(false);
+        setSideSelectionDeadline(null);
         setSideTimeLeft(null);
         // Begin post-match setup phase with 3-minute connect window (if server doesn't supply one)
         setPostMatchSetupPhase(true);
@@ -1043,6 +1076,7 @@ export default function MatchPage() {
       if (typeof unsubscribeServerVetoTimeout === 'function') unsubscribeServerVetoTimeout();
       if (typeof unsubscribeMapVetoed === 'function') unsubscribeMapVetoed();
       if (typeof unsubscribeSideSelectionTimeout === 'function') unsubscribeSideSelectionTimeout();
+    if (typeof unsubscribeSideSelectionStarted === 'function') unsubscribeSideSelectionStarted();
       if (typeof unsubscribeSideSelected === 'function') unsubscribeSideSelected();
       if (typeof unsubscribeError === 'function') unsubscribeError();
     };
@@ -1099,23 +1133,30 @@ export default function MatchPage() {
     return () => clearInterval(interval);
   }, [vetoDeadline]);
 
-  // Side selection countdown (fallback 30s if server deadline isn't provided yet)
+  // Side selection countdown (uses server-supplied deadline when available)
   useEffect(() => {
-    if (!sideSelectionPhase) return;
-    // If server provides a deadline later, we can replace this with sync logic similar to veto
-    if (sideTimeLeft === null) setSideTimeLeft(30);
-    const interval = setInterval(() => {
-      setSideTimeLeft(prev => {
-        if (prev === null) return null;
-        if (prev <= 1) {
-          clearInterval(interval);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    if (!sideSelectionPhase) {
+      setSideTimeLeft(null);
+      return;
+    }
+
+    if (!sideSelectionDeadline) {
+      setSideTimeLeft(prev => (prev === null ? 30 : prev));
+      return;
+    }
+
+    const updateTimer = () => {
+      const deadline = new Date(sideSelectionDeadline);
+      const now = new Date();
+      const diff = Math.max(0, Math.floor((deadline - now) / 1000));
+      setSideTimeLeft(diff);
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+
     return () => clearInterval(interval);
-  }, [sideSelectionPhase]);
+  }, [sideSelectionPhase, sideSelectionDeadline]);
   
   // Update captain status when match data changes
   useEffect(() => {

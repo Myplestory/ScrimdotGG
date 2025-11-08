@@ -1240,10 +1240,12 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
                 'match_id': event.get('match_id'),
                 'auto_vetoed_map': event.get('auto_vetoed_map'),
                 'veto_complete': event.get('veto_complete', False),
+                'final_map': event.get('final_map'),
+                'side_selector': event.get('side_selector'),
+                'side_selection_deadline': event.get('side_selection_deadline'),
                 'next_turn': event.get('next_turn'),
                 'remaining_maps': event.get('remaining_maps', []),
-                'deadline': event.get('deadline'),
-                'final_map': event.get('final_map')
+                'deadline': event.get('deadline')
             }
         }))
     
@@ -1270,7 +1272,21 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
             'payload': {
                 'match_id': event.get('match_id'),
                 'final_map': event.get('final_map'),
-                'side_selector': event.get('side_selector')
+                'side_selector': event.get('side_selector'),
+                'side_selection_deadline': event.get('side_selection_deadline')
+            }
+        }))
+
+    async def side_selection_started(self, event):
+        """
+        Side selection phase has begun.
+        """
+        await self.send(text_data=json.dumps({
+            'event': 'side_selection_started',
+            'payload': {
+                'match_id': event.get('match_id'),
+                'side_selector': event.get('side_selector'),
+                'deadline': event.get('deadline')
             }
         }))
     
@@ -1438,7 +1454,18 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
                             'type': 'veto_complete',
                             'match_id': str(match.id),
                             'final_map': result['final_map'],
-                            'side_selector': result.get('side_selector')
+                            'side_selector': result.get('side_selector'),
+                            'side_selection_deadline': result.get('side_selection_deadline')
+                        }
+                    )
+                    
+                    await self.channel_layer.group_send(
+                        f"match_{match.id}",
+                        {
+                            'type': 'side_selection_started',
+                            'match_id': str(match.id),
+                            'side_selector': result.get('side_selector'),
+                            'deadline': result.get('side_selection_deadline')
                         }
                     )
                 else:
