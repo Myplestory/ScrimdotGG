@@ -18,7 +18,7 @@ from datetime import timedelta
 from typing import Dict, List, Optional, Tuple
 import logging
 import random
-from asgiref.sync import sync_to_async
+from asgiref.sync import sync_to_async, async_to_sync
 from channels.layers import get_channel_layer
 
 # Import models from match_system (this app)
@@ -627,6 +627,7 @@ class MatchManager:
                     'veto_complete': True,
                     'final_map': match.final_map,
                     'side_selector': match.side_selector,
+                    'side_selection_deadline': match.side_selection_deadline.isoformat() if match.side_selection_deadline else None,
                     'map_name': map_name,
                     'vetoed_by': vetoing_team
                 }
@@ -814,6 +815,7 @@ class MatchManager:
                 # Side selection fields
                 'side_selector': match.side_selector,
                 'selected_side': match.selected_side,
+                'side_selection_deadline': match.side_selection_deadline.isoformat() if match.side_selection_deadline else None,
                 # Match metadata
                 'match_quality': match.match_quality,
                 'team_a_avg_mmr': match.team_a_avg_mmr,
@@ -895,7 +897,8 @@ class MatchManager:
                     'veto_complete': True,
                     'auto_vetoed_map': auto_map,
                     'final_map': match.final_map,
-                    'side_selector': match.side_selector
+                    'side_selector': match.side_selector,
+                    'side_selection_deadline': match.side_selection_deadline.isoformat() if match.side_selection_deadline else None
                 }
             else:
                 # Continue veto
@@ -1092,7 +1095,7 @@ class MatchManager:
                     'veto_complete': True,
                     'final_map': match.final_map,
                     'side_selector': match.side_selector,
-                    'deadline': match.side_selection_deadline.isoformat() if match.side_selection_deadline else None
+                    'side_selection_deadline': match.side_selection_deadline.isoformat() if match.side_selection_deadline else None
                 }
             else:
                 # Continue veto
@@ -1217,6 +1220,7 @@ class MatchManager:
             # Update match with side selection
             match.selected_side = side
             match.state = Match.STATE_READY  # Move to ready state
+            match.side_selection_deadline = None
             match.save()
 
             logger.info(f"Side {side} selected by {team} captain {player_puuid[:12]}... in match {match.id}")
@@ -1229,7 +1233,7 @@ class MatchManager:
                 from matchmaking.match_execution import MatchExecutionManager
                 
                 # Start the match execution process
-                execution_result = MatchExecutionManager.initiate_match_start(str(match.id))
+                execution_result = async_to_sync(MatchExecutionManager.initiate_match_start)(str(match.id))
                 
                 if execution_result.get('status') == 'success':
                     logger.info(f"Match {match.id} execution started successfully")

@@ -198,6 +198,21 @@ async def handle_map_vetoed(payload: dict, client_id: int, ws, mgr):
         await mgr.send(ws, 'error', {'message': f"Failed to process map vetoed event: {str(e)}"})
 
 
+@on("side_selection_started")
+async def handle_side_selection_started(payload: dict, client_id: int, ws, mgr):
+    """Handle side selection phase start."""
+    try:
+        match_id = payload.get('match_id')
+        side_selector = payload.get('side_selector')
+        deadline = payload.get('deadline')
+        print(f"[SIDE_SELECTION_STARTED] Match: {match_id}, Selector: {side_selector}, Deadline: {deadline}")
+
+        await mgr.send(ws, 'side_selection_started', payload)
+    except Exception as e:
+        print(f"[SIDE_SELECTION_STARTED] Error handling side_selection_started: {e}")
+        await mgr.send(ws, 'error', {'message': f"Failed to process side selection start: {str(e)}"})
+
+
 @on("select_side")
 async def handle_select_side(payload: dict, client_id: int, ws, mgr):
     """Forward select_side events from frontend to Django backend."""

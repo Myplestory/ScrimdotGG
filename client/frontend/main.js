@@ -18,30 +18,11 @@ function createWindow() {
     transparent: true, // Make window transparent initially
     opacity: 0, // Start with 0 opacity
     webPreferences: {
-      nodeIntegration: true,
-      // preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
     },
     autoHideMenuBar: true,
-  });
-  
-  // Expose API to renderer process
-  win.webContents.on('dom-ready', () => {
-    win.webContents.executeJavaScript(`
-      window.electronAPI = {
-        closeApp: () => {
-          require('electron').ipcRenderer.send('close-app');
-        },
-        fadeInWindow: () => {
-          require('electron').ipcRenderer.send('react-ready');
-        },
-        minimizeWindow: () => {
-          require('electron').ipcRenderer.send('minimize-window');
-        },
-        maximizeWindow: () => {
-          require('electron').ipcRenderer.send('maximize-window');
-        }
-      };
-    `);
   });
   
   // Handle close app IPC
@@ -85,9 +66,9 @@ function createWindow() {
     const backendPath = path.join(__dirname, '..', 'backend', 'run.py');
     const backendDir = path.join(__dirname, '..', 'backend');
     
-    console.log('🚀 Starting Python backend (REFACTORED)...');
-    console.log('📁 Backend directory:', backendDir);
-    console.log('🐍 Backend script:', backendPath);
+    console.log(' Starting Python backend (REFACTORED)...');
+    console.log(' Backend directory:', backendDir);
+    console.log(' Backend script:', backendPath);
     
   try {
     // Determine Python command based on environment
