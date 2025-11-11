@@ -107,7 +107,7 @@ try:
     from matchmaking.match_execution import MatchExecutionManager
     print("   [OK] MatchExecutionManager imported successfully")
     
-    from matchmaking.match_monitor import MatchMonitor
+    from match_system.monitor import MatchMonitor
     print("   [OK] MatchMonitor imported successfully")
     
     # Check methods exist

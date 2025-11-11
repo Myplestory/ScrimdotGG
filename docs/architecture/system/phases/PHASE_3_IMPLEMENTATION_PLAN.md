@@ -435,7 +435,7 @@ class MatchExecutionManager:
 ### **3.2.1: Efficient Statistics Collection**
 
 ```python
-# server/matchmaking/match_monitor.py
+# server/match_system/monitor.py
 
 class MatchMonitor:
     """

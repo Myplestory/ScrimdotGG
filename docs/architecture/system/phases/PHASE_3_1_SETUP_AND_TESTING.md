@@ -192,7 +192,7 @@ pipenv run python manage.py shell
 
 ```python
 import asyncio
-from matchmaking.match_monitor import MatchMonitor
+from match_system.monitor import MatchMonitor
 from scrimgg.models import Match
 
 # Get test match
@@ -228,7 +228,7 @@ pipenv run python manage.py shell
 
 ```python
 import asyncio
-from matchmaking.match_monitor import MatchMonitor
+from match_system.monitor import MatchMonitor
 from scrimgg.models import Match, MatchStatistics
 
 # Get test match

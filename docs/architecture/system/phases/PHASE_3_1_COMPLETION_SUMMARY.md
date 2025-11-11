@@ -40,7 +40,7 @@ Phase 3.1 has been successfully implemented with all core functionality for matc
 - ✅ `validate_rejoin_token()` - Validates and consumes rejoin tokens
 - ✅ WebSocket broadcasting for all state changes
 
-#### **3. Match Monitor** (`server/matchmaking/match_monitor.py`)
+#### **3. Match Monitor** (`server/match_system/monitor.py`)
 - ✅ `update_match_score()` - Delta-based score updates (only when changed)
 - ✅ `update_player_statistics()` - Batch player stat updates
 - ✅ `get_match_statistics()` - Retrieve stats for spectators
@@ -170,7 +170,7 @@ Match completes → Process results
 
 ### **New Files Created**
 1. ✅ `server/matchmaking/match_execution.py` - Match execution logic
-2. ✅ `server/matchmaking/match_monitor.py` - Live match monitoring
+2. ✅ `server/match_system/monitor.py` - Live match monitoring
 3. ✅ `docs/PHASE_3_IMPLEMENTATION_PLAN.md` - Complete implementation plan
 4. ✅ `docs/PHASE_3_1_SETUP_AND_TESTING.md` - Setup and testing guide
 5. ✅ `docs/PHASE_3_1_COMPLETION_SUMMARY.md` - This document

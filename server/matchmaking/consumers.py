@@ -1902,7 +1902,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
             return
         
         try:
-            from .match_monitor import MatchMonitor
+            from match_system.monitor import MatchMonitor
             
             await MatchMonitor.update_match_score(
                 match_id, team_a_score, team_b_score, current_round
@@ -1985,7 +1985,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
             return
         
         try:
-            from .match_monitor import MatchMonitor
+            from match_system.monitor import MatchMonitor
             
             result = await MatchMonitor.get_match_statistics(match_id)
             

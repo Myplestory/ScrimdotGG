@@ -158,7 +158,7 @@ Refer to `docs/PHASE_3_1_SETUP_AND_TESTING.md` for:
 
 ### **New Files**
 - `server/matchmaking/match_execution.py` (476 lines)
-- `server/matchmaking/match_monitor.py` (236 lines)
+- `server/match_system/monitor.py` (236 lines)
 - `server/test_phase3_installation.py` (132 lines)
 - `docs/PHASE_3_1_SETUP_AND_TESTING.md`
 - `docs/PHASE_3_1_COMPLETION_SUMMARY.md`

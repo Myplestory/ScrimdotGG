@@ -13,7 +13,7 @@ django.setup()
 
 from scrimgg.models import Match, Player, MatchStatistics
 from matchmaking.match_execution import MatchExecutionManager
-from matchmaking.match_monitor import MatchMonitor
+from match_system.monitor import MatchMonitor
 from django.utils import timezone
 
 
