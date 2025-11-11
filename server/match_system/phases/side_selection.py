@@ -28,7 +28,7 @@ async def process_selection(match: Match, side: str, team: str, player_puuid: st
 
     match.selected_side = side
     match.side_selection_deadline = None
-    match.state = Match.STATE_READY
+    match.state = Match.STATE_CREATING
 
     await sync_to_async(match.save, thread_sensitive=False)(
         update_fields=['selected_side', 'side_selection_deadline', 'state']
@@ -55,7 +55,7 @@ def handle_timeout(match_id: str, broadcast_callback) -> Dict:
 
         auto_side = 'attack'
         match.selected_side = auto_side
-        match.state = Match.STATE_READY
+        match.state = Match.STATE_CREATING
         match.side_selection_deadline = None
         match.save(update_fields=['selected_side', 'state', 'side_selection_deadline'])
 

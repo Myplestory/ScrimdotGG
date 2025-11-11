@@ -21,6 +21,20 @@ class PugSocketClient:
         self.player_data_event = asyncio.Event()
         self.match_data_event = asyncio.Event()
 
+        # Callback hooks set by clientapi
+        self.match_ready_callback = None
+        self.player_accepted_callback = None
+        self.match_confirmed_callback = None
+        self.match_data_callback = None
+        self.match_state_update_callback = None
+        self.match_construction_started_callback = None
+        self.join_custom_game_callback = None
+        self.player_joined_game_callback = None
+        self.player_join_failed_callback = None
+        self.all_players_joined_callback = None
+        self.match_in_progress_callback = None
+        self.match_completed_callback = None
+
     ### CONNECTION COMMANDS ###
 
     async def start_connection(self, websocket_url):
@@ -120,6 +134,20 @@ class PugSocketClient:
                 await self.on_match_data(payload)
             elif event == "match_state_update":
                 await self.on_match_state_update(payload)
+            elif event == "match_construction_started":
+                await self.on_match_construction_started(payload)
+            elif event == "join_custom_game":
+                await self.on_join_custom_game(payload)
+            elif event == "player_joined_game":
+                await self.on_player_joined_game(payload)
+            elif event == "player_join_failed":
+                await self.on_player_join_failed(payload)
+            elif event == "all_players_joined":
+                await self.on_all_players_joined(payload)
+            elif event == "match_in_progress":
+                await self.on_match_in_progress(payload)
+            elif event == "match_completed":
+                await self.on_match_completed(payload)
             else:
                 print(f"Unknown event received: {event}")
         except Exception as e:
@@ -344,6 +372,56 @@ class PugSocketClient:
                 await self.side_acknowledged_callback(data)
         except Exception as e:
             print(f"Error processing 'side_acknowledged' event: {e}")
+
+    async def on_match_construction_started(self, data):
+        """Handle constructor assignment from the server."""
+        try:
+            if self.match_construction_started_callback:
+                await self.match_construction_started_callback(data)
+        except Exception as e:
+            print(f"Error processing 'match_construction_started' event: {e}")
+
+    async def on_join_custom_game(self, data):
+        try:
+            if self.join_custom_game_callback:
+                await self.join_custom_game_callback(data)
+        except Exception as e:
+            print(f"Error processing 'join_custom_game' event: {e}")
+
+    async def on_player_joined_game(self, data):
+        try:
+            if self.player_joined_game_callback:
+                await self.player_joined_game_callback(data)
+        except Exception as e:
+            print(f"Error processing 'player_joined_game' event: {e}")
+
+    async def on_player_join_failed(self, data):
+        try:
+            if self.player_join_failed_callback:
+                await self.player_join_failed_callback(data)
+        except Exception as e:
+            print(f"Error processing 'player_join_failed' event: {e}")
+
+    async def on_all_players_joined(self, data):
+        try:
+            if self.all_players_joined_callback:
+                await self.all_players_joined_callback(data)
+        except Exception as e:
+            print(f"Error processing 'all_players_joined' event: {e}")
+
+    async def on_match_in_progress(self, data):
+        try:
+            if self.match_in_progress_callback:
+                await self.match_in_progress_callback(data)
+        except Exception as e:
+            print(f"Error processing 'match_in_progress' event: {e}")
+
+    async def on_match_completed(self, data):
+        try:
+            if self.match_completed_callback:
+                await self.match_completed_callback(data)
+        except Exception as e:
+            print(f"Error processing 'match_completed' event: {e}")
 
     ### COMMANDS ###
 

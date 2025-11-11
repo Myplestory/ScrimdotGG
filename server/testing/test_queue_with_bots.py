@@ -197,7 +197,7 @@ async def wait_for_you_to_join():
     print(f"   4. Matchmaker will find a match within 30 seconds")
     print(f"   5. You'll receive 'match_found' event")
     print(f"   6. Accept the match")
-    print(f"   7. Then you'll receive 'match_starting' event")
+    print(f"   7. Then you'll receive 'match_construction_started' event")
     
     print(f"\n[MONITORING] Watching queue for your entry...")
     

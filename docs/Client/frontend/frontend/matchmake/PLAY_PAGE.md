@@ -495,8 +495,8 @@ Play.jsx
    - ✅ TrueSkill integration for skill-based matching
    - ✅ Time-in-queue tolerance expansion
 
-6. **Match Execution** (`server/match_execution/`)
-   - ✅ MatchExecutionManager with constructor assignment
+6. **Match Execution** (`server/match_system/phases/execution.py`)
+   - ✅ ExecutionPhaseManager with constructor assignment
    - ✅ Custom game creation tracking
    - ✅ Player join monitoring
    - ✅ Transition to live state management

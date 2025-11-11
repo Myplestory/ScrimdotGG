@@ -30,15 +30,14 @@ Phase 3.1 has been successfully implemented with all core functionality for matc
   - One-time use validation
   - Indexed for fast lookups
 
-#### **2. Match Execution Manager** (`server/matchmaking/match_execution.py`)
-- ✅ `initiate_match_start()` - Triggers match transition from confirmed to starting
-- ✅ `_select_constructor()` - Chooses party leader (highest ELO from team_a)
-- ✅ `handle_custom_game_created()` - Processes custom game creation
-- ✅ `handle_match_started()` - Transitions match to in_progress
-- ✅ `handle_match_completion()` - Processes match completion and results
-- ✅ `generate_rejoin_token()` - Creates secure rejoin tokens
-- ✅ `validate_rejoin_token()` - Validates and consumes rejoin tokens
-- ✅ WebSocket broadcasting for all state changes
+#### **2. Execution Phase Manager** (`server/match_system/phases/execution.py`)
+- ✅ `initiate_match_start()` - Triggers match transition from side selection → constructor flow
+- ✅ `_select_constructor_from_match()` - Elects the constructor (captain/highest ELO)
+- ✅ `handle_custom_game_created()` - Processes custom lobby creation + notifies teams
+- ✅ `handle_player_joined()` - Tracks join progress and drives snapshot updates
+- ✅ `handle_match_started()` / `handle_match_completion()` - Transitions match through live states
+- ⚠️ Rejoin token helpers stubbed (`NotImplementedError`) — left for a future iteration
+- ✅ Unified WebSocket + snapshot broadcasting for every state change
 
 #### **3. Match Monitor** (`server/match_system/monitor.py`)
 - ✅ `update_match_score()` - Delta-based score updates (only when changed)
@@ -102,7 +101,7 @@ Phase 3.1 has been successfully implemented with all core functionality for matc
 ```
 Match Confirmed (All Accept)
     ↓
-MatchExecutionManager.initiate_match_start()
+ExecutionPhaseManager.initiate_match_start()
     ↓
 Select Constructor (highest ELO from team_a)
     ↓
@@ -169,7 +168,7 @@ Match completes → Process results
 ## 🚀 **Files Created/Modified**
 
 ### **New Files Created**
-1. ✅ `server/matchmaking/match_execution.py` - Match execution logic
+1. ✅ `server/match_system/phases/execution.py` - Match execution logic
 2. ✅ `server/match_system/monitor.py` - Live match monitoring
 3. ✅ `docs/PHASE_3_IMPLEMENTATION_PLAN.md` - Complete implementation plan
 4. ✅ `docs/PHASE_3_1_SETUP_AND_TESTING.md` - Setup and testing guide

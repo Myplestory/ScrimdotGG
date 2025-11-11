@@ -1,3 +1,4 @@
+
 """
 Django settings for ScrimGG project.
 
@@ -62,7 +63,6 @@ INSTALLED_APPS = [
     'lobby',
     'matchmaking',
     'match_system',         # NEW: Post-acceptance match flow
-    'match_execution',      # NEW: Live game management
     
     # Realtime communication (depends on all above)
     'realtime',            # NEW: WebSocket layer

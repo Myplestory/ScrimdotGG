@@ -138,7 +138,7 @@ class MatchRejoinToken(models.Model):
 ### **3.1.2: Match Execution Manager**
 
 ```python
-# server/matchmaking/match_execution.py
+# server/match_system/phases/execution.py
 
 import asyncio
 import logging
@@ -151,7 +151,7 @@ from channels.layers import get_channel_layer
 logger = logging.getLogger(__name__)
 
 
-class MatchExecutionManager:
+class ExecutionPhaseManager:
     """
     Handles match transition from confirmed → starting → in_progress → completed
     Uses WebSocket-only communication for all updates
@@ -178,7 +178,7 @@ class MatchExecutionManager:
             match = await sync_to_async(get_match)()
             
             # Select constructor (highest ELO player from team_a captain)
-            constructor = await MatchExecutionManager._select_constructor(match)
+            constructor = await ExecutionPhaseManager._select_constructor_from_match(match)
             
             # Update match status
             def update_match():
@@ -190,7 +190,7 @@ class MatchExecutionManager:
             await sync_to_async(update_match)()
             
             # Notify all players via WebSocket
-            await MatchExecutionManager._broadcast_match_starting(match, constructor)
+            await ExecutionPhaseManager._broadcast_match_starting(match, constructor)
             
             logger.info(f"Match {match_id} starting - Constructor: {constructor['puuid']}")
             
@@ -290,7 +290,7 @@ class MatchExecutionManager:
             match = await sync_to_async(update_match)()
             
             # Broadcast to all non-constructor players to join
-            await MatchExecutionManager._broadcast_join_custom_game(match, pregame_id, constructor_puuid)
+            await ExecutionPhaseManager._broadcast_join_custom_game(match, pregame_id, constructor_puuid)
             
             logger.info(f"Custom game created for match {match_id}: {pregame_id}")
             
@@ -354,7 +354,7 @@ class MatchExecutionManager:
             match = await sync_to_async(update_match)()
             
             # Notify all players that match is live
-            await MatchExecutionManager._broadcast_match_in_progress(match)
+            await ExecutionPhaseManager._broadcast_match_in_progress(match)
             
             # Start background monitoring task (LOW FREQUENCY)
             from .tasks import monitor_live_match
@@ -706,9 +706,9 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         pregame_id = payload.get('pregame_id')
         constructor_puuid = payload.get('constructor_puuid')
         
-        from .match_execution import MatchExecutionManager
+        from match_system.phases.execution import ExecutionPhaseManager
         
-        result = await MatchExecutionManager.handle_custom_game_created(
+        result = await ExecutionPhaseManager.handle_custom_game_created(
             match_id, pregame_id, constructor_puuid
         )
         
@@ -760,9 +760,9 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         match_id = payload.get('match_id')
         final_data = payload.get('final_data')
         
-        from .match_execution import MatchExecutionManager
+        from match_system.phases.execution import ExecutionPhaseManager
         
-        await MatchExecutionManager.handle_match_completion(
+        await ExecutionPhaseManager.handle_match_completion(
             match_id, final_data
         )
     
@@ -774,9 +774,9 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         match_id = payload.get('match_id')
         player_puuid = payload.get('player_puuid')
         
-        from .match_execution import MatchExecutionManager
+        from match_system.phases.execution import ExecutionPhaseManager
         
-        token = await MatchExecutionManager.generate_rejoin_token(
+        token = await ExecutionPhaseManager.generate_rejoin_token(
             match_id, player_puuid
         )
         
@@ -1130,7 +1130,7 @@ export default MatchRoom;
 
 ### **Week 1: Core Match Execution**
 1. ✅ Extend Match model
-2. ✅ Create MatchExecutionManager
+2. ✅ Create ExecutionPhaseManager
 3. ✅ Add Django consumer handlers
 4. ✅ Update client bootstrap.py
 5. ✅ Test constructor flow
@@ -1160,7 +1160,7 @@ export default MatchRoom;
 Ready to begin implementation? I recommend starting with:
 
 1. **Match model extensions** - Foundation for everything
-2. **MatchExecutionManager** - Core business logic
+2. **ExecutionPhaseManager** - Core business logic
 3. **Constructor flow testing** - Critical path validation
 
 **Shall I proceed with implementing Phase 3.1 (Match Execution System)?**

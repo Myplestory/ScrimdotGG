@@ -57,7 +57,7 @@ This document details the hybrid async/sync architecture implemented for ScrimGG
 - MatchmakerV2: see `docs/Server/match_system.md` for algorithms and sync/async parity.
 - MatchConfirmationManager: see `docs/Server/match_system.md` for acceptance flow.
 - MatchManager: see `docs/Server/matchpage.md` for veto/start and timeout handling.
-- MatchExecutionManager / MatchMonitor: see `docs/Server/match_execution.md`.
+- ExecutionPhaseManager / MatchMonitor: see `docs/Server/match_system.md`.
 
 ---
 

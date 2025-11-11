@@ -1,6 +1,7 @@
 import requests, os, json, time, asyncio
 from valclient import Client
 from datetime import datetime
+from quart import current_app
 from pugapi import PugSocketClient
 from app.utils.logger import get_logger
 
@@ -201,6 +202,43 @@ class ValorantAPI(object):
                     self.pugsocket.match_data_callback = match_data_callback
                     self.pugsocket.match_state_update_callback = match_state_update_callback
                     self.match_state_update_callback = match_state_update_callback
+
+                    async def match_construction_started_callback(data):
+                        self.latest_match_state = data
+                        if self.conn_mgr:
+                            await current_app.conn_mgr.broadcast('match_construction_started', data)
+
+                    async def join_custom_game_callback(data):
+                        if self.conn_mgr:
+                            await current_app.conn_mgr.broadcast('join_custom_game', data)
+
+                    async def player_joined_game_callback(data):
+                        if self.conn_mgr:
+                            await current_app.conn_mgr.broadcast('player_joined_game', data)
+
+                    async def player_join_failed_callback(data):
+                        if self.conn_mgr:
+                            await current_app.conn_mgr.broadcast('player_join_failed', data)
+
+                    async def all_players_joined_callback(data):
+                        if self.conn_mgr:
+                            await current_app.conn_mgr.broadcast('all_players_joined', data)
+
+                    async def match_in_progress_callback(data):
+                        if self.conn_mgr:
+                            await current_app.conn_mgr.broadcast('match_in_progress', data)
+
+                    async def match_completed_callback(data):
+                        if self.conn_mgr:
+                            await current_app.conn_mgr.broadcast('match_completed', data)
+
+                    self.pugsocket.match_construction_started_callback = match_construction_started_callback
+                    self.pugsocket.join_custom_game_callback = join_custom_game_callback
+                    self.pugsocket.player_joined_game_callback = player_joined_game_callback
+                    self.pugsocket.player_join_failed_callback = player_join_failed_callback
+                    self.pugsocket.all_players_joined_callback = all_players_joined_callback
+                    self.pugsocket.match_in_progress_callback = match_in_progress_callback
+                    self.pugsocket.match_completed_callback = match_completed_callback
                     self._pending_match_data = None
                     self._pending_match_proposed_data = None
                     self._pending_player_accepted_data = None

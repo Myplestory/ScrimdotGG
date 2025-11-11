@@ -104,15 +104,15 @@ except Exception as e:
 # Test imports
 print("\n5. Testing Manager Imports...")
 try:
-    from matchmaking.match_execution import MatchExecutionManager
-    print("   [OK] MatchExecutionManager imported successfully")
+    from match_system.phases.execution import ExecutionPhaseManager
+    print("   [OK] ExecutionPhaseManager imported successfully")
     
     from match_system.monitor import MatchMonitor
     print("   [OK] MatchMonitor imported successfully")
     
     # Check methods exist
-    if hasattr(MatchExecutionManager, 'initiate_match_start'):
-        print("   [OK] MatchExecutionManager.initiate_match_start() exists")
+    if hasattr(ExecutionPhaseManager, 'initiate_match_start'):
+        print("   [OK] ExecutionPhaseManager.initiate_match_start() exists")
     
     if hasattr(MatchMonitor, 'update_match_score'):
         print("   [OK] MatchMonitor.update_match_score() exists")

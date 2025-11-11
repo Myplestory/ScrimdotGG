@@ -15,6 +15,7 @@ from .match_manager import MatchManager
 from .match_state_validator import MatchStateValidator
 from .lobby_manager import LobbyManager
 from scrimgg.serializers import LobbySerializer, PlayerSerializer
+from match_system.phases.execution import ExecutionPhaseManager
 
 logger = logging.getLogger(__name__)
 
@@ -1527,38 +1528,30 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
                 }))
                 return
             
-            # Process side selection
-            result = await MatchManager.process_side_selection(match, side, team, self.puuid)
-            
+            result = await MatchManager.select_side(match_id, self.puuid, side)
+
             if result['status'] == 'success':
-                # Broadcast side selection to all players in match
-                await self.channel_layer.group_send(
-                    f"match_{match.id}",
-                    {
-                        'type': 'side_selected',
-                        'match_id': str(match.id),
-                        'side': side,
-                        'selected_by': team,
-                        'side_complete': result.get('side_complete', False)
-                    }
+                await self.send(
+                    text_data=json.dumps(
+                        {
+                            'event': 'side_acknowledged',
+                            'payload': result,
+                        }
+                    )
                 )
-                
-                await self.send(text_data=json.dumps({
-                    'event': 'side_acknowledged',
-                    'payload': result
-                }))
-                
                 logger.info(f"Side {side} selected by {team} in match {match.id}")
             else:
-                await self.send(text_data=json.dumps({
-                    'error': result.get('message')
-                }))
-                
+                await self.send(
+                    text_data=json.dumps({'error': result.get('message')})
+                )
+
         except Exception as e:
             logger.error(f"Error processing side selection for {match_id}: {str(e)}")
-            await self.send(text_data=json.dumps({
-                'error': f"Failed to process side selection: {str(e)}"
-            }))
+            await self.send(
+                text_data=json.dumps(
+                    {'error': f"Failed to process side selection: {str(e)}"}
+                )
+            )
         
     # -------------------- Lobby Chat WebSocket Messages --------------------        
         
@@ -1653,9 +1646,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
             return
         
         try:
-            from .match_execution import MatchExecutionManager
-            
-            result = await MatchExecutionManager.handle_custom_game_created(
+            result = await ExecutionPhaseManager.handle_custom_game_created(
                 match_id, pregame_id, constructor_puuid
             )
             
@@ -1694,66 +1685,29 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         logger.info(f"Player {player_puuid} joined match {match_id} (Team: {team})")
         
         try:
-            Match = apps.get_model('scrimgg', 'Match')
-            
-            def update_match():
-                match = Match.objects.get(id=match_id)
-                
-                # Add player to joined list if not already there
-                if player_puuid not in match.joined_players:
-                    match.joined_players.append(player_puuid)
-                    match.save()
-                
-                return match
-            
-            match = await sync_to_async(update_match)()
-            
-            # Get expected players
-            team_a_players = match.team_a_data.get('players', [])
-            team_b_players = match.team_b_data.get('players', [])
-            all_expected = [p['puuid'] for p in team_a_players + team_b_players]
-            
-            joined_count = len(match.joined_players)
-            total_expected = len(all_expected)
-            
-            logger.info(f"Match {match_id}: {joined_count}/{total_expected} players joined")
-            
-            # Check if all players have joined
-            if joined_count >= total_expected:
-                logger.info(f"All players joined match {match_id} - starting game")
-                
-                # Find constructor
-                constructor_puuid = match.constructor_puuid
-                if not constructor_puuid:
-                    # Fallback: use first player from team A as constructor
-                    constructor_puuid = team_a_players[0]['puuid'] if team_a_players else None
-                
-                if constructor_puuid:
-                    # Notify constructor to start game
-                    await self.channel_layer.group_send(
-                        f"player_{constructor_puuid}",
-                        {
-                            'type': 'all_players_joined',
-                            'match_id': str(match_id),
-                            'is_constructor': True
-                        }
-                    )
-                    
-                    logger.info(f"Notified constructor {constructor_puuid} to start match {match_id}")
-                else:
-                    logger.error(f"No constructor found for match {match_id}")
-            
-            # Acknowledge join
-            await self.send(text_data=json.dumps({
-                'event': 'player_joined_ack',
-                'payload': {
-                    'match_id': match_id,
-                    'player_puuid': player_puuid,
-                    'joined_count': joined_count,
-                    'total_expected': total_expected
-                }
-            }))
-            
+            result = await ExecutionPhaseManager.handle_player_joined(match_id, player_puuid)
+
+            if result.get('status') == 'success':
+                await self.send(text_data=json.dumps({
+                    'event': 'player_joined_ack',
+                    'payload': {
+                        'match_id': match_id,
+                        'player_puuid': player_puuid,
+                        'joined_count': result.get('joined_count'),
+                        'total_expected': result.get('total_players'),
+                    }
+                }))
+            else:
+                await self.send(text_data=json.dumps({
+                    'event': 'player_joined_ack',
+                    'payload': {
+                        'match_id': match_id,
+                        'player_puuid': player_puuid,
+                        'error': result.get('message', 'join failed'),
+                    }
+                }))
+                logger.error(f"Failed to record player join for match {match_id}: {result.get('message')}")
+
         except Exception as e:
             logger.error(f"Error handling player join: {str(e)}")
             import traceback
@@ -1871,9 +1825,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
             return
         
         try:
-            from .match_execution import MatchExecutionManager
-            
-            result = await MatchExecutionManager.handle_match_started(
+            result = await ExecutionPhaseManager.handle_match_started(
                 match_id, coregame_id
             )
             
@@ -1924,9 +1876,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
             return
         
         try:
-            from .match_execution import MatchExecutionManager
-            
-            await MatchExecutionManager.handle_match_completion(
+            await ExecutionPhaseManager.handle_match_completion(
                 match_id, final_data
             )
             
@@ -1951,9 +1901,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
             return
         
         try:
-            from .match_execution import MatchExecutionManager
-            
-            token = await MatchExecutionManager.generate_rejoin_token(
+            token = await ExecutionPhaseManager.generate_rejoin_token(
                 match_id, player_puuid
             )
             
@@ -2008,10 +1956,10 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
     
     # -------------------- Outgoing WebSocket Handlers (called by channel layer) --------------------
     
-    async def match_starting(self, event):
-        """Send match_starting event to client"""
+    async def match_construction_started(self, event):
+        """Send match_construction_started event to client"""
         await self.send(text_data=json.dumps({
-            'event': 'match_starting',
+            'event': 'match_construction_started',
             'payload': {
                 'match_id': event.get('match_id'),
                 'constructor_puuid': event.get('constructor_puuid'),

@@ -22,6 +22,7 @@ from channels.layers import get_channel_layer
 from core.websocket_utils import WebSocketBroadcaster
 from match_system.models import Match, MatchPlayer, VetoAction
 from match_system.phases import server_veto, map_veto, side_selection, snapshot as snapshot_builder
+from match_system.phases.execution import ExecutionPhaseManager
 
 logger = logging.getLogger(__name__)
 
@@ -431,51 +432,60 @@ class MatchManager:
             Dict with side selection result
         """
         try:
-            # Get match
-            match = await sync_to_async(lambda: Match.objects.get(id=match_id), thread_sensitive=False)()
-            
-            # Determine team
+            match = await sync_to_async(
+                lambda: Match.objects.get(id=match_id), thread_sensitive=False
+            )()
+
             team = match.get_player_team(player_puuid)
             if not team:
-                return {
-                    'status': 'error',
-                    'message': 'Player not found in match'
-                }
-            
-            # Process side selection (business logic)
-            result = await side_selection.process_selection(match, side, team, player_puuid)
-            
+                return {'status': 'error', 'message': 'Player not found in match'}
+
+            result = await MatchManager.process_side_selection(
+                match, side, team, player_puuid
+            )
+
             if result['status'] != 'success':
                 return result
-            
+
             await MatchManager.broadcast_match_state(
                 match_id,
-                last_event='side_selection_complete' if result.get('side_complete') else 'side_selected',
+                match=match,
+                last_event='side_selection_complete'
+                if result.get('side_complete')
+                else 'side_selected',
                 event_context={
                     'side': side,
                     'team': team,
                     'auto': result.get('auto_selected', False),
-                    'match_ready': result.get('match_ready', False),
-                }
+                },
             )
-            
+
             return result
-            
+
         except Match.DoesNotExist:
-            return {
-                'status': 'error',
-                'message': f'Match {match_id} not found'
-            }
+            return {'status': 'error', 'message': f'Match {match_id} not found'}
         except Exception as e:
             logger.error(f"Error in select_side orchestration: {e}")
-            return {
-                'status': 'error',
-                'message': str(e)
-            }
+            return {'status': 'error', 'message': str(e)}
     
     @staticmethod
-    async def process_side_selection(match: Match, side: str, team: str, player_puuid: str) -> Dict:
-        return await side_selection.process_selection(match, side, team, player_puuid)
+    async def process_side_selection(
+        match: Match, side: str, team: str, player_puuid: str
+    ) -> Dict:
+        result = await side_selection.process_selection(match, side, team, player_puuid)
+        logger.info(
+            "process_side_selection called"
+        )
+        if result.get('side_complete'):
+            try:
+                await ExecutionPhaseManager.initiate_match_start(str(match.id))
+            except Exception as exc:  # pylint: disable=broad-except
+                logger.error(
+                    "Failed to initiate match start for %s after side selection: %s",
+                    match.id,
+                    exc,
+                )
+        return result
     
     # ============================================================================
     # MATCH DATA
@@ -557,7 +567,7 @@ class MatchManager:
 
     @staticmethod
     def handle_side_selection_timeout_sync(match_id: str) -> Dict:
-        return side_selection.handle_timeout(
+        result = side_selection.handle_timeout(
             match_id,
             lambda mid, instance, last_event=None, event_context=None: MatchManager.broadcast_match_state_sync(
                 mid,
@@ -566,3 +576,13 @@ class MatchManager:
                 event_context=event_context,
             ),
         )
+
+        if result.get('status') == 'success' and result.get('side_selection_complete'):
+            try:
+                async_to_sync(ExecutionPhaseManager.initiate_match_start)(match_id)
+            except Exception as exc:  # pylint: disable=broad-except
+                logger.error(
+                    "Failed to initiate match start (timeout) for %s: %s", match_id, exc
+                )
+
+        return result

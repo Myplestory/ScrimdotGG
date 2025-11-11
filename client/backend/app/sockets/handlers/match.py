@@ -85,10 +85,10 @@ async def handle_match_ended(payload: dict, client_id: int, ws, mgr):
     await mgr.send(ws, 'match_ended', payload)
 
 
-@on("match_starting")
-async def handle_match_starting(payload: dict, client_id: int, ws, mgr):
+@on("match_construction_started")
+async def handle_match_construction_started(payload: dict, client_id: int, ws, mgr):
     """
-    Django server notifies that match is starting.
+    Django server notifies that construction/lobby creation is starting.
     If this client is constructor, create custom game.
     Otherwise, wait for join instruction.
     """
@@ -98,14 +98,14 @@ async def handle_match_starting(payload: dict, client_id: int, ws, mgr):
     server = payload.get('server')
     team = payload.get('team')
     
-    logger.info(f"[MATCH_STARTING] Match {match_id[:8] if match_id else 'Unknown'}... starting")
-    logger.info(f"[MATCH_STARTING] Constructor: {is_constructor}, Map: {map_name}, Server: {server}, Team: {team}")
+    logger.info(f"[MATCH_CONSTRUCTION] Match {match_id[:8] if match_id else 'Unknown'} entering construction phase")
+    logger.info(f"[MATCH_CONSTRUCTION] Constructor: {is_constructor}, Map: {map_name}, Server: {server}, Team: {team}")
     
     # Stop heartbeat - user entering game
     mgr.state[client_id]['in_game'] = True
     
     # Notify frontend
-    await mgr.send(ws, 'match_starting', {
+    await mgr.send(ws, 'match_construction_started', {
         'match_id': match_id,
         'is_constructor': is_constructor,
         'map': map_name,
@@ -115,11 +115,11 @@ async def handle_match_starting(payload: dict, client_id: int, ws, mgr):
     
     if is_constructor:
         # This client needs to create the custom game
-        logger.info(f"[MATCH_STARTING] This client is CONSTRUCTOR - creating custom game")
+        logger.info(f"[MATCH_CONSTRUCTION] This client is CONSTRUCTOR - creating custom game")
         valorant_service = current_app.valorant
         asyncio.create_task(create_custom_game(valorant_service, match_id, map_name, server, client_id))
     else:
-        logger.info(f"[MATCH_STARTING] This client is NOT constructor - waiting for join instruction")
+        logger.info(f"[MATCH_CONSTRUCTION] This client is NOT constructor - waiting for join instruction")
 
 
 async def create_custom_game(valorant_service, match_id: str, map_name: str, server: str, client_id: int):

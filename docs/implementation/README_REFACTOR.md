@@ -18,7 +18,7 @@ This is a **complete, production-ready refactor** of your monolithic `matchmakin
    - Match managers (lifecycle, confirmation, veto)
    - Celery tasks for timeouts and cleanup
 
-3. **`match_execution/`** - Live game management
+3. **Execution phase (`match_system/phases/execution.py`)** - Live game management
    - Execution manager (game creation, player joins)
    - Match monitoring
 
@@ -45,7 +45,7 @@ This is a **complete, production-ready refactor** of your monolithic `matchmakin
 ```
 core/                    (4 files)
 match_system/            (8 files)
-match_execution/         (4 files)
+match_system/phases/execution.py
 realtime/                (9 files including 5 handlers)
 Documentation/           (8 comprehensive guides)
 ```
@@ -122,7 +122,7 @@ matchmaking/
 ```
 core/              # Utilities (3 files)
 match_system/      # Match flow (8 files)
-match_execution/   # Game execution (4 files)  
+match_system/phases/execution.py   # Game execution phase logic  
 realtime/          # WebSocket (9 files)
 lobby/             # Lobby management
 matchmaking/       # Queue + Matchmaker ONLY
@@ -162,7 +162,7 @@ server/
 │       ├── confirmation_manager.py
 │       └── veto_manager.py
 │
-├── match_execution/
+├── (match_execution/ removed – logic moved under match_system/phases/)
 │   ├── __init__.py
 │   ├── apps.py
 │   ├── models.py
@@ -201,7 +201,7 @@ INSTALLED_APPS = [
     # ... existing ...
     'core',              # NEW
     'match_system',      # NEW
-    'match_execution',   # NEW
+    # 'match_execution', removed (execution handled within match_system)
     'realtime',          # NEW
 ]
 ```
