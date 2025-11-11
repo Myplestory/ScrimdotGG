@@ -440,6 +440,12 @@ async def handle_side_selected(payload: dict, client_id: int, ws, mgr):
     })
 
 
+@on("match_state_update")
+async def handle_match_state_update(payload: dict, client_id: int, ws, mgr):
+    """Forward unified match state updates to frontend clients."""
+    logger.debug(f"[MATCH STATE UPDATE] Forwarding snapshot for match {payload.get('match_id')}")
+    await mgr.send(ws, 'match_state_update', payload)
+
 @on("side_acknowledged")
 async def handle_side_acknowledged(payload: dict, client_id: int, ws, mgr):
     """Handle side selection acknowledgment from Django server."""

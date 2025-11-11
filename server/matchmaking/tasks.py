@@ -28,7 +28,7 @@ def periodic_matchmaking(self):
     """
     try:
         logger.info("="*70)
-        logger.info("🔄 PERIODIC MATCHMAKING STARTED")
+        logger.info("PERIODIC MATCHMAKING STARTED")
         logger.info("="*70)
         
         # Get queue statistics (SYNC)
@@ -36,10 +36,10 @@ def periodic_matchmaking(self):
         total_lobbies = queue_stats.get('total_lobbies', 0)
         total_players = queue_stats.get('total_players', 0)
         
-        logger.info(f"📊 Queue Status: {total_lobbies} lobbies, {total_players} players")
+        logger.info(f"Queue Status: {total_lobbies} lobbies, {total_players} players")
         
         if total_lobbies < 2:
-            logger.info("⏸️  Not enough lobbies in queue for matchmaking (need 2+)")
+            logger.info("Not enough lobbies in queue for matchmaking (need 2+)")
             return {
                 'status': 'success',
                 'message': 'Not enough lobbies in queue',
@@ -48,22 +48,22 @@ def periodic_matchmaking(self):
             }
         
         # Run matchmaking algorithm (using MMR-based matchmaker) - SYNC
-        logger.info(f"🎯 Running MMR-based matchmaker (MatchmakerV2)...")
+        logger.info("Running MMR-based matchmaker (MatchmakerV2)...")
         matchmaking_result = MatchmakerV2.find_matches_sync()
         
         if matchmaking_result['status'] == 'success':
             matches_found = matchmaking_result.get('matches_found', 0)
-            logger.info(f"✅ Matchmaking completed: {matches_found} matches found")
+            logger.info(f"Matchmaking completed: {matches_found} matches found")
             
             # If matches were found, create match confirmations
             if matches_found > 0:
-                logger.info(f"🎮 Processing {matches_found} match(es)...")
+                logger.info(f"Processing {matches_found} match(es)...")
                 matches = matchmaking_result.get('matches', [])
                 confirmations_created = 0
                 
                 for idx, match in enumerate(matches, 1):
                     try:
-                        logger.info(f"📋 Match {idx}/{len(matches)}:")
+                        logger.info(f"Match {idx}/{len(matches)}:")
                         logger.info(f"   Match data keys: {list(match.keys())}")
                         
                         # Log team info
@@ -77,7 +77,7 @@ def periodic_matchmaking(self):
                         
                         if confirmation_id:
                             confirmations_created += 1
-                            logger.info(f"   ✅ Created confirmation: {confirmation_id[:8]}...")
+                            logger.info(f"   Created confirmation: {confirmation_id[:8]}...")
                             
                             # Send match found notifications to ALL lobbies in the match
                             all_lobby_ids = match.get('lobbies', [])
@@ -87,24 +87,24 @@ def periodic_matchmaking(self):
                                 all_lobby_ids = [match['lobby1']['id'], match['lobby2']['id']]
                                 logger.info(f"   Using lobby1/lobby2 format: {all_lobby_ids}")
                             
-                            logger.info(f"   📢 Notifying {len(all_lobby_ids)} lobbies...")
+                            logger.info(f"   Notifying {len(all_lobby_ids)} lobbies...")
                             
                             # Spawn async notification tasks for each lobby (non-blocking)
                             for i, lobby_id in enumerate(all_lobby_ids, 1):
-                                logger.info(f"   📨 Spawning notification task for lobby {i}/{len(all_lobby_ids)}: {lobby_id}")
+                                logger.info(f"   Spawning notification task for lobby {i}/{len(all_lobby_ids)}: {lobby_id}")
                                 notify_match_found_task.apply_async(
                                     args=[lobby_id, confirmation_id],
                                     queue='celery'  # Use default queue for fast dispatch
                                 )
                             
-                            logger.info(f"   ✅ All notification tasks spawned for match {confirmation_id[:8]}")
+                            logger.info(f"   All notification tasks spawned for match {confirmation_id[:8]}")
                             
                     except Exception as e:
-                        logger.error(f"   ❌ Error creating match confirmation: {str(e)}")
+                        logger.error(f"   Error creating match confirmation: {str(e)}")
                         import traceback
                         logger.error(traceback.format_exc())
                 
-                logger.info(f"🎉 MATCHMAKING SUCCESS: {confirmations_created} confirmations created")
+                logger.info(f"MATCHMAKING SUCCESS: {confirmations_created} confirmations created")
                 logger.info("="*70)
                 return {
                     'status': 'success',
@@ -114,7 +114,7 @@ def periodic_matchmaking(self):
                     'confirmations_created': confirmations_created
                 }
             else:
-                logger.info(f"⚠️  No matches found this cycle")
+                logger.info("No matches found this cycle")
                 logger.info("="*70)
                 return {
                     'status': 'success',
@@ -123,7 +123,7 @@ def periodic_matchmaking(self):
                     'matches_found': 0
                 }
         else:
-            logger.error(f"❌ Matchmaking failed: {matchmaking_result.get('message')}")
+            logger.error(f"Matchmaking failed: {matchmaking_result.get('message')}")
             logger.info("="*70)
             return {
                 'status': 'error',
@@ -133,7 +133,7 @@ def periodic_matchmaking(self):
             }
             
     except Exception as e:
-        logger.error(f"❌ ERROR in periodic matchmaking: {str(e)}")
+        logger.error(f"ERROR in periodic matchmaking: {str(e)}")
         import traceback
         logger.error(traceback.format_exc())
         logger.info("="*70)
@@ -248,12 +248,12 @@ def notify_match_found_task(self, lobby_id, match_confirmation_id):
     Runs asynchronously to avoid blocking the matchmaker.
     """
     try:
-        logger.info(f"🔔 Notifying lobby {lobby_id[:8]}... about match {match_confirmation_id[:8]}...")
+        logger.info(f"Notifying lobby {lobby_id[:8]}... about match {match_confirmation_id[:8]}...")
         _notify_match_found(lobby_id, match_confirmation_id)
-        logger.info(f"✅ Successfully sent match found to lobby {lobby_id[:8]}...")
+        logger.info(f"Successfully sent match found to lobby {lobby_id[:8]}...")
         return {'status': 'success', 'lobby_id': lobby_id}
     except Exception as e:
-        logger.error(f"❌ Error sending match found notification to {lobby_id[:8]}...: {str(e)}")
+        logger.error(f"Error sending match found notification to {lobby_id[:8]}...: {str(e)}")
         import traceback
         logger.error(traceback.format_exc())
         return {'status': 'error', 'message': str(e), 'lobby_id': lobby_id}
@@ -287,7 +287,7 @@ def _notify_match_found(lobby_id, match_confirmation_id):
         
         logger.info(f"Channel layer obtained, sending to group lobby_{lobby_id}")
         
-        # Send match found notification (SYNC→ASYNC bridge)
+        # Send match found notification (SYNC -> ASYNC bridge)
         async_to_sync(channel_layer.group_send)(
             f"lobby_{lobby_id}",
             {
@@ -313,7 +313,7 @@ def _notify_match_timeout(lobby_id, reason):
     try:
         channel_layer = get_channel_layer()
         
-        # Send match timeout notification (SYNC→ASYNC bridge)
+        # Send match timeout notification (SYNC -> ASYNC bridge)
         async_to_sync(channel_layer.group_send)(
             f"lobby_{lobby_id}",
             {
@@ -349,14 +349,14 @@ def update_lobby_queue_status_task(self, lobby_id, in_queue):
             lobby.queued_at = timezone.now() if in_queue else None
             lobby.save()
             
-            logger.debug(f"✅ Updated lobby {lobby_id[:8]}... DB: in_queue={in_queue}")
+            logger.debug(f"Updated lobby {lobby_id[:8]}... DB: in_queue={in_queue}")
             return {'status': 'success', 'lobby_id': lobby_id}
         except Lobby.DoesNotExist:
-            logger.warning(f"⚠️ Lobby {lobby_id[:8]}... not found for DB update (may be deleted)")
+            logger.warning(f"Lobby {lobby_id[:8]}... not found for DB update (may be deleted)")
             return {'status': 'error', 'message': 'Lobby not found'}
             
     except Exception as e:
-        logger.error(f"❌ Error updating lobby queue status in DB: {str(e)}")
+        logger.error(f"Error updating lobby queue status in DB: {str(e)}")
         import traceback
         logger.error(traceback.format_exc())
         return {'status': 'error', 'message': str(e)}
@@ -466,7 +466,6 @@ def check_map_veto_timeouts(self):
                 if result['status'] == 'success':
                     processed += 1
                     
-                    # Broadcast timeout event to all players
                     channel_layer = get_channel_layer()
                     async_to_sync(channel_layer.group_send)(
                         f"match_{match.id}",
@@ -495,6 +494,21 @@ def check_map_veto_timeouts(self):
                             'deadline': result.get('deadline'),
                         }
                     )
+
+                    # Broadcast fresh snapshot if state changed
+                    try:
+                        updated_match_data = MatchManager.get_match_data_sync(str(match.id))
+                        if updated_match_data:
+                            async_to_sync(channel_layer.group_send)(
+                                f"match_{match.id}",
+                                {
+                                    'type': 'match_data',
+                                    'match_id': str(match.id),
+                                    'payload': updated_match_data
+                                }
+                            )
+                    except Exception as snapshot_error:
+                        logger.warning(f"Match {match.id}: Failed to broadcast updated match_data after {event_type}: {snapshot_error}")
                     
                     logger.info(f"Match {match.id}: {event_type} handled successfully")
 
