@@ -19,6 +19,7 @@ class ValorantAPI(object):
         self.pugsocket_url = "ws://localhost:8000/ws/matchmaking/"
         self.session_id = None
         self.puuid = None
+        self.latest_match_state = None
         try:
             with open(file_path, 'r') as file:
                 data = json.load(file)
@@ -164,22 +165,6 @@ class ValorantAPI(object):
                             import traceback
                             traceback.print_exc()
                     
-                    # Set up the map_veto_started callback to forward to main WebSocket
-                    async def map_veto_started_callback(data):
-                        """Forward map_veto_started event to main WebSocket connection (IMMEDIATE)"""
-                        try:
-                            print(f"[MAP_VETO_STARTED_CALLBACK] Received map_veto_started event: {data}")
-                            
-                            # Immediately broadcast to all connected frontend clients
-                            from quart import current_app
-                            await current_app.conn_mgr.broadcast('map_veto_started', data)
-                            
-                            print(f"[MAP_VETO_STARTED_CALLBACK] Immediately broadcasted map_veto_started to all clients")
-                        except Exception as e:
-                            print(f"[MAP_VETO_STARTED_CALLBACK] Error broadcasting map_veto_started: {e}")
-                            import traceback
-                            traceback.print_exc()
-                    
                     # Set up the match_data callback to forward to main WebSocket
                     async def match_data_callback(data):
                         """Forward match_data event to main WebSocket connection"""
@@ -194,148 +179,17 @@ class ValorantAPI(object):
                             print(f"[MATCH_DATA_CALLBACK] Error storing match_data: {e}")
                             import traceback
                             traceback.print_exc()
-                    
-                    # Set up the veto_complete callback to forward to main WebSocket
-                    async def veto_complete_callback(data):
-                        """Forward veto_complete event to main WebSocket connection (IMMEDIATE)"""
+
+                    # Set up the match_state_update callback to forward to main WebSocket
+                    async def match_state_update_callback(data):
+                        """Forward match_state_update snapshots to all frontend clients (IMMEDIATE)"""
                         try:
-                            print(f"[VETO_COMPLETE_CALLBACK] Received veto_complete event: {data}")
-                            
-                            # Immediately broadcast to all connected frontend clients
+                            self.latest_match_state = data
                             from quart import current_app
-                            await current_app.conn_mgr.broadcast('veto_complete', data)
-                            
-                            print(f"[VETO_COMPLETE_CALLBACK] Immediately broadcasted veto_complete to all clients")
+                            await current_app.conn_mgr.broadcast('match_state_update', data)
+                            print(f"[MATCH_STATE_UPDATE_CALLBACK] Broadcasted match_state_update for match {data.get('match_id')}")
                         except Exception as e:
-                            print(f"[VETO_COMPLETE_CALLBACK] Error broadcasting veto_complete: {e}")
-                            import traceback
-                            traceback.print_exc()
-                    
-                    # Set up the veto_acknowledged callback to forward to main WebSocket
-                    async def veto_acknowledged_callback(data):
-                        """Forward veto_acknowledged event to main WebSocket connection (IMMEDIATE)"""
-                        try:
-                            print(f"[VETO_ACKNOWLEDGED_CALLBACK] Received veto_acknowledged event: {data}")
-                            
-                            # Immediately broadcast to all connected frontend clients
-                            from quart import current_app
-                            await current_app.conn_mgr.broadcast('veto_acknowledged', data)
-                            
-                            print(f"[VETO_ACKNOWLEDGED_CALLBACK] Immediately broadcasted veto_acknowledged to all clients")
-                        except Exception as e:
-                            print(f"[VETO_ACKNOWLEDGED_CALLBACK] Error broadcasting veto_acknowledged: {e}")
-                            import traceback
-                            traceback.print_exc()
-                    
-                    # Set up the map_vetoed callback to forward to main WebSocket
-                    async def map_vetoed_callback(data):
-                        """Forward map_vetoed event to main WebSocket connection (IMMEDIATE)"""
-                        try:
-                            print(f"[MAP_VETOED_CALLBACK] Received map_vetoed event: {data}")
-                            
-                            # Immediately broadcast to all connected frontend clients
-                            from quart import current_app
-                            await current_app.conn_mgr.broadcast('map_vetoed', data)
-                            
-                            print(f"[MAP_VETOED_CALLBACK] Immediately broadcasted map_vetoed to all clients")
-                        except Exception as e:
-                            print(f"[MAP_VETOED_CALLBACK] Error broadcasting map_vetoed: {e}")
-                            import traceback
-                            traceback.print_exc()
-                    
-                    # Set up the server_veto_started callback to forward to main WebSocket
-                    async def server_veto_started_callback(data):
-                        """Forward server_veto_started event to main WebSocket connection (IMMEDIATE)"""
-                        try:
-                            print(f"[SERVER_VETO_STARTED_CALLBACK] Received server_veto_started event: {data}")
-                            
-                            # Immediately broadcast to all connected frontend clients
-                            from quart import current_app
-                            await current_app.conn_mgr.broadcast('server_veto_started', data)
-                            
-                            print(f"[SERVER_VETO_STARTED_CALLBACK] Immediately broadcasted server_veto_started to all clients")
-                        except Exception as e:
-                            print(f"[SERVER_VETO_STARTED_CALLBACK] Error broadcasting server_veto_started: {e}")
-                            import traceback
-                            traceback.print_exc()
-                    
-                    # Set up the server_veto_update callback to forward to main WebSocket
-                    async def server_veto_update_callback(data):
-                        """Forward server_veto_update event to main WebSocket connection (IMMEDIATE)"""
-                        try:
-                            print(f"[SERVER_VETO_UPDATE_CALLBACK] Received server_veto_update event: {data}")
-                            
-                            # Immediately broadcast to all connected frontend clients
-                            from quart import current_app
-                            await current_app.conn_mgr.broadcast('server_veto_update', data)
-                            
-                            print(f"[SERVER_VETO_UPDATE_CALLBACK] Immediately broadcasted server_veto_update to all clients")
-                        except Exception as e:
-                            print(f"[SERVER_VETO_UPDATE_CALLBACK] Error broadcasting server_veto_update: {e}")
-                            import traceback
-                            traceback.print_exc()
-                    
-                    # Set up the server_veto_complete callback to forward to main WebSocket
-                    async def server_veto_complete_callback(data):
-                        """Forward server_veto_complete event to main WebSocket connection (IMMEDIATE)"""
-                        try:
-                            print(f"[SERVER_VETO_COMPLETE_CALLBACK] Received server_veto_complete event: {data}")
-                            
-                            # Immediately broadcast to all connected frontend clients
-                            from quart import current_app
-                            await current_app.conn_mgr.broadcast('server_veto_complete', data)
-                            
-                            print(f"[SERVER_VETO_COMPLETE_CALLBACK] Immediately broadcasted server_veto_complete to all clients")
-                        except Exception as e:
-                            print(f"[SERVER_VETO_COMPLETE_CALLBACK] Error broadcasting server_veto_complete: {e}")
-                            import traceback
-                            traceback.print_exc()
-                    
-                    # Set up the server_veto_acknowledged callback to forward to main WebSocket
-                    async def server_veto_acknowledged_callback(data):
-                        """Forward server_veto_acknowledged event to main WebSocket connection (IMMEDIATE)"""
-                        try:
-                            print(f"[SERVER_VETO_ACKNOWLEDGED_CALLBACK] Received server_veto_acknowledged event: {data}")
-                            
-                            # Immediately broadcast to all connected frontend clients
-                            from quart import current_app
-                            await current_app.conn_mgr.broadcast('server_veto_acknowledged', data)
-                            
-                            print(f"[SERVER_VETO_ACKNOWLEDGED_CALLBACK] Immediately broadcasted server_veto_acknowledged to all clients")
-                        except Exception as e:
-                            print(f"[SERVER_VETO_ACKNOWLEDGED_CALLBACK] Error broadcasting server_veto_acknowledged: {e}")
-                            import traceback
-                            traceback.print_exc()
-                    
-                    # Set up the side_selected callback to forward to main WebSocket
-                    async def side_selected_callback(data):
-                        """Forward side_selected event to main WebSocket connection (IMMEDIATE)"""
-                        try:
-                            print(f"[SIDE_SELECTED_CALLBACK] Received side_selected event: {data}")
-                            
-                            # Immediately broadcast to all connected frontend clients
-                            from quart import current_app
-                            await current_app.conn_mgr.broadcast('side_selected', data)
-                            
-                            print(f"[SIDE_SELECTED_CALLBACK] Immediately broadcasted side_selected to all clients")
-                        except Exception as e:
-                            print(f"[SIDE_SELECTED_CALLBACK] Error broadcasting side_selected: {e}")
-                            import traceback
-                            traceback.print_exc()
-                    
-                    # Set up the side_acknowledged callback to forward to main WebSocket
-                    async def side_acknowledged_callback(data):
-                        """Forward side_acknowledged event to main WebSocket connection (IMMEDIATE)"""
-                        try:
-                            print(f"[SIDE_ACKNOWLEDGED_CALLBACK] Received side_acknowledged event: {data}")
-                            
-                            # Immediately broadcast to all connected frontend clients
-                            from quart import current_app
-                            await current_app.conn_mgr.broadcast('side_acknowledged', data)
-                            
-                            print(f"[SIDE_ACKNOWLEDGED_CALLBACK] Immediately broadcasted side_acknowledged to all clients")
-                        except Exception as e:
-                            print(f"[SIDE_ACKNOWLEDGED_CALLBACK] Error broadcasting side_acknowledged: {e}")
+                            print(f"[MATCH_STATE_UPDATE_CALLBACK] Error broadcasting match_state_update: {e}")
                             import traceback
                             traceback.print_exc()
                     
@@ -344,26 +198,15 @@ class ValorantAPI(object):
                     self.pugsocket.player_accepted_callback = player_accepted_callback
                     self.pugsocket.match_ready_callback = match_ready_callback
                     self.pugsocket.match_confirmed_callback = match_confirmed_callback
-                    self.pugsocket.map_veto_started_callback = map_veto_started_callback
                     self.pugsocket.match_data_callback = match_data_callback
-                    self.pugsocket.veto_complete_callback = veto_complete_callback
-                    self.pugsocket.veto_acknowledged_callback = veto_acknowledged_callback
-                    self.pugsocket.map_vetoed_callback = map_vetoed_callback
-                    self.pugsocket.server_veto_started_callback = server_veto_started_callback
-                    self.pugsocket.server_veto_update_callback = server_veto_update_callback
-                    self.pugsocket.server_veto_complete_callback = server_veto_complete_callback
-                    self.pugsocket.server_veto_acknowledged_callback = server_veto_acknowledged_callback
-                    self.pugsocket.side_selected_callback = side_selected_callback
-                    self.pugsocket.side_acknowledged_callback = side_acknowledged_callback
+                    self.pugsocket.match_state_update_callback = match_state_update_callback
+                    self.match_state_update_callback = match_state_update_callback
                     self._pending_match_data = None
                     self._pending_match_proposed_data = None
                     self._pending_player_accepted_data = None
                     self._pending_match_ready_data = None
                     self._pending_match_confirmed_data = None
-                    self._pending_veto_started_data = None
                     self._pending_match_data_response = None
-                    self._pending_veto_complete_data = None
-                    self._pending_veto_acknowledged_data = None
                     
                     await asyncio.sleep(1)
                     return connection_status

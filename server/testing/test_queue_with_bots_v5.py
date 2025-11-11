@@ -77,19 +77,107 @@ class BotWebSocketClient:
         self.vetoed_maps = []
         self.current_turn = None
         self.veto_deadline = None
-        self.veto_strategy = random.choice(['random', 'aggressive', 'strategic'])
-        
-        # Server veto state
-        self.available_servers = []
-        self.vetoed_servers = []
-        self.server_veto_turn = None
-        self.server_veto_deadline = None
+        self.side_selection_active = False
+        self.side_selection_pending = False
+        self.side_selection_deadline = None
         
         # Game constructor state
         self.is_constructor = False
         self.pregame_id = None
         self.game_started = False
         self.joined_custom_game = False
+        
+        # Snapshot tracking / duplicate suppression
+        self.latest_snapshot = None
+        self.latest_snapshot_version = None
+        self.last_processed_server_state = None
+        self.last_processed_map_state = None
+
+        # Server veto state
+        self.available_servers = []
+        self.vetoed_servers = []
+        self.server_veto_turn = None
+        self.server_veto_deadline = None
+        # Map veto strategy (choose once per match)
+        self.veto_strategy = random.choice(['random', 'aggressive', 'strategic'])
+ 
+        # Snapshot tracking / duplicate suppression
+        self.latest_snapshot = None
+        self.latest_snapshot_version = None
+        self.last_processed_server_state = None
+        self.last_processed_map_state = None
+        
+    async def _handle_side_selection_started(self, payload: dict):
+        """Handle side selection phase start."""
+        self.side_selection_active = True
+        self.side_selection_deadline = payload.get('deadline')
+        side_selector = payload.get('side_selector')
+
+        logger.info(f"Bot {self.bot_alias} side selection started")
+        logger.info(f"   Side selector: {side_selector}")
+        logger.info(f"   Deadline: {self.side_selection_deadline}")
+        logger.info(f"   Is captain: {self.is_captain}, My team: {self.my_team}")
+
+        if self.is_captain and side_selector == self.my_team and not self.side_selection_pending:
+            self.side_selection_pending = True
+            await self._select_match_side()
+        else:
+            self.side_selection_pending = False
+
+    async def _handle_side_selected(self, payload: dict):
+        """Handle side selected event."""
+        self.side_selection_active = False
+        self.side_selection_pending = False
+        self.side_selection_deadline = None
+
+        logger.info(f"Bot {self.bot_alias} received side selected event")
+        logger.info(f"   Side: {payload.get('side')}")
+        logger.info(f"   Selected by: {payload.get('selected_by')}")
+        logger.info(f"   Side complete: {payload.get('side_complete')}")
+
+    async def _handle_side_selection_timeout(self, payload: dict):
+        """Handle side selection timeout (server auto-selected)."""
+        self.side_selection_active = False
+        self.side_selection_pending = False
+        self.side_selection_deadline = None
+
+        logger.info(f"Bot {self.bot_alias} side selection timeout occurred")
+        logger.info(f"   Auto-selected side: {payload.get('auto_selected_side')}")
+        logger.info(f"   Match ready: {payload.get('match_ready')}")
+
+    async def _select_match_side(self):
+        """Select a side when this bot is the active captain."""
+        if not self.current_match_id:
+            logger.warning(f"Bot {self.bot_alias} cannot select side without match ID")
+            return
+
+        chosen_side = random.choice(['attack', 'defend'])
+        delay = random.uniform(1.0, 3.0)
+        logger.info(f"Bot {self.bot_alias} selecting side '{chosen_side}' after {delay:.2f}s delay")
+
+        await asyncio.sleep(delay)
+
+        await self._send_message('select_side', {
+            'match_id': self.current_match_id,
+            'side': chosen_side
+        })
+        self.side_selection_pending = False
+        self.veto_strategy = random.choice(['random', 'aggressive', 'strategic'])
+        
+        # Game constructor state
+        self.is_constructor = False
+        self.pregame_id = None
+        self.game_started = False
+        self.joined_custom_game = False
+        self.side_selection_active = False
+        self.side_selection_pending = False
+        self.side_selection_deadline = None
+ 
+        # Snapshot tracking / duplicate suppression
+        self.latest_snapshot = None
+        self.latest_snapshot_version = None
+        self.last_processed_server_state = None
+        self.last_processed_map_state = None
         
     async def connect(self):
         """Connect to the Django WebSocket consumer"""
@@ -160,56 +248,10 @@ class BotWebSocketClient:
             self.match_confirmed = True
             self.current_match_id = payload.get('match_id')
             logger.info(f" Bot {self.bot_alias} match confirmed! Match ID: {self.current_match_id[:8] if self.current_match_id else 'Unknown'}")
-            
-            # FIX: Don't request match_data here - server now broadcasts it automatically
-            # The server will send match_data event immediately after match_confirmed
-            logger.info(f" Bot {self.bot_alias} waiting for automatic match_data broadcast...")
-        
-        elif event == 'match_data':
-            # Handle match data (veto phase initialization)
-            logger.info(f"[FIX] Bot {self.bot_alias} received match_data event from server broadcast!")
-            await self._handle_match_data(payload)
+            logger.info(f" Bot {self.bot_alias} waiting for automatic match_state_update broadcast...")
 
-        elif event == 'veto_update':
-            logger.info(f"veto update: {payload}")
-            # Handle veto updates (map vetoed, turn changes)
-            await self._handle_veto_update(payload)
-        
-        elif event == 'map_veto_timeout':
-            # Handle veto timeout (auto-veto occurred)
-            await self._handle_veto_timeout(payload)
-        
-        elif event == 'map_vetoed':
-            # Handle map vetoed event
-            await self._handle_map_vetoed(payload)
-        
-        elif event == 'map_veto_started':
-            # Handle map veto phase started
-            await self._handle_map_veto_started(payload)
-        
-        elif event == 'server_veto_started':
-            # Handle server veto phase started
-            await self._handle_server_veto_started(payload)
-        
-        elif event == 'server_veto_update':
-            # Handle server veto updates
-            await self._handle_server_veto_update(payload)
-        
-        elif event == 'server_vetoed':
-            # Handle server vetoed event
-            await self._handle_server_vetoed(payload)
-        
-        elif event == 'server_veto_complete':
-            # Handle server veto phase completion
-            await self._handle_server_veto_complete(payload)
-        
-        elif event == 'server_veto_timeout':
-            # Handle server veto timeout
-            await self._handle_server_veto_timeout(payload)
-        
-        elif event == 'veto_complete':
-            # Handle veto phase completion
-            await self._handle_veto_complete(payload)
+        elif event == 'match_state_update':
+            await self._handle_match_state_update(payload)
         
         elif event == 'match_starting':
             # Handle match starting (constructor assignment)
@@ -245,6 +287,154 @@ class BotWebSocketClient:
         else:
             # Log unhandled events for debugging
             logger.debug(f"Bot {self.bot_alias} unhandled event '{event}': {payload}")
+ 
+    async def _handle_match_state_update(self, snapshot: dict):
+        """Consume unified match state snapshots from the server."""
+        self.latest_snapshot = snapshot
+
+        state = snapshot.get('state')
+        match_id = snapshot.get('match_id')
+        last_event = snapshot.get('last_event')
+        draft = snapshot.get('draft', {})
+
+        meta = snapshot.get('meta') or {}
+        version = meta.get('version') or meta.get('timestamp')
+        if version is None:
+            version = json.dumps({
+                'state': state,
+                'last_event': last_event,
+                'servers': draft.get('servers'),
+                'maps': draft.get('maps'),
+                'side': draft.get('side'),
+            }, sort_keys=True)
+
+        if version == self.latest_snapshot_version:
+            logger.debug(f" Bot {self.bot_alias} ignoring duplicate snapshot (version={version})")
+            return
+
+        self.latest_snapshot_version = version
+
+        logger.info(f" Bot {self.bot_alias} processing match_state_update: state={state}, last_event={last_event}, version={version}")
+
+        if match_id:
+            self.current_match_id = match_id
+
+        team_a_players = snapshot.get('team_a_players', [])
+        team_b_players = snapshot.get('team_b_players', [])
+        self._update_team_and_captain(team_a_players, team_b_players)
+
+        if state == 'SERVER_VETO':
+            await self._sync_server_veto(draft.get('servers', {}), last_event)
+        elif state == 'MAP_VETO':
+            await self._sync_map_veto(draft.get('maps', {}), last_event)
+        elif state == 'SIDE_SELECTION':
+            await self._sync_side_selection(draft.get('side', {}), last_event)
+        elif state in ('CREATING', 'READY', 'IN_PROGRESS'):
+            await self._sync_post_match(snapshot)
+
+    def _update_team_and_captain(self, team_a_players: list, team_b_players: list):
+        """Derive this bot's team/captain status from the snapshot."""
+        self.is_captain = False
+        self.my_team = None
+
+        for player in team_a_players:
+            if player.get('puuid') == self.bot_puuid:
+                self.my_team = 'team_a'
+                self.is_captain = player.get('is_captain', False)
+                return
+
+        for player in team_b_players:
+            if player.get('puuid') == self.bot_puuid:
+                self.my_team = 'team_b'
+                self.is_captain = player.get('is_captain', False)
+                return
+
+    async def _sync_server_veto(self, servers_info: dict, last_event: str):
+        self.server_veto_turn = servers_info.get('turn')
+        self.available_servers = servers_info.get('remaining') or servers_info.get('pool') or []
+        self.vetoed_servers = servers_info.get('vetoed', [])
+        self.server_veto_deadline = servers_info.get('deadline')
+        history = servers_info.get('history', [])
+
+        logger.info(
+            f" Bot {self.bot_alias} server veto snapshot: turn={self.server_veto_turn}, "
+            f"available={self.available_servers}, vetoed={self.vetoed_servers}"
+        )
+
+        if history:
+            logger.info(f"   Server veto history (latest): {history[-1]}")
+
+        state_key = (self.server_veto_turn, tuple(self.vetoed_servers))
+        if self.is_captain and self.my_team and self.server_veto_turn == self.my_team:
+            if self.last_processed_server_state != state_key:
+                self.last_processed_server_state = state_key
+                await self._handle_server_veto_action()
+        else:
+            self.last_processed_server_state = state_key
+
+    async def _sync_map_veto(self, maps_info: dict, last_event: str):
+        self.current_turn = maps_info.get('turn')
+        self.available_maps = (
+            maps_info.get('remaining')
+            or maps_info.get('pool')
+            or []
+        )
+        self.vetoed_maps = maps_info.get('vetoed', [])
+        self.veto_deadline = maps_info.get('deadline')
+        history = maps_info.get('history', [])
+
+        logger.info(
+            f" Bot {self.bot_alias} map veto snapshot: turn={self.current_turn}, "
+            f"available={self.available_maps}, vetoed={self.vetoed_maps}"
+        )
+
+        if history:
+            logger.info(f"   Map veto history (latest): {history[-1]}")
+
+        state_key = (self.current_turn, tuple(self.vetoed_maps))
+        if self.is_captain and self.my_team and self.current_turn == self.my_team:
+            if self.last_processed_map_state != state_key:
+                self.last_processed_map_state = state_key
+                await self._make_map_veto_decision()
+        else:
+            self.last_processed_map_state = state_key
+
+    async def _sync_side_selection(self, side_info: dict, last_event: str):
+        selector = side_info.get('selector')
+        selected = side_info.get('selected')
+        deadline = side_info.get('deadline')
+        auto_side = side_info.get('auto_selected_side')
+
+        self.side_selection_deadline = deadline
+        self.side_selection_active = selected is None
+
+        if auto_side:
+            logger.info(f" Bot {self.bot_alias} noticed auto-selected side: {auto_side}")
+
+        if selected:
+            logger.info(f" Bot {self.bot_alias} side already selected: {selected}")
+            self.side_selection_active = False
+            self.side_selection_pending = False
+            return
+
+        if self.is_captain and selector == self.my_team and self.side_selection_active and not self.side_selection_pending:
+            self.side_selection_pending = True
+            await self._select_match_side()
+
+    async def _sync_post_match(self, snapshot: dict):
+        state = snapshot.get('state')
+        constructor = snapshot.get('constructor_puuid')
+        pregame_id = snapshot.get('pregame_id')
+
+        if constructor == self.bot_puuid:
+            self.is_constructor = True
+            self.pregame_id = pregame_id
+            logger.info(f" Bot {self.bot_alias} is constructor in state {state}, pregame_id={pregame_id}")
+        else:
+            self.is_constructor = False
+
+        if state == 'READY':
+            logger.info(f" Bot {self.bot_alias} match ready. Awaiting join instructions...")
     
     async def _send_message(self, event: str, payload: dict):
         """Send a message to the WebSocket"""
@@ -330,173 +520,46 @@ class BotWebSocketClient:
     
     async def _handle_match_data(self, payload: dict):
         """Handle match data (veto phase initialization)"""
-        logger.info(f" Bot {self.bot_alias} received match data")
-        
-        # FIX: The server should have already added us to the match group
-        # when it sent the match_data event
-        logger.info(f"Payload: {payload}")
-        # DEBUG: Log PUUID information
-        logger.info(f"[DEBUG] Bot {self.bot_alias} PUUID investigation:")
-        logger.info(f"   Bot's self.bot_puuid: '{self.bot_puuid}' (type: {type(self.bot_puuid)})")
-        
-        # Initialize veto state from match data
-        if payload.get('state') == 'SERVER_VETO':
-            # Server veto phase
-            self.available_servers = payload.get('server_pool', [])
-            self.vetoed_servers = payload.get('vetoed_servers', [])
-            self.server_veto_turn = payload.get('server_veto_turn')
-            self.server_veto_deadline = payload.get('server_veto_deadline')
-            
-            # Determine if this bot is captain (same logic as map veto)
-            team_a_players = payload.get('team_a_players', [])
-            team_b_players = payload.get('team_b_players', [])
-            
-            # DEBUG: Log team player PUUIDs
-            logger.info(f"   Team A players ({len(team_a_players)}):")
-            for i, player in enumerate(team_a_players):
-                puuid = player.get('puuid')
-                is_captain = player.get('is_captain')
-                alias = player.get('alias', 'Unknown')
-                logger.info(f"     [{i}] PUUID: '{puuid}' (type: {type(puuid)}), Captain: {is_captain}, Alias: {alias}")
-                logger.info(f"         Match check: '{puuid}' == '{self.bot_puuid}' = {puuid == self.bot_puuid}")
-            
-            logger.info(f"   Team B players ({len(team_b_players)}):")
-            for i, player in enumerate(team_b_players):
-                puuid = player.get('puuid')
-                is_captain = player.get('is_captain')
-                alias = player.get('alias', 'Unknown')
-                logger.info(f"     [{i}] PUUID: '{puuid}' (type: {type(puuid)}), Captain: {is_captain}, Alias: {alias}")
-                logger.info(f"         Match check: '{puuid}' == '{self.bot_puuid}' = {puuid == self.bot_puuid}")
+        logger.info(f" Bot {self.bot_alias} received match data (legacy event)")
 
-            
-            # Check team A
-            for player in team_a_players:
-                if player.get('puuid') == self.bot_puuid:
-                    self.my_team = 'team_a'
-                    if player.get('is_captain'):
-                        self.is_captain = True
-                    break
-            
-            # Check team B if not found in team A
-            if self.my_team is None:
-                for player in team_b_players:
-                    if player.get('puuid') == self.bot_puuid:
-                        self.my_team = 'team_b'
-                        if player.get('is_captain'):
-                            self.is_captain = True
-                        break
-            
-            logger.info(f" Bot {self.bot_alias} server veto state initialized:")
-            logger.info(f"   Is captain: {self.is_captain}")
-            logger.info(f"   My team: {self.my_team}")
-            logger.info(f"   Current turn: {self.server_veto_turn}")
-            logger.info(f"   Available servers: {self.available_servers}")
-            logger.info(f"   Vetoed servers: {self.vetoed_servers}")
-            
-            # Auto-veto if it's our turn and we're captain
-            if self.is_captain and self.server_veto_turn == self.my_team:
-                await self._handle_server_veto_action()
-                
-        elif payload.get('state') == 'VETO':
-            # Map veto phase
-            logger.info(f"MAP VETO ONGOING")
-            self.available_maps = payload.get('remaining_maps', [])
-            self.vetoed_maps = payload.get('vetoed_maps', [])
-            self.current_turn = payload.get('veto_turn')
-            self.veto_deadline = payload.get('veto_deadline')
-            
-            # Determine if this bot is captain
-            team_a_players = payload.get('team_a_players', [])
-            team_b_players = payload.get('team_b_players', [])
-            
-            # DEBUG: Log team player PUUIDs for map veto
-            logger.info(f"[DEBUG] Bot {self.bot_alias} MAP VETO PUUID investigation:")
-            logger.info(f"   Bot's self.bot_puuid: '{self.bot_puuid}' (type: {type(self.bot_puuid)})")
-            logger.info(f"   Team A players ({len(team_a_players)}):")
-            for i, player in enumerate(team_a_players):
-                puuid = player.get('puuid')
-                is_captain = player.get('is_captain')
-                alias = player.get('alias', 'Unknown')
-                logger.info(f"     [{i}] PUUID: '{puuid}' (type: {type(puuid)}), Captain: {is_captain}, Alias: {alias}")
-                logger.info(f"         Match check: '{puuid}' == '{self.bot_puuid}' = {puuid == self.bot_puuid}")
-            
-            logger.info(f"   Team B players ({len(team_b_players)}):")
-            for i, player in enumerate(team_b_players):
-                puuid = player.get('puuid')
-                is_captain = player.get('is_captain')
-                alias = player.get('alias', 'Unknown')
-                logger.info(f"     [{i}] PUUID: '{puuid}' (type: {type(puuid)}), Captain: {is_captain}, Alias: {alias}")
-                logger.info(f"         Match check: '{puuid}' == '{self.bot_puuid}' = {puuid == self.bot_puuid}")
-            
-            
-            # Check team A
-            for player in team_a_players:
-                if player.get('puuid') == self.bot_puuid:
-                    self.my_team = 'team_a'
-                    x = player.get('puuid')
-                    y = player.get('is_captain')
-                    logger.info(f" Bot {self.bot_alias} puuid grabbed : {x} ")
-                    logger.info(f" Bot {self.bot_alias} is assigned captain? {y} ")
-                    if player.get('is_captain'):
-                        self.is_captain = True
-                    break
-            
-            # Check team B if not found in team A
-            if self.my_team is None:
-                for player in team_b_players:
-                    if player.get('puuid') == self.bot_puuid:
-                        self.my_team = 'team_b'
-                        x = player.get('puuid')
-                        y = player.get('is_captain')
-                        logger.info(f" Bot {self.bot_alias} puuid grabbed : {x} ")
-                        logger.info(f" Bot {self.bot_alias} is assigned captain? {y} ")
-                        if player.get('is_captain'):
-                            self.is_captain = True
-                        break
-            
-            logger.info(f" Bot {self.bot_alias} veto state initialized:")
-            logger.info(f"   Is captain: {self.is_captain}")
-            logger.info(f"   My team: {self.my_team}")
-            logger.info(f"   Current turn: {self.current_turn}")
-            logger.info(f"   Available maps: {self.available_maps}")
-            logger.info(f"   Veto strategy: {self.veto_strategy}")
-            
-            # If it's my turn and I'm captain, make a veto decision
-            if self.is_captain and self.current_turn == self.my_team:
-                await self._make_map_veto_decision()
+        snapshot = {
+            'state': payload.get('state'),
+            'match_id': payload.get('match_id') or self.current_match_id,
+            'team_a_players': payload.get('team_a_players', []),
+            'team_b_players': payload.get('team_b_players', []),
+            'draft': {
+                'servers': {
+                    'turn': payload.get('server_veto_turn'),
+                    'remaining': payload.get('server_pool'),
+                    'vetoed': payload.get('vetoed_servers'),
+                    'deadline': payload.get('server_veto_deadline'),
+                },
+                'maps': {
+                    'turn': payload.get('veto_turn'),
+                    'remaining': payload.get('remaining_maps') or payload.get('map_pool'),
+                    'vetoed': payload.get('vetoed_maps'),
+                    'deadline': payload.get('veto_deadline'),
+                    'history': payload.get('veto_history'),
+                },
+                'side': {
+                    'selector': payload.get('side_selector'),
+                    'selected': payload.get('selected_side'),
+                    'deadline': payload.get('side_selection_deadline'),
+                    'auto_selected_side': payload.get('auto_selected_side'),
+                }
+            },
+            'meta': {
+                'version': json.dumps({
+                    'state': payload.get('state'),
+                    'servers': payload.get('vetoed_servers'),
+                    'maps': payload.get('vetoed_maps'),
+                    'side': payload.get('selected_side')
+                }, sort_keys=True)
+            },
+            'last_event': payload.get('last_event')
+        }
 
-        elif payload.get('state') == 'CONFIRMED':
-            logger.info(f"MATCH STATE CONFIRMED")
-            self.available_maps = payload.get('remaining_maps', [])
-            self.vetoed_maps = payload.get('vetoed_maps', [])
-            self.current_turn = payload.get('veto_turn')
-            self.veto_deadline = payload.get('veto_deadline')
-            
-            # Determine if this bot is captain
-            team_a_players = payload.get('team_a_players', [])
-            team_b_players = payload.get('team_b_players', [])
-            for player in team_a_players:
-                if player.get('puuid') == self.bot_puuid:
-                    self.my_team = 'team_a'
-                    x = player.get('puuid')
-                    y = player.get('is_captain')
-                    logger.info(f" Bot {self.bot_alias} puuid grabbed : {x} ")
-                    logger.info(f" Bot {self.bot_alias} is assigned captain? {y} ")
-                    if player.get('is_captain'):
-                        self.is_captain = True
-                    break
-            if self.my_team is None:
-                for player in team_b_players:
-                    if player.get('puuid') == self.bot_puuid:
-                        self.my_team = 'team_b'
-                        x = player.get('puuid')
-                        y = player.get('is_captain')
-                        logger.info(f" Bot {self.bot_alias} puuid grabbed : {x} ")
-                        logger.info(f" Bot {self.bot_alias} is assigned captain? {y} ")
-                        if player.get('is_captain'):
-                            self.is_captain = True
-                        break
-           
+        await self._handle_match_state_update(snapshot)
     
     async def _handle_veto_timeout(self, payload: dict):
         """Handle veto timeout (auto-veto occurred)"""
@@ -865,6 +928,9 @@ class BotWebSocketClient:
         """Handle match starting event (constructor assignment)"""
         self.is_constructor = payload.get('is_constructor', False)
         self.current_match_id = payload.get('match_id')
+        self.side_selection_active = False
+        self.side_selection_pending = False
+        self.side_selection_deadline = None
         
         if self.is_constructor:
             logger.info(f"Bot {self.bot_alias} is CONSTRUCTOR for match {self.current_match_id[:8] if self.current_match_id else 'Unknown'}")
@@ -950,6 +1016,9 @@ class BotWebSocketClient:
         self.game_started = False
         self.joined_custom_game = False
         self.current_match_id = None
+        self.side_selection_active = False
+        self.side_selection_pending = False
+        self.side_selection_deadline = None
     
     async def _handle_joined_custom_game(self, payload: dict):
         """Handle successful join confirmation"""
@@ -993,6 +1062,12 @@ async def create_bot_with_websocket(bot_num: int, base_elo: int, base_mmr: int, 
         bot_elo = base_elo + random.randint(-50, 50)
         bot_mmr = base_mmr + random.randint(-50, 50)
         bot_mu = mmr_to_trueskill_mu(bot_mmr)
+        games_played = random.randint(120, 400)
+        wins = random.randint(int(games_played * 0.45), int(games_played * 0.65))
+        losses = max(games_played - wins, 0)
+        frags = random.randint(15, 24) * games_played
+        deaths = max(int(frags / random.uniform(1.2, 1.6)), 1)
+        assists = random.randint(4, 10) * games_played
         
         bot, created = Player.objects.get_or_create(
             puuid=bot_puuid,
@@ -1005,7 +1080,13 @@ async def create_bot_with_websocket(bot_num: int, base_elo: int, base_mmr: int, 
                 'trueskill_mu': bot_mu,
                 'trueskill_sigma': 9.0,
                 'rank': 'S',
-                'team': 'none'
+                'team': 'none',
+                'games_played': games_played,
+                'wins': wins,
+                'loss': losses,
+                'frags': frags,
+                'deaths': deaths,
+                'assists': assists,
             }
         )
         
@@ -1015,6 +1096,12 @@ async def create_bot_with_websocket(bot_num: int, base_elo: int, base_mmr: int, 
             bot.mmr = bot_mmr
             bot.trueskill_mu = bot_mu
             bot.trueskill_sigma = 9.0
+            bot.games_played = games_played
+            bot.wins = wins
+            bot.loss = losses
+            bot.frags = frags
+            bot.deaths = deaths
+            bot.assists = assists
             bot.save()
         
         return bot

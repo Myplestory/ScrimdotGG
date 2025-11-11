@@ -36,12 +36,15 @@ import PostMatchSetup from '../components/PostMatchSetup';
 
 // Compact Player Card Component
 const PlayerCard = ({ player, isCurrentUser, theme, colors, isLeftTeam = false }) => {
-  // Mock recent games data (simplified)
-  const recentGames = {
-    totalMatches: Math.floor(Math.random() * 500) + 100, // 100-600 total matches
-    winRate: Math.floor(Math.random() * 30) + 40, // 40-70% win rate
-    avgKD: (Math.random() * 1.5 + 0.5).toFixed(2), // 0.5-2.0 K/D
-  };
+  const stats = player?.stats || {};
+  const totalMatches = stats.total_matches ?? stats.totalMatches ?? 0;
+  const winRate = stats.win_rate ?? stats.winRate ?? 0;
+  const averageKDRaw = stats.average_kd ?? stats.avgKD ?? 0;
+  const averageKD = Number.isFinite(averageKDRaw) ? Number(averageKDRaw) : 0;
+
+  const statsLabel = totalMatches
+    ? `${totalMatches} matches • ${winRate}% WR • ${averageKD.toFixed(2)} K/D`
+    : 'No match history';
 
   const cardContent = (
     <>
@@ -107,7 +110,7 @@ const PlayerCard = ({ player, isCurrentUser, theme, colors, isLeftTeam = false }
             </Box>
             
             <Typography variant="caption" sx={{ color: colors.grey[300], display: 'block', textAlign: 'left' }}>
-              {recentGames.totalMatches} matches • {recentGames.winRate}% WR • {recentGames.avgKD} K/D
+              {statsLabel}
             </Typography>
           </Box>
           
@@ -183,7 +186,7 @@ const PlayerCard = ({ player, isCurrentUser, theme, colors, isLeftTeam = false }
             </Box>
             
             <Typography variant="caption" sx={{ color: colors.grey[300], display: 'block' }}>
-              {recentGames.totalMatches} matches • {recentGames.winRate}% WR • {recentGames.avgKD} K/D
+              {statsLabel}
             </Typography>
           </Box>
           
@@ -266,7 +269,7 @@ const ServerVetoSection = ({ servers, vetoedServers, currentTurn, timeLeft, onSe
         <Typography variant="body2" sx={{ color: colors.grey[300], mb: 1, fontSize: '0.8rem' }}>
           is banning a server
         </Typography>
-        {timeLeft && (
+        {timeLeft !== null && (
           <Box sx={{ 
             display: 'inline-flex', 
             alignItems: 'center', 
@@ -379,7 +382,7 @@ const MapVetoSection = ({ maps, vetoedMaps, currentTurn, timeLeft, onMapVeto, th
         <Typography variant="body2" sx={{ color: colors.grey[300], mb: 1, fontSize: '0.8rem' }}>
           is banning a map
         </Typography>
-        {timeLeft && (
+        {timeLeft !== null && (
           <Box sx={{ 
             display: 'inline-flex', 
             alignItems: 'center', 
@@ -466,12 +469,11 @@ const MapVetoSection = ({ maps, vetoedMaps, currentTurn, timeLeft, onMapVeto, th
 export default function MatchPage() {
   const { matchId } = useParams();
   const navigate = useNavigate();
-  const { connected, sendEvent, on, playerData } = useContext(WebSocketContext);
+  const { connected, sendEvent, playerData, matchData } = useContext(WebSocketContext);
   const [theme, colorMode] = useMode();
   const colors = tokens(theme.palette.mode);
   
   // Match state
-  const [matchData, setMatchData] = useState(null); // Real data from backend
   const [loading, setLoading] = useState(true); // Start with loading true
   const [error, setError] = useState(null);
   
@@ -510,8 +512,8 @@ export default function MatchPage() {
     }
   }, [matchId, connected, sendEvent]);
 
-
-  const [timeLeft, setTimeLeft] = useState(null);
+  const [serverTimeLeft, setServerTimeLeft] = useState(null);
+  const [mapTimeLeft, setMapTimeLeft] = useState(null);
   
   // Player info
   const [myTeam, setMyTeam] = useState(null);
@@ -571,522 +573,30 @@ export default function MatchPage() {
   const getMatchOdds = () => {
     if (!matchData) return { teamA: 50, teamB: 50 };
     
-    // Calculate odds based on MMR difference
-    const mmrDiff = matchData.team_a_avg_mmr - matchData.team_b_avg_mmr;
-    const oddsA = 50 + (mmrDiff / 100); // Simple calculation
+    const avgEloA = matchData.meta?.team_a_avg_elo ?? matchData.team_a_avg_elo ?? 0;
+    const avgEloB = matchData.meta?.team_b_avg_elo ?? matchData.team_b_avg_elo ?? 0;
+
+    if (!avgEloA && !avgEloB) {
+      return { teamA: 50, teamB: 50 };
+    }
+
+    const ratingDiff = avgEloA - avgEloB;
+    const oddsA = 50 + (ratingDiff / 50); // Simple sensitivity curve
     const oddsB = 100 - oddsA;
     
     return {
       teamA: Math.max(10, Math.min(90, oddsA)),
-      teamB: Math.max(10, Math.min(90, oddsB))
+      teamB: Math.max(10, Math.min(90, oddsB)),
     };
   };
   
-  // Fetch match data on load
-  useEffect(() => {
-    if (!connected || !matchId) return;
-    
-    console.log('[MATCH PAGE] Fetching match data for:', matchId);
-    sendEvent('get_match_data', { match_id: matchId });
-  }, [connected, matchId, sendEvent]);
-  
   // WebSocket event handlers
-  useEffect(() => {
-    const unsubscribeMatchData = on('match_data', (payload) => {
-      console.log('📥 [MATCH PAGE] Received match data:', payload);
-      setMatchData(payload);
-      setError(null);
-      
-      // Initialize server veto state from real data
-      if (payload.state === 'SERVER_VETO') {
-        console.log('🎮 [MATCH PAGE] SERVER VETO PHASE DETECTED - Initializing server veto component');
-        console.log('   Server veto turn:', payload.server_veto_turn);
-        console.log('   Available servers:', payload.server_pool);
-        console.log('   Vetoed servers:', payload.vetoed_servers);
-        console.log('   Server veto deadline:', payload.server_veto_deadline);
-        
-        setServerVetoPhase(true);
-        setServerVetoTurn(payload.server_veto_turn);
-        setAvailableServers(payload.server_pool || []);
-        setVetoedServers(payload.vetoed_servers || []);
-        setServerVetoDeadline(payload.server_veto_deadline);
-        // Clear map veto state since we're in server veto phase
-        setVetoPhase(false);
-        setVetoDeadline(null);
-        // Stop loading when server veto component is mounted
-        setLoading(false);
-      } else if (payload.state === 'VETO') {
-        console.log('🎮 [MATCH PAGE] MAP VETO PHASE DETECTED - Initializing map veto component');
-        console.log('   Veto turn:', payload.veto_turn);
-        console.log('   Remaining maps:', payload.remaining_maps);
-        console.log('   Vetoed maps:', payload.vetoed_maps);
-        console.log('   Veto deadline:', payload.veto_deadline);
-        
-        setVetoPhase(true);
-        setCurrentTurn(payload.veto_turn);
-        setAvailableMaps(payload.remaining_maps || []);
-        setVetoedMaps(payload.vetoed_maps || []);
-        setVetoHistory(payload.veto_history || []);
-        setVetoDeadline(payload.veto_deadline);
-        // Clear server veto state since we're in map veto phase
-        setServerVetoPhase(false);
-        setServerVetoDeadline(null);
-        // Stop loading when map veto component is mounted
-        setLoading(false);
-      } else if (payload.state === 'SIDE_SELECTION') {
-        console.log('🎮 [MATCH PAGE] SIDE SELECTION PHASE DETECTED - Initializing side selection component');
-        console.log('   Final map:', payload.final_map);
-        console.log('   Side selector:', payload.side_selector);
-        console.log('   Deadline:', payload.side_selection_deadline);
-        
-        setSideSelectionPhase(true);
-        setSideSelector(payload.side_selector);
-        setSelectedSide(payload.selected_side);
-        const selectionDeadline = payload.side_selection_deadline || null;
-        setSideSelectionDeadline(selectionDeadline);
-        setSideTimeLeft(selectionDeadline ? null : 30);
-        // Stop loading when side selection component is mounted
-        setLoading(false);
-      } else {
-        console.log('🎮 [MATCH PAGE] Match state:', payload.state, '- Veto component not initialized, keeping loading state');
-        // Keep loading state until a veto component is mounted
-      }
-    });
-
-
-    const unsubscribeVetoComplete = on('veto_complete', (payload) => {
-      console.log('📥 [MATCH PAGE] Map veto phase completed:', payload);
-      setVetoPhase(false);
-      setVetoDeadline(null); // Clear map veto deadline
-      setSideSelectionPhase(true);
-      setSideSelector(payload.side_selector);
-      const selectionDeadline = payload.side_selection_deadline || null;
-      setSideSelectionDeadline(selectionDeadline);
-      setSideTimeLeft(selectionDeadline ? null : 30);
-      // Stop loading when side selection component is mounted
-      setLoading(false);
-      setMatchData(prev => ({
-        ...prev,
-        state: 'SIDE_SELECTION',
-        final_map: payload.final_map,
-        side_selector: payload.side_selector,
-        side_selection_deadline: selectionDeadline
-      }));
-      
-      console.log('🎮 [MATCH PAGE] Transitioning to side selection phase:', {
-        finalMap: payload.final_map,
-        sideSelector: payload.side_selector
-      });
-    });
-
-    const unsubscribeMapVetoTimeout = on('map_veto_timeout', (payload) => {
-      console.log('📥 [MATCH PAGE] Map veto timeout occurred:', payload);
-      
-      const autoVetoedMap = payload.auto_vetoed_map;
-      const isComplete = payload.veto_complete;
-      
-      if (isComplete) {
-        // Veto phase completed due to timeout
-        console.log('🎮 [MATCH PAGE] Map veto completed via timeout, final map:', payload.final_map);
-        setVetoPhase(false);
-        setVetoDeadline(null); // Clear map veto deadline
-        setSideSelectionPhase(true);
-        setSideSelector(payload.side_selector);
-        const selectionDeadline = payload.side_selection_deadline || null;
-        setSideSelectionDeadline(selectionDeadline);
-        setSideTimeLeft(selectionDeadline ? null : 30);
-        // Stop loading when side selection component is mounted
-        setLoading(false);
-        setMatchData(prev => ({
-          ...prev,
-          state: 'SIDE_SELECTION',
-          final_map: payload.final_map,
-          side_selector: payload.side_selector,
-          side_selection_deadline: selectionDeadline
-        }));
-      } else {
-        // Auto-veto occurred, update state
-        console.log('🎮 [MATCH PAGE] Auto-vetoed map due to timeout:', autoVetoedMap);
-        
-        const newVetoedMaps = [...(vetoedMaps || [])];
-        if (autoVetoedMap && !newVetoedMaps.includes(autoVetoedMap)) {
-          newVetoedMaps.push(autoVetoedMap);
-        }
-        
-        setAvailableMaps(payload.remaining_maps || []);
-        setVetoedMaps(newVetoedMaps);
-        setCurrentTurn(payload.next_turn);
-        setVetoDeadline(payload.deadline);
-        
-        setMatchData(prev => ({
-          ...prev,
-          map_pool: payload.remaining_maps,
-          vetoed_maps: newVetoedMaps,
-          veto_turn: payload.next_turn,
-          veto_deadline: payload.deadline
-        }));
-        
-        console.log('✅ [MATCH PAGE] Map veto state updated after timeout:', {
-          autoVetoedMap,
-          currentTurn: payload.next_turn,
-          availableMaps: payload.remaining_maps,
-          vetoedMaps: newVetoedMaps
-        });
-      }
-    });
-
-    // Server veto event handlers
-    const unsubscribeServerVetoStarted = on('server_veto_started', (payload) => {
-      console.log('📥 [MATCH PAGE] Server veto phase started:', payload);
-      
-      // Initialize server veto state
-      setServerVetoPhase(true);
-      setServerVetoTurn(payload.current_turn);
-      setAvailableServers(payload.available_servers || []);
-      setVetoedServers([]);
-      setServerVetoDeadline(payload.deadline);
-      // Clear map veto state
-      setVetoPhase(false);
-      setVetoDeadline(null);
-      // Stop loading when server veto component is mounted
-      setLoading(false);
-      
-      // Update match data
-      setMatchData(prev => ({
-        ...prev,
-        state: 'SERVER_VETO',
-        server_pool: payload.available_servers,
-        server_veto_turn: payload.current_turn,
-        server_veto_deadline: payload.deadline
-      }));
-      
-      console.log('🎮 [MATCH PAGE] Server veto phase initialized:', {
-        currentTurn: payload.current_turn,
-        availableServers: payload.available_servers,
-        myTeam,
-        isCaptain,
-        isMyTurn: payload.current_turn === myTeam && isCaptain
-      });
-    });
-
-    const unsubscribeServerVetoUpdate = on('server_veto_update', (payload) => {
-      console.log('📥 [MATCH PAGE] Server veto update received:', payload);
-      
-      // Update vetoed servers list - add the newly vetoed server
-      const newVetoedServers = [...(vetoedServers || [])];
-      if (payload.server_name && !newVetoedServers.includes(payload.server_name)) {
-        newVetoedServers.push(payload.server_name);
-      }
-      
-      // Update server veto state
-      setAvailableServers(payload.remaining_servers || []);
-      setVetoedServers(newVetoedServers);
-      setServerVetoTurn(payload.next_turn || payload.server_veto_turn);
-      setServerVetoDeadline(payload.deadline || payload.server_veto_deadline);
-      
-      // Update match data
-      setMatchData(prev => ({
-        ...prev,
-        server_pool: payload.remaining_servers,
-        vetoed_servers: newVetoedServers,
-        server_veto_turn: payload.next_turn || payload.server_veto_turn,
-        server_veto_deadline: payload.deadline || payload.server_veto_deadline
-      }));
-      
-      console.log('✅ [MATCH PAGE] Server veto state updated:', {
-        currentTurn: payload.next_turn || payload.server_veto_turn,
-        availableServers: payload.remaining_servers,
-        vetoedServers: newVetoedServers,
-        myTeam,
-        isCaptain,
-        isMyTurn: (payload.next_turn || payload.server_veto_turn) === myTeam && isCaptain
-      });
-    });
-
-    // Handle server_vetoed events (sent by server)
-    const unsubscribeServerVetoed = on('server_vetoed', (payload) => {
-      console.log('📥 [MATCH PAGE] Server vetoed event received:', payload);
-      
-      // Update vetoed servers list - add the newly vetoed server
-      const vetoedServer = payload.server_name;
-      setVetoedServers(prev => {
-        const newVetoedServers = [...prev];
-        if (vetoedServer && !newVetoedServers.includes(vetoedServer)) {
-          newVetoedServers.push(vetoedServer);
-        }
-        return newVetoedServers;
-      });
-      
-      // Update server veto state
-      setAvailableServers(payload.remaining_servers || []);
-      setServerVetoTurn(payload.next_turn);
-      setServerVetoDeadline(payload.deadline);
-      
-      // Update match data
-      setMatchData(prev => ({
-        ...prev,
-        server_pool: payload.remaining_servers,
-        vetoed_servers: [...(prev.vetoed_servers || []), ...(vetoedServer && !prev.vetoed_servers?.includes(vetoedServer) ? [vetoedServer] : [])],
-        server_veto_turn: payload.next_turn,
-        server_veto_deadline: payload.deadline
-      }));
-      
-      console.log('✅ [MATCH PAGE] Server vetoed state updated:', {
-        currentTurn: payload.next_turn,
-        availableServers: payload.remaining_servers,
-        vetoedServer: vetoedServer,
-        myTeam,
-        isCaptain,
-        isMyTurn: payload.next_turn === myTeam && isCaptain
-      });
-    });
-
-    const unsubscribeServerVetoComplete = on('server_veto_complete', (payload) => {
-      console.log('📥 [MATCH PAGE] Server veto phase completed:', payload);
-      setServerVetoPhase(false);
-      setServerVetoDeadline(null); // Clear server veto deadline
-      setVetoPhase(true);
-      setCurrentTurn(payload.current_turn);
-      setAvailableMaps(payload.available_maps || []);
-      setVetoedMaps([]);
-      setVetoHistory([]);
-      setVetoDeadline(payload.veto_deadline);
-      // Stop loading when map veto component is mounted
-      setLoading(false);
-      setMatchData(prev => ({
-        ...prev,
-        state: 'VETO',
-        final_server: payload.final_server,
-        map_pool: payload.available_maps,
-        veto_turn: payload.current_turn,
-        veto_deadline: payload.veto_deadline
-      }));
-      
-      console.log('🎮 [MATCH PAGE] Transitioning to map veto phase:', {
-        finalServer: payload.final_server,
-        availableMaps: payload.available_maps,
-        currentTurn: payload.current_turn
-      });
-    });
-
-    const unsubscribeServerVetoTimeout = on('server_veto_timeout', (payload) => {
-      console.log('📥 [MATCH PAGE] Server veto timeout occurred:', payload);
-      
-      const autoVetoedServer = payload.auto_vetoed_server;
-      const isComplete = payload.server_veto_complete;
-      const mapVetoStarted = payload.map_veto_started;
-      
-      if (isComplete && mapVetoStarted) {
-        // Server veto completed due to timeout, transition to map veto
-        console.log('🎮 [MATCH PAGE] Server veto completed via timeout, starting map veto');
-        console.log('   Final server:', payload.final_server);
-        console.log('   Available maps:', payload.available_maps);
-        
-        setServerVetoPhase(false);
-        setServerVetoDeadline(null); // Clear server veto deadline
-        setVetoPhase(true);
-        setCurrentTurn(payload.current_turn);
-        setAvailableMaps(payload.available_maps || []);
-        setVetoedMaps([]);
-        setVetoHistory([]);
-        setVetoDeadline(payload.veto_deadline);
-        // Stop loading when map veto component is mounted
-        setLoading(false);
-        
-        setMatchData(prev => ({
-          ...prev,
-          state: 'VETO',
-          final_server: payload.final_server,
-          map_pool: payload.available_maps,
-          veto_turn: payload.current_turn,
-          veto_deadline: payload.veto_deadline
-        }));
-        
-        console.log('✅ [MATCH PAGE] Transitioned to map veto phase after server veto timeout');
-      } else {
-        // Auto-veto occurred, but server veto continues
-        console.log('🎮 [MATCH PAGE] Auto-vetoed server due to timeout:', autoVetoedServer);
-        
-        const newVetoedServers = [...(vetoedServers || [])];
-        if (autoVetoedServer && !newVetoedServers.includes(autoVetoedServer)) {
-          newVetoedServers.push(autoVetoedServer);
-        }
-        
-        setAvailableServers(payload.remaining_servers || []);
-        setVetoedServers(newVetoedServers);
-        setServerVetoTurn(payload.next_turn);
-        setServerVetoDeadline(payload.deadline);
-        
-        setMatchData(prev => ({
-          ...prev,
-          server_pool: payload.remaining_servers,
-          vetoed_servers: newVetoedServers,
-          server_veto_turn: payload.next_turn,
-          server_veto_deadline: payload.deadline
-        }));
-        
-        console.log('✅ [MATCH PAGE] Server veto state updated after timeout:', {
-          autoVetoedServer,
-          currentTurn: payload.next_turn,
-          availableServers: payload.remaining_servers,
-          vetoedServers: newVetoedServers
-        });
-      }
-    });
-
-    // Handle map_vetoed events (sent by server)
-    const unsubscribeMapVetoed = on('map_vetoed', (payload) => {
-      console.log('📥 [MATCH PAGE] Map vetoed event received:', payload);
-      
-      // Update vetoed maps list - add the newly vetoed map
-      const vetoedMap = payload.map;
-      setVetoedMaps(prev => {
-        const newVetoedMaps = [...prev];
-        if (vetoedMap && !newVetoedMaps.includes(vetoedMap)) {
-          newVetoedMaps.push(vetoedMap);
-        }
-        return newVetoedMaps;
-      });
-      
-      // Update map veto state
-      setAvailableMaps(payload.remaining_maps || []);
-      setCurrentTurn(payload.next_turn);
-      setVetoDeadline(payload.deadline);
-      
-      // Update veto history
-      setVetoHistory(prev => {
-        const newHistory = [...prev];
-        newHistory.push({
-          map: vetoedMap,
-          vetoed_by: payload.vetoed_by,
-          timestamp: new Date().toISOString()
-        });
-        return newHistory;
-      });
-      
-      // Update match data
-      setMatchData(prev => ({
-        ...prev,
-        map_pool: payload.remaining_maps,
-        vetoed_maps: [...(prev.vetoed_maps || []), ...(vetoedMap && !prev.vetoed_maps?.includes(vetoedMap) ? [vetoedMap] : [])],
-        veto_turn: payload.next_turn,
-        veto_deadline: payload.deadline
-      }));
-      
-      console.log('✅ [MATCH PAGE] Map vetoed state updated:', {
-        currentTurn: payload.next_turn,
-        availableMaps: payload.remaining_maps,
-        vetoedMap: vetoedMap,
-        myTeam,
-        isCaptain,
-        isMyTurn: payload.next_turn === myTeam && isCaptain
-      });
-    });
-
-    const unsubscribeSideSelectionTimeout = on('side_selection_timeout', (payload) => {
-      console.log('📥 [MATCH PAGE] Side selection timeout occurred:', payload);
-      
-      const autoSelectedSide = payload.auto_selected_side;
-      const isComplete = payload.side_selection_complete;
-      const matchReady = payload.match_ready;
-      
-      if (isComplete && matchReady) {
-        // Side selection completed due to timeout
-        console.log('🎮 [MATCH PAGE] Side selection completed via timeout, match ready');
-        console.log('   Auto-selected side:', autoSelectedSide);
-        
-        setSelectedSide(autoSelectedSide);
-        setSideSelectionPhase(false);
-        setSideSelectionDeadline(null);
-        setSideTimeLeft(null);
-        // Begin post-match setup phase
-        setPostMatchSetupPhase(true);
-        setLoading(false);
-        
-        setMatchData(prev => ({
-          ...prev,
-          state: 'READY',
-          selected_side: autoSelectedSide,
-          side_selection_deadline: null
-        }));
-        
-        console.log('✅ [MATCH PAGE] Match ready after side selection timeout');
-      } else {
-        // Timeout occurred but side selection continues (shouldn't happen in normal flow)
-        console.log('🎮 [MATCH PAGE] Side selection timeout but not complete - unexpected state');
-      }
-    });
-
-    const unsubscribeSideSelectionStarted = on('side_selection_started', (payload) => {
-      console.log('📥 [MATCH PAGE] Side selection started:', payload);
-
-      const selectionDeadline = payload.deadline || null;
-      setSideSelectionPhase(true);
-      setSideSelector(payload.side_selector);
-      setSideSelectionDeadline(selectionDeadline);
-      setSideTimeLeft(selectionDeadline ? null : 30);
-      setLoading(false);
-
-      setMatchData(prev => ({
-        ...prev,
-        state: 'SIDE_SELECTION',
-        side_selector: payload.side_selector,
-        side_selection_deadline: selectionDeadline
-      }));
-    });
-
-    const unsubscribeSideSelected = on('side_selected', (payload) => {
-      console.log('📥 [MATCH PAGE] Side selected:', payload);
-      
-      setSelectedSide(payload.side);
-      setMatchData(prev => ({
-        ...prev,
-        selected_side: payload.side,
-        state: payload.side_complete ? 'READY' : 'SIDE_SELECTION',
-        side_selection_deadline: payload.side_complete ? null : prev?.side_selection_deadline
-      }));
-      
-      if (payload.side_complete) {
-        setSideSelectionPhase(false);
-        setSideSelectionDeadline(null);
-        setSideTimeLeft(null);
-        // Begin post-match setup phase with 3-minute connect window (if server doesn't supply one)
-        setPostMatchSetupPhase(true);
-        const defaultDeadline = new Date(Date.now() + 3 * 60 * 1000).toISOString();
-        setConnectDeadline(prev => prev || defaultDeadline);
-        setPregameStatus('connecting');
-        console.log('🎮 [MATCH PAGE] Side selection completed, match is ready!');
-      }
-    });
-
-    const unsubscribeError = on('error', (payload) => {
-      console.error('❌ [MATCH PAGE] WebSocket error:', payload);
-      setError(payload.message || 'An error occurred');
-      setLoading(false);
-    });
-
-    return () => {
-      if (typeof unsubscribeMatchData === 'function') unsubscribeMatchData();
-      if (typeof unsubscribeVetoComplete === 'function') unsubscribeVetoComplete();
-      if (typeof unsubscribeMapVetoTimeout === 'function') unsubscribeMapVetoTimeout();
-      if (typeof unsubscribeServerVetoStarted === 'function') unsubscribeServerVetoStarted();
-      if (typeof unsubscribeServerVetoUpdate === 'function') unsubscribeServerVetoUpdate();
-      if (typeof unsubscribeServerVetoed === 'function') unsubscribeServerVetoed();
-      if (typeof unsubscribeServerVetoComplete === 'function') unsubscribeServerVetoComplete();
-      if (typeof unsubscribeServerVetoTimeout === 'function') unsubscribeServerVetoTimeout();
-      if (typeof unsubscribeMapVetoed === 'function') unsubscribeMapVetoed();
-      if (typeof unsubscribeSideSelectionTimeout === 'function') unsubscribeSideSelectionTimeout();
-    if (typeof unsubscribeSideSelectionStarted === 'function') unsubscribeSideSelectionStarted();
-      if (typeof unsubscribeSideSelected === 'function') unsubscribeSideSelected();
-      if (typeof unsubscribeError === 'function') unsubscribeError();
-    };
-  }, [on]);
-  
+  // (legacy handlers removed)
   
   // Server veto countdown timer
   useEffect(() => {
     if (!serverVetoDeadline) {
-      setTimeLeft(null);
+      setServerTimeLeft(null);
       return;
     }
     
@@ -1094,11 +604,11 @@ export default function MatchPage() {
       const deadline = new Date(serverVetoDeadline);
       const now = new Date();
       const diff = Math.max(0, Math.floor((deadline - now) / 1000));
-      setTimeLeft(diff);
+      setServerTimeLeft(diff);
       
       if (diff === 0) {
         // Timer expired
-        setTimeLeft(0);
+        setServerTimeLeft(0);
       }
     };
     
@@ -1111,7 +621,7 @@ export default function MatchPage() {
   // Map veto countdown timer
   useEffect(() => {
     if (!vetoDeadline) {
-      setTimeLeft(null);
+      setMapTimeLeft(null);
       return;
     }
     
@@ -1119,11 +629,11 @@ export default function MatchPage() {
       const deadline = new Date(vetoDeadline);
       const now = new Date();
       const diff = Math.max(0, Math.floor((deadline - now) / 1000));
-      setTimeLeft(diff);
+      setMapTimeLeft(diff);
       
       if (diff === 0) {
         // Timer expired
-        setTimeLeft(0);
+        setMapTimeLeft(0);
       }
     };
     
@@ -1173,42 +683,114 @@ export default function MatchPage() {
     }
   }, [matchData, playerData]);
   
-  // Sync local veto state with matchData.veto_state when map_vetoed events are received
   useEffect(() => {
-    if (matchData?.veto_state) {
-      const vetoState = matchData.veto_state;
-      
-      console.log('🔄 [MATCH PAGE] Syncing veto state from matchData:', vetoState);
-      
-      // Update current turn
-      if (vetoState.current_turn && vetoState.current_turn !== currentTurn) {
-        console.log('🔄 [MATCH PAGE] Updating currentTurn:', currentTurn, '->', vetoState.current_turn);
-        setCurrentTurn(vetoState.current_turn);
-      }
-      
-      // Update available maps
-      if (vetoState.remaining_maps && JSON.stringify(vetoState.remaining_maps) !== JSON.stringify(availableMaps)) {
-        console.log('🔄 [MATCH PAGE] Updating availableMaps:', availableMaps, '->', vetoState.remaining_maps);
-        setAvailableMaps(vetoState.remaining_maps);
-      }
-      
-      // Update vetoed maps (calculate from original maps - remaining maps)
-      if (vetoState.remaining_maps && matchData.available_maps) {
-        const originalMaps = matchData.available_maps;
-        const vetoed = originalMaps.filter(map => !vetoState.remaining_maps.includes(map));
-        if (JSON.stringify(vetoed) !== JSON.stringify(vetoedMaps)) {
-          console.log('🔄 [MATCH PAGE] Updating vetoedMaps:', vetoedMaps, '->', vetoed);
-          setVetoedMaps(vetoed);
-        }
-      }
-      
-      // Update veto deadline
-      if (vetoState.veto_deadline && vetoState.veto_deadline !== vetoDeadline) {
-        console.log('🔄 [MATCH PAGE] Updating vetoDeadline:', vetoDeadline, '->', vetoState.veto_deadline);
-        setVetoDeadline(vetoState.veto_deadline);
-      }
+    if (!matchData) return;
+
+    setLoading(false);
+    setError(null);
+
+    const currentState = matchData.state;
+    const draft = matchData.draft || {};
+    const serversInfo = draft.servers || {};
+    const mapsInfo = draft.maps || {};
+    const sideInfo = draft.side || {};
+
+    const resolvedAvailableServers =
+      serversInfo.remaining ??
+      serversInfo.pool ??
+      matchData.available_servers ??
+      matchData.server_pool ??
+      [];
+
+    const resolvedVetoedServers =
+      serversInfo.vetoed ??
+      matchData.vetoed_servers ??
+      [];
+
+    const resolvedServerDeadline =
+      serversInfo.deadline ??
+      matchData.server_veto_deadline ??
+      null;
+
+    const inServerVeto = currentState === 'SERVER_VETO';
+    const inMapVeto = currentState === 'MAP_VETO';
+
+    setServerVetoPhase(inServerVeto);
+    setServerVetoTurn(serversInfo.turn ?? matchData.server_veto_turn ?? null);
+    setAvailableServers(resolvedAvailableServers);
+    setVetoedServers(resolvedVetoedServers);
+    if (inServerVeto) {
+      setServerVetoDeadline(resolvedServerDeadline);
+    } else {
+      setServerVetoDeadline(null);
+      setServerTimeLeft(null);
     }
-  }, [matchData?.veto_state, currentTurn, availableMaps, vetoedMaps, vetoDeadline]);
+
+    const resolvedAvailableMaps =
+      mapsInfo.remaining ??
+      matchData.remaining_maps ??
+      mapsInfo.pool ??
+      matchData.available_maps ??
+      matchData.map_pool ??
+      [];
+
+    const resolvedVetoedMaps =
+      mapsInfo.vetoed ??
+      matchData.vetoed_maps ??
+      [];
+
+    const resolvedVetoDeadline =
+      mapsInfo.deadline ??
+      matchData.veto_deadline ??
+      null;
+
+    const resolvedVetoHistory =
+      mapsInfo.history ??
+      matchData.veto_history ??
+      [];
+
+    setVetoPhase(inMapVeto);
+    setCurrentTurn(mapsInfo.turn ?? matchData.veto_turn ?? null);
+    setAvailableMaps(resolvedAvailableMaps);
+    setVetoedMaps(resolvedVetoedMaps);
+    setVetoHistory(resolvedVetoHistory);
+
+    if (inMapVeto) {
+      setVetoDeadline(prev => {
+        if (!resolvedVetoDeadline) {
+          return prev;
+        }
+        return prev === resolvedVetoDeadline ? prev : resolvedVetoDeadline;
+      });
+    } else {
+      setVetoDeadline(null);
+      setMapTimeLeft(null);
+    }
+
+    setSideSelectionPhase(currentState === 'SIDE_SELECTION');
+    setSideSelector(sideInfo.selector ?? matchData.side_selector ?? null);
+    setSelectedSide(sideInfo.selected ?? matchData.selected_side ?? null);
+    const resolvedSideDeadline =
+      sideInfo.deadline ??
+      matchData.side_selection_deadline ??
+      null;
+    setSideSelectionDeadline(resolvedSideDeadline);
+
+    if (currentState === 'SIDE_SELECTION') {
+      // reset connection status while awaiting final selection
+      setPostMatchSetupPhase(false);
+      setConnectDeadline(null);
+    } else if (['READY', 'CREATING', 'IN_PROGRESS'].includes(currentState)) {
+      setPostMatchSetupPhase(true);
+      const defaultConnectDeadline =
+        resolvedSideDeadline || new Date(Date.now() + 3 * 60 * 1000).toISOString();
+      setConnectDeadline(prev => prev || defaultConnectDeadline);
+      setPregameStatus(prev => (prev === 'connecting' ? prev : 'connecting'));
+    } else {
+      setPostMatchSetupPhase(false);
+      setConnectDeadline(null);
+    }
+  }, [matchData]);
   
   // Handle server veto action
   const handleServerVetoAction = (serverName) => {
@@ -1537,7 +1119,7 @@ export default function MatchPage() {
                 servers={availableServers}
                 vetoedServers={vetoedServers}
                 currentTurn={serverVetoTurn}
-                timeLeft={timeLeft}
+                timeLeft={serverTimeLeft}
                 onServerVeto={handleServerVetoAction}
                 theme={theme}
                 colors={colors}
@@ -1554,7 +1136,7 @@ export default function MatchPage() {
                 maps={availableMaps}
                 vetoedMaps={vetoedMaps}
                 currentTurn={currentTurn}
-                timeLeft={timeLeft}
+                timeLeft={mapTimeLeft}
                 onMapVeto={handleVetoMapAction}
                 theme={theme}
                 colors={colors}

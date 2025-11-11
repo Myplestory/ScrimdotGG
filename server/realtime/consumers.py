@@ -369,6 +369,13 @@ class RealtimeConsumer(AsyncWebsocketConsumer):
             'payload': event.get('payload', {})
         }))
     
+    async def match_state_update(self, event):
+        """Handle unified match state snapshot broadcasts."""
+        await self.send(text_data=json.dumps({
+            'event': 'match_state_update',
+            'payload': event.get('payload', {})
+        }))
+    
     async def direct_message(self, event):
         """Handle direct_message broadcast"""
         await self.send(text_data=json.dumps({'event': 'direct_message', 'payload': event}))

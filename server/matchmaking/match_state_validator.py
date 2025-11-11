@@ -231,11 +231,11 @@ class MatchStateValidator:
     @staticmethod
     async def _get_player_active_match(player_puuid: str):
         """Get the active match for a player, if any - ASYNC version"""
-        Match = apps.get_model('matchmaking', 'Match')
+        Match = apps.get_model('match_system', 'Match')
         
         def get_match():
             # Use the MatchPlayer relationship instead of JSON field queries
-            MatchPlayer = apps.get_model('matchmaking', 'MatchPlayer')
+            MatchPlayer = apps.get_model('match_system', 'MatchPlayer')
             
             # Find matches where this player is a participant and match is in active state
             # Use Q objects to handle multiple state checks for better database compatibility
@@ -255,10 +255,10 @@ class MatchStateValidator:
     @staticmethod
     def _get_player_active_match_sync(player_puuid: str):
         """Get the active match for a player, if any - SYNC version"""
-        Match = apps.get_model('matchmaking', 'Match')
+        Match = apps.get_model('match_system', 'Match')
         
         # Use the MatchPlayer relationship instead of JSON field queries
-        MatchPlayer = apps.get_model('matchmaking', 'MatchPlayer')
+        MatchPlayer = apps.get_model('match_system', 'MatchPlayer')
         
         # Find matches where this player is a participant and match is in active state
         # Use Q objects to handle multiple state checks for better database compatibility

@@ -690,7 +690,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
             }))
             return
         
-        logger.info(f"✅ Player {player_puuid[:12]}... ACCEPTED match {match_confirmation_id[:8]}...")
+        logger.info(f"Player {player_puuid[:12]}... accepted match {match_confirmation_id[:8]}...")
         
         try:
             result = await MatchConfirmationManager.accept_match(match_confirmation_id, player_puuid)
@@ -698,7 +698,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
             if result['status'] == 'success':
                 if result.get('match_confirmed'):
                     # All players accepted - match is ready
-                    logger.info(f"🎉 MATCH READY! All players accepted match {result.get('match_id', '')[:8]}...")
+                    logger.info(f"MATCH READY! All players accepted match {result.get('match_id', '')[:8]}...")
                     # Send to ALL lobbies involved in the match
                     match_lobbies = result.get('match_lobbies', [])
                     logger.info(f"   Notifying {len(match_lobbies)} lobbies that match is ready")
@@ -711,7 +711,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
                                 'match_id': str(result.get('match_id')) if result.get('match_id') else None
                             }
                         )
-                    logger.info(f"   ✅ All {len(match_lobbies)} lobbies notified - match starting!")
+                    logger.info(f"   All {len(match_lobbies)} lobbies notified - match starting!")
                 else:
                     # Send acceptance update to ALL lobbies in the match, not just the accepting lobby
                     match_lobbies = result.get('match_lobbies', [])
@@ -1000,7 +1000,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
         Sends a notification that a match has been found.
         """
         match_id = event.get('match_confirmation_id')
-        logger.info(f"🎮 MATCH PROPOSED to player {self.puuid[:12]}... - Match ID: {match_id[:8] if match_id else 'Unknown'}...")
+        logger.info(f"MATCH PROPOSED to player {self.puuid[:12]}... - Match ID: {match_id[:8] if match_id else 'Unknown'}...")
         logger.info(f"   Timeout: {event.get('timeout_seconds', 30)}s")
         
         await self.send(text_data=json.dumps({
@@ -1014,7 +1014,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
             }
         }))
         
-        logger.info(f"   ✅ Match proposal sent to {self.puuid[:12]}... via WebSocket")
+        logger.info(f"   Match proposal sent to {self.puuid[:12]}... via WebSocket")
     
     async def match_declined(self, event):
         """
@@ -1079,7 +1079,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
     
     async def match_data(self, event):
         """
-        🔧 FIX: Match data broadcast - ensures all players get captain/team info.
+        # FIX: Match data broadcast - ensures all players get captain/team info.
         """
         # Add player to match group for veto updates
         match_id = event.get('match_id')
@@ -1154,7 +1154,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
             }
         }))
         
-        # 🔧 FIX: If map veto started, also send map_veto_started event
+        # FIX: If map veto started, also send map_veto_started event
         if event.get('map_veto_started', False):
             await self.send(text_data=json.dumps({
                 'event': 'map_veto_started',
@@ -1188,7 +1188,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
             }
         }))
         
-        # 🔧 FIX: If map veto started, also send map_veto_started event
+        # FIX: If map veto started, also send map_veto_started event
         if event.get('map_veto_started', False):
             await self.send(text_data=json.dumps({
                 'event': 'map_veto_started',
@@ -1218,7 +1218,7 @@ class PugSocketConsumer(AsyncWebsocketConsumer):
     
     async def map_veto_started(self, event):
         """
-        🔧 FIX: Map veto phase has begun.
+        # FIX: Map veto phase has begun.
         """
         await self.send(text_data=json.dumps({
             'event': 'map_veto_started',

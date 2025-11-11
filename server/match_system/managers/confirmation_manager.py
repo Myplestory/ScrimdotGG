@@ -54,7 +54,7 @@ class MatchConfirmationManager:
             
             if match_confirmed:
                 # All players accepted - broadcast match_ready to ALL lobbies
-                logger.info(f"🎉 MATCH READY! All players accepted match {match_id[:8]}...")
+                logger.info(f"MATCH READY! All players accepted match {match_id[:8]}...")
                 logger.info(f"   Notifying {len(match_lobbies)} lobbies that match is ready")
                 
                 for lobby_id in match_lobbies:
@@ -67,7 +67,7 @@ class MatchConfirmationManager:
                         }
                     )
                 
-                logger.info(f"   ✅ All {len(match_lobbies)} lobbies notified - match starting!")
+                logger.info(f"   All {len(match_lobbies)} lobbies notified - match starting!")
             else:
                 # Broadcast acceptance progress to ALL lobbies involved
                 if match_lobbies:
