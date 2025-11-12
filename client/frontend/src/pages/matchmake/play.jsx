@@ -83,9 +83,6 @@ const PugQueue = () => {
   const [queueStartTime, setQueueStartTime] = useState(null);
   const messagesEndRef = useRef(null);
   
-  // ============================================
-  // INVITE DIALOG STATE - Added for player invitation feature
-  // ============================================
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [availablePlayers, setAvailablePlayers] = useState([
@@ -263,9 +260,7 @@ const PugQueue = () => {
       setChatMessages(prev => [...prev, payload]);
     });
 
-    // ============================================
-    // INVITE EVENT LISTENERS - Handle invite responses
-    // ============================================
+    //invite event listeners; not fully implemented
     const unsubscribeInviteSent = on('invite_sent', (payload) => {
       console.log('Invite sent successfully:', payload);
       setInvitingPlayer(null);
