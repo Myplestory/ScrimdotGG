@@ -33,16 +33,16 @@ Scrim.GG is a comprehensive matchmaking platform that provides highly engaged pl
 ### 1. Django ASGI Server (`server/`)
 - MMR-based matchmaking with time tolerance and priority requeue bias
 - Django Channels for WebSocket consumer support
-- Redis for caching, queues, state management, and async to sync support
+- Redis for caching, queues, channels, and async to sync support
 - PostgreSQL database
 - Celery for concurrent batched synchronous tasks
 
 ### 2. User Client (`client/`)
 - ElectronJs Desktop application
-- React frontend with Material-UI
+- React frontend with Material-UI, gsap
 - Lightweight ASGI Python backend (Quart)
-- WebSocket communication with server
-- Valorant local client API
+- Bidirectional WebSocket communication
+- Valorant local game client API
 
 ## Quick Start
 
@@ -155,6 +155,7 @@ npm start
 - **Electron** - Desktop app framework
 - **React 18** - UI framework
 - **Material-UI** - Component library
+- **GSAP** - Animation Library
 - **Quart** - Async Python web framework (local backend)
 - **valclient** - Valorant local API wrapper
 
@@ -197,9 +198,9 @@ See [DEVELOPMENT_SETUP.md](./docs/DEVELOPMENT_SETUP.md) for development environm
 | **Matchmaking (MMR/ELO)** | ✅ Complete | 100% |
 | **Match Acceptance Flow** | ✅ Complete | 100% |
 | **Requeueing System** | ✅ Complete | 100% |
-| Game Monitor | 🚧 In Progress | 40% |
-| Match Coordinator | 🚧 In Progress | 30% |
-| Veto System | 📋 Planned | 0% |
+| Veto System | ✅ Complete | 100% |
+| Game Monitor | 🚧 In Progress | 50% |
+| Match Coordinator | 🚧 In Progress | 50% |
 | Post-Match Stats/Updates | 📋 Planned | 0% |
 
 **Current Focus:** Game state monitoring and custom game coordination
@@ -216,7 +217,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - Inspired by [FACEIT](https://www.faceit.com)
 - Built with [valclient](https://github.com/colinhartigan/valclient-python)
-- UI design inspired by ESEA
+- UI design inspired by ESEA and Valorant
 - TrueSkill algorithm by Microsoft Research
 
 ---
