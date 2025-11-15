@@ -1,4 +1,4 @@
-import requests, os, json, time, asyncio
+import requests, os, json, time, asyncio, random
 from valclient import Client
 from datetime import datetime
 from quart import current_app
@@ -21,6 +21,13 @@ class ValorantAPI(object):
         self.session_id = None
         self.puuid = None
         self.latest_match_state = None
+        
+        # Pregame ID validation tracking
+        self.expected_pregame_id = None  # Pregame ID expected from match_state_update snapshot
+        self.sent_pregame_id = None  # Pregame ID sent by constructor (if this client is constructor)
+        self.is_constructor = False  # Track if this client is the constructor
+        self.current_match_id = None  # Track current match ID for validation context
+        self.pregame_id_validation_errors = []  # Track validation failures (for debugging/monitoring)
         try:
             with open(file_path, 'r') as file:
                 data = json.load(file)
@@ -186,6 +193,10 @@ class ValorantAPI(object):
                         """Forward match_state_update snapshots to all frontend clients (IMMEDIATE)"""
                         try:
                             self.latest_match_state = data
+                            
+                            # Extract and validate pregame_id from snapshot
+                            self._update_pregame_id_from_snapshot(data)
+                            
                             from quart import current_app
                             await current_app.conn_mgr.broadcast('match_state_update', data)
                             print(f"[MATCH_STATE_UPDATE_CALLBACK] Broadcasted match_state_update for match {data.get('match_id')}")
@@ -204,33 +215,49 @@ class ValorantAPI(object):
                     self.match_state_update_callback = match_state_update_callback
 
                     async def match_construction_started_callback(data):
+                        from quart import current_app
+                        print(f"[MATCH_CONSTRUCTION_STARTED_CALLBACK] Received event: {data}")
                         self.latest_match_state = data
-                        if self.conn_mgr:
-                            await current_app.conn_mgr.broadcast('match_construction_started', data)
+                        await current_app.conn_mgr.broadcast('match_construction_started', data)
+                        print(f"[MATCH_CONSTRUCTION_STARTED_CALLBACK] Broadcasted to frontend")
+                        
+                        # Check if this client is the constructor
+                        is_constructor = data.get('is_constructor', False)
+                        if is_constructor:
+                            match_id = data.get('match_id')
+                            map_name = data.get('map')
+                            server = data.get('server')
+                            team = data.get('team')  # Extract team for player_joined_game
+                            
+                            print(f"[MATCH_CONSTRUCTION_STARTED_CALLBACK] This client is CONSTRUCTOR - creating custom game")
+                            print(f"[MATCH_CONSTRUCTION_STARTED_CALLBACK] Match: {match_id}, Map: {map_name}, Server: {server}, Team: {team}")
+                            
+                            # Create custom game in background task
+                            asyncio.create_task(self._create_custom_game(match_id, map_name, server, team))
 
                     async def join_custom_game_callback(data):
-                        if self.conn_mgr:
-                            await current_app.conn_mgr.broadcast('join_custom_game', data)
+                        from quart import current_app
+                        await current_app.conn_mgr.broadcast('join_custom_game', data)
 
                     async def player_joined_game_callback(data):
-                        if self.conn_mgr:
-                            await current_app.conn_mgr.broadcast('player_joined_game', data)
+                        from quart import current_app
+                        await current_app.conn_mgr.broadcast('player_joined_game', data)
 
                     async def player_join_failed_callback(data):
-                        if self.conn_mgr:
-                            await current_app.conn_mgr.broadcast('player_join_failed', data)
+                        from quart import current_app
+                        await current_app.conn_mgr.broadcast('player_join_failed', data)
 
                     async def all_players_joined_callback(data):
-                        if self.conn_mgr:
-                            await current_app.conn_mgr.broadcast('all_players_joined', data)
+                        from quart import current_app
+                        await current_app.conn_mgr.broadcast('all_players_joined', data)
 
                     async def match_in_progress_callback(data):
-                        if self.conn_mgr:
-                            await current_app.conn_mgr.broadcast('match_in_progress', data)
+                        from quart import current_app
+                        await current_app.conn_mgr.broadcast('match_in_progress', data)
 
                     async def match_completed_callback(data):
-                        if self.conn_mgr:
-                            await current_app.conn_mgr.broadcast('match_completed', data)
+                        from quart import current_app
+                        await current_app.conn_mgr.broadcast('match_completed', data)
 
                     self.pugsocket.match_construction_started_callback = match_construction_started_callback
                     self.pugsocket.join_custom_game_callback = join_custom_game_callback
@@ -371,6 +398,144 @@ class ValorantAPI(object):
         except Exception as e:
             print(f"Error sending 'create_lobby' message: {e}")
             return {"error": f"Error sending 'create_lobby' message: {str(e)}"}
+    
+    async def _create_custom_game(self, match_id: str, map_name: str, server: str, team: str = None):
+        """
+        Constructor client creates the custom game in Valorant.
+        Performance: Runs in background task to avoid blocking
+        """
+        try:
+            if not self.client:
+                logger.error("[CREATE_CUSTOM_GAME] Client not initialized")
+                return
+            
+            logger.info(f"[CREATE_CUSTOM_GAME] Starting custom game creation for match {match_id}")
+            logger.info(f"[CREATE_CUSTOM_GAME] Map: {map_name}, Server: {server}")
+            
+            # Change party to custom mode
+            logger.info("[CREATE_CUSTOM_GAME] Changing to custom game mode...")
+            custom_response = self.client.party_change_to_custom()
+            pregame_id = custom_response.get('ID')
+            
+            if not pregame_id:
+                raise ValueError("Failed to get pregame ID from custom game creation")
+
+            logger.info(f"[CREATE_CUSTOM_GAME] Got pregame_id: {pregame_id}")
+            
+            # Track the pregame_id we're sending
+            self.sent_pregame_id = pregame_id
+            self.is_constructor = True
+            self.current_match_id = match_id
+            logger.info(f"[VALIDATION] Constructor tracking sent pregame_id: {pregame_id[:8]}")
+            
+            # Set custom game settings
+            logger.info("[CREATE_CUSTOM_GAME] Configuring game settings...")
+            
+            # Get map UUID from args
+            map_uuid = None
+            if self.args and 'mapPreferences' in self.args:
+                map_uuid = self.args['mapPreferences'].get(map_name.lower())
+            
+            if not map_uuid:
+                raise ValueError(f"Map UUID not found for map: {map_name}")
+            
+            # Get server GamePod URL
+            game_pod = self._get_server_url(server)
+            if not game_pod:
+                raise ValueError(f"Server GamePod not found for server: {server}")
+            
+            settings = {
+                "Map": map_uuid,
+                "Mode": "/Game/GameModes/Bomb/BombGameMode.BombGameMode_C",
+                "GamePod": game_pod,
+                "UseBots": False,
+                "GameRules": {
+                    "AllowGameModifiers": "true",
+                    "PlayOutAllRounds": "true",
+                    "SkipMatchHistory": "true",
+                    "TournamentMode": "false",
+                    "IsOvertimeWinByTwo": "true",
+                },
+            }
+            
+            logger.info(f"[CREATE_CUSTOM_GAME] Settings: {json.dumps(settings, indent=2)}")
+            self.client.party_set_custom_game_settings(settings)
+            logger.info("[CREATE_CUSTOM_GAME] Settings applied successfully")
+            
+            # Wait a moment for settings to apply
+            await asyncio.sleep(2)
+
+            # VALIDATION: Before notifying server, ensure we have a valid pregame_id
+            if not self._validate_pregame_id(pregame_id, 'custom_game_creation', match_id):
+                logger.error(
+                    f"[VALIDATION] Failed validation before notifying server, "
+                    "but proceeding with notification"
+                )
+
+            # Notify Django server via WebSocket
+            logger.info(f"[CREATE_CUSTOM_GAME] Notifying server of custom game creation: {pregame_id}")
+            if self.pugsocket:
+                await self.pugsocket.send_message('custom_game_created', {
+                    'match_id': match_id,
+                    'pregame_id': pregame_id,
+                    'constructor_puuid': self.client.puuid
+                })
+                logger.info("[CREATE_CUSTOM_GAME] Successfully notified server")
+            else:
+                logger.error("[CREATE_CUSTOM_GAME] PugSocket not connected, cannot notify server")
+            
+            # CRITICAL: Constructor must send player_joined_game so server counts it in joined_players
+            # Without this, server will only see 9/10 joined (missing constructor)
+            await asyncio.sleep(random.uniform(0.3, 0.8))  # Small delay before reporting join
+            logger.info(f"[CREATE_CUSTOM_GAME] Constructor reporting self as joined (team: {team or 'unknown'})")
+            if self.pugsocket:
+                # If team not provided, try to determine from latest_match_state
+                if not team and self.latest_match_state:
+                    try:
+                        team_a_players = self.latest_match_state.get('team_a_players', [])
+                        team_b_players = self.latest_match_state.get('team_b_players', [])
+                        if any(p.get('puuid') == self.client.puuid for p in team_a_players):
+                            team = 'team_a'
+                        elif any(p.get('puuid') == self.client.puuid for p in team_b_players):
+                            team = 'team_b'
+                    except Exception as e:
+                        logger.warning(f"[CREATE_CUSTOM_GAME] Could not determine team from snapshot: {e}")
+                
+                # Default to team_a if still unknown
+                if not team:
+                    team = 'team_a'
+                
+                await self.pugsocket.send_message('player_joined_game', {
+                    'match_id': match_id,
+                    'player_puuid': self.client.puuid,
+                    'team': team
+                })
+                logger.info("[CREATE_CUSTOM_GAME] Successfully reported constructor as joined")
+            
+            # Store the game creation data for when all players join
+            self._pending_game_start = {
+                'match_id': match_id,
+                'pregame_id': pregame_id,
+                'settings_applied': True
+            }
+            
+            logger.info("[CREATE_CUSTOM_GAME] Waiting for all players to join before starting game...")
+            
+        except Exception as e:
+            logger.exception(f"[CREATE_CUSTOM_GAME] Error creating custom game: {str(e)}")
+            # Reset validation state on error
+            self.reset_pregame_validation()
+            # Notify server of failure
+            if self.pugsocket:
+                try:
+                    await self.pugsocket.send_message('custom_game_created', {
+                        'match_id': match_id,
+                        'pregame_id': None,
+                        'constructor_puuid': self.client.puuid if self.client else None,
+                        'error': str(e)
+                    })
+                except Exception as notify_error:
+                    logger.error(f"[CREATE_CUSTOM_GAME] Failed to notify server of error: {notify_error}")
           
     
     def _get_server_url(self, server_name):
@@ -382,13 +547,157 @@ class ValorantAPI(object):
         
         # Search through all regions for the server
         for region, servers in server_prefs.items():
-            if server_name in servers:
-                return servers[server_name]
+            # Convert both keys to lowercase for case-insensitive lookup
+            servers_lower = {k.lower(): v for k, v in servers.items()}
+            if server_name.lower() in servers_lower:
+                return servers_lower[server_name.lower()]
         
         return None
     
     
     
+    def _extract_pregame_id_from_snapshot(self, snapshot: dict):
+        """
+        Extract pregame_id from match_state_update snapshot.
+        
+        Args:
+            snapshot: match_state_update payload from server
+        
+        Returns:
+            pregame_id if found, None otherwise
+        """
+        if not snapshot:
+            return None
+        
+        try:
+            execution = snapshot.get('execution') or {}
+            pregame_id = execution.get('pregame_id')
+            return pregame_id
+        except Exception as e:
+            logger.warning(f"[VALIDATION] Error extracting pregame_id from snapshot: {e}")
+            return None
+
+    def _extract_match_id_from_snapshot(self, snapshot: dict):
+        """Extract match_id from snapshot."""
+        if not snapshot:
+            return None
+        return snapshot.get('match_id')
+
+    def _extract_constructor_from_snapshot(self, snapshot: dict):
+        """Extract constructor puuid from snapshot."""
+        if not snapshot:
+            return None
+        try:
+            execution = snapshot.get('execution') or {}
+            return execution.get('constructor')
+        except Exception:
+            return None
+
+    def _validate_pregame_id(self, received_pregame_id: str, source: str, match_id: str = None) -> bool:
+        """
+        Validate that received pregame_id matches expected value.
+        
+        Args:
+            received_pregame_id: The pregame_id received from server/event
+            source: Source of the pregame_id (e.g., 'join_custom_game', 'match_state_update')
+            match_id: Optional match_id for context
+        
+        Returns:
+            True if valid or no expected value set yet, False if mismatch detected
+        """
+        if not received_pregame_id:
+            return True  # No ID to validate (may be None initially)
+        
+        # For constructor: validate that sent pregame_id matches what we're seeing
+        if self.is_constructor and self.sent_pregame_id:
+            if self.sent_pregame_id != received_pregame_id:
+                error_msg = (
+                    f"[PREGAME_ID VALIDATION] CONSTRUCTOR MISMATCH: "
+                    f"sent {self.sent_pregame_id[:8]}, got {received_pregame_id[:8]} "
+                    f"(source: {source}, match: {match_id[:8] if match_id else 'Unknown'})"
+                )
+                logger.error(error_msg)
+                self.pregame_id_validation_errors.append(error_msg)
+                return False
+        
+        # For non-constructor: validate against expected value from snapshot
+        if not self.is_constructor and self.expected_pregame_id:
+            if self.expected_pregame_id != received_pregame_id:
+                error_msg = (
+                    f"[PREGAME_ID VALIDATION] PLAYER MISMATCH: "
+                    f"expected {self.expected_pregame_id[:8]}, got {received_pregame_id[:8]} "
+                    f"(source: {source}, match: {match_id[:8] if match_id else 'Unknown'})"
+                )
+                logger.error(error_msg)
+                self.pregame_id_validation_errors.append(error_msg)
+                # For non-constructor players, this is a critical error - don't proceed
+                return False
+        
+        # Validation passed or no expected value yet
+        if self.expected_pregame_id or self.sent_pregame_id:
+            logger.debug(
+                f"[PREGAME_ID VALIDATION] ✓ Validated: {received_pregame_id[:8]} "
+                f"(source: {source})"
+            )
+        return True
+
+    def _update_pregame_id_from_snapshot(self, snapshot: dict):
+        """
+        Update expected/sent pregame_id from match_state_update snapshot.
+        Called from match_state_update_callback.
+        """
+        if not snapshot:
+            return
+        
+        match_id = self._extract_match_id_from_snapshot(snapshot)
+        if match_id:
+            self.current_match_id = match_id
+        
+        pregame_id = self._extract_pregame_id_from_snapshot(snapshot)
+        if not pregame_id:
+            return  # No pregame_id in snapshot yet
+        
+        constructor_puuid = self._extract_constructor_from_snapshot(snapshot)
+        is_constructor = constructor_puuid == self.puuid if constructor_puuid and self.puuid else False
+        self.is_constructor = is_constructor
+        
+        # Track pregame_id based on role
+        if is_constructor:
+            # Constructor: validate snapshot matches what we sent
+            if self.sent_pregame_id:
+                self._validate_pregame_id(pregame_id, 'match_state_update', match_id)
+            else:
+                # Haven't sent yet, but snapshot has it (shouldn't happen, but track it)
+                logger.warning(
+                    f"[VALIDATION] Constructor sees pregame_id in snapshot before sending: {pregame_id[:8]}"
+                )
+        else:
+            # Non-constructor: track expected value
+            if self.expected_pregame_id is None:
+                # First time seeing pregame_id - set as expected
+                self.expected_pregame_id = pregame_id
+                logger.info(
+                    f"[VALIDATION] Tracking expected pregame_id: {pregame_id[:8]} "
+                    f"(match: {match_id[:8] if match_id else 'Unknown'})"
+                )
+            elif self.expected_pregame_id != pregame_id:
+                # Mismatch detected in snapshot itself
+                error_msg = (
+                    f"[PREGAME_ID VALIDATION] SNAPSHOT MISMATCH: "
+                    f"expected {self.expected_pregame_id[:8]}, got {pregame_id[:8]} "
+                    f"in match_state_update (match: {match_id[:8] if match_id else 'Unknown'})"
+                )
+                logger.error(error_msg)
+                self.pregame_id_validation_errors.append(error_msg)
+
+    def reset_pregame_validation(self):
+        """Reset validation state (call when match ends or is cancelled)."""
+        self.expected_pregame_id = None
+        self.sent_pregame_id = None
+        self.is_constructor = False
+        self.current_match_id = None
+        # Note: Keep validation_errors for debugging/monitoring, but could clear if desired
+
     def get_region_servers(self, region_code):
         """Get servers for a specific region code"""
         region_mapping = {

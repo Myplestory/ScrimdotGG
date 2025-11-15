@@ -66,6 +66,9 @@ class ExecutionPhaseManager:
                 update_fields=['constructor_puuid', 'state', 'pregame_id', 'coregame_id']
             )
 
+            # Refresh match from DB to ensure snapshot has latest data (especially constructor_puuid)
+            match = await sync_to_async(lambda: Match.objects.get(id=match.id), thread_sensitive=False)()
+
             await MatchManager.broadcast_match_state(
                 str(match.id),
                 match=match,

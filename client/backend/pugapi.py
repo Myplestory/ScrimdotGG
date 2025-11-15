@@ -376,10 +376,17 @@ class PugSocketClient:
     async def on_match_construction_started(self, data):
         """Handle constructor assignment from the server."""
         try:
+            print(f"[PUGAPI] on_match_construction_started called with data: {data}")
+            print(f"[PUGAPI] Callback exists: {self.match_construction_started_callback is not None}")
             if self.match_construction_started_callback:
                 await self.match_construction_started_callback(data)
+                print(f"[PUGAPI] match_construction_started_callback executed successfully")
+            else:
+                print(f"[PUGAPI] WARNING: match_construction_started_callback is None!")
         except Exception as e:
             print(f"Error processing 'match_construction_started' event: {e}")
+            import traceback
+            traceback.print_exc()
 
     async def on_join_custom_game(self, data):
         try:

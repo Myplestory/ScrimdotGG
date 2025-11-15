@@ -2,6 +2,7 @@
 Match lifecycle event handlers.
 """
 import asyncio
+import random
 from quart import current_app
 from ..events import on
 from ...utils.logger import get_logger
@@ -79,6 +80,10 @@ async def handle_match_ended(payload: dict, client_id: int, ws, mgr):
     """
     logger.info(f"Match ended for client {client_id}")
     
+    # Reset validation state
+    valorant_service = current_app.valorant
+    valorant_service.api.reset_pregame_validation()
+    
     mgr.state[client_id]['in_game'] = False
     mgr.state[client_id]['match_id'] = None
     
@@ -117,17 +122,21 @@ async def handle_match_construction_started(payload: dict, client_id: int, ws, m
         # This client needs to create the custom game
         logger.info(f"[MATCH_CONSTRUCTION] This client is CONSTRUCTOR - creating custom game")
         valorant_service = current_app.valorant
-        asyncio.create_task(create_custom_game(valorant_service, match_id, map_name, server, client_id))
+        asyncio.create_task(create_custom_game(valorant_service, match_id, map_name, server, client_id, team))
     else:
         logger.info(f"[MATCH_CONSTRUCTION] This client is NOT constructor - waiting for join instruction")
 
 
-async def create_custom_game(valorant_service, match_id: str, map_name: str, server: str, client_id: int):
+async def create_custom_game(valorant_service, match_id: str, map_name: str, server: str, client_id: int, team: str = None):
     """
     Constructor client creates the custom game in Valorant.
     Performance: Runs in background task to avoid blocking
     """
     try:
+        # Mark this client as constructor
+        valorant_service.api.is_constructor = True
+        valorant_service.api.current_match_id = match_id
+        
         # Change party to custom mode
         logger.info("Changing to custom game mode...")
         custom_response = valorant_service.api.client.party_change_to_custom()
@@ -136,10 +145,14 @@ async def create_custom_game(valorant_service, match_id: str, map_name: str, ser
         if not pregame_id:
             raise ValueError("Failed to get pregame ID from custom game creation")
         
+        # Track the pregame_id we're sending
+        valorant_service.api.sent_pregame_id = pregame_id
+        logger.info(f"[VALIDATION] Constructor tracking sent pregame_id: {pregame_id[:8]}")
+        
         # Set custom game settings
         logger.info("Configuring game settings...")
         settings = {
-            "Map": valorant_service.api.args['mapPreferences'].get(map_name),
+            "Map": valorant_service.api.args['mapPreferences'].get(map_name.lower()),
             "Mode": "/Game/GameModes/Bomb/BombGameMode.BombGameMode_C",
             "GamePod": valorant_service.api._get_server_url(server),
             "UseBots": False,
@@ -154,6 +167,13 @@ async def create_custom_game(valorant_service, match_id: str, map_name: str, ser
         
         valorant_service.api.client.party_set_custom_game_settings(settings)
         
+        # VALIDATION: Before notifying server, ensure we have a valid pregame_id
+        if not valorant_service.api._validate_pregame_id(pregame_id, 'custom_game_creation', match_id):
+            logger.error(
+                f"[VALIDATION] Failed validation before notifying server, "
+                "but proceeding with notification"
+            )
+        
         # Notify Django server via WebSocket
         logger.info(f"Custom game created: {pregame_id}")
         await valorant_service.api.pugsocket.send_message('custom_game_created', {
@@ -164,6 +184,34 @@ async def create_custom_game(valorant_service, match_id: str, map_name: str, ser
         
         # Wait a moment for settings to apply
         await asyncio.sleep(2)
+        
+        # CRITICAL: Constructor must send player_joined_game so server counts it in joined_players
+        # Without this, server will only see 9/10 joined (missing constructor)
+        await asyncio.sleep(random.uniform(0.3, 0.8))  # Small delay before reporting join
+        logger.info(f"Constructor reporting self as joined (team: {team or 'unknown'})")
+        
+        # If team not provided, try to determine from latest_match_state
+        if not team and valorant_service.api.latest_match_state:
+            try:
+                team_a_players = valorant_service.api.latest_match_state.get('team_a_players', [])
+                team_b_players = valorant_service.api.latest_match_state.get('team_b_players', [])
+                if any(p.get('puuid') == valorant_service.api.client.puuid for p in team_a_players):
+                    team = 'team_a'
+                elif any(p.get('puuid') == valorant_service.api.client.puuid for p in team_b_players):
+                    team = 'team_b'
+            except Exception as e:
+                logger.warning(f"Could not determine team from snapshot: {e}")
+        
+        # Default to team_a if still unknown
+        if not team:
+            team = 'team_a'
+        
+        await valorant_service.api.pugsocket.send_message('player_joined_game', {
+            'match_id': match_id,
+            'player_puuid': valorant_service.api.client.puuid,
+            'team': team
+        })
+        logger.info("Successfully reported constructor as joined")
         
         logger.info("Waiting for all players to join before starting game...")
         # Store the game creation data for when all players join
@@ -177,6 +225,8 @@ async def create_custom_game(valorant_service, match_id: str, map_name: str, ser
         
     except Exception as e:
         logger.exception(f"Error creating custom game: {str(e)}")
+        # Reset validation state on error
+        valorant_service.api.reset_pregame_validation()
 
 
 @on("all_players_joined")
@@ -196,6 +246,28 @@ async def handle_all_players_joined(payload: dict, client_id: int, ws, mgr):
         # Check if we have pending game start data
         if hasattr(valorant_service.api, '_pending_game_start') and valorant_service.api._pending_game_start:
             game_data = valorant_service.api._pending_game_start
+            pregame_id = game_data.get('pregame_id')
+            
+            # VALIDATION: Before starting game, verify pregame_id is still valid
+            # Get actual pregame_id from Valorant
+            try:
+                current_pregame = valorant_service.api.client.pregame_fetch_player()
+                actual_pregame_id = current_pregame.get('MatchID')
+                
+                if not valorant_service.api._validate_pregame_id(
+                    actual_pregame_id, 'match_start', match_id
+                ):
+                    logger.error(
+                        f"[VALIDATION] Cannot start game - pregame_id mismatch. "
+                        f"Expected: {valorant_service.api.sent_pregame_id[:8] if valorant_service.api.sent_pregame_id else 'None'}, "
+                        f"Actual: {actual_pregame_id[:8] if actual_pregame_id else 'None'}. "
+                        "Aborting game start."
+                    )
+                    return
+                    
+            except Exception as e:
+                logger.warning(f"[VALIDATION] Could not verify pregame_id before start: {e}")
+                # Continue anyway, but log warning
             
             logger.info("All players ready - starting game now...")
             try:
@@ -246,8 +318,11 @@ async def handle_match_cancelled(payload: dict, client_id: int, ws, mgr):
     
     logger.warning(f"Match {match_id} cancelled: {reason}")
     
-    # Clear any pending game start data
+    # Reset validation state
     valorant_service = current_app.valorant
+    valorant_service.api.reset_pregame_validation()
+    
+    # Clear any pending game start data
     if hasattr(valorant_service.api, '_pending_game_start'):
         valorant_service.api._pending_game_start = None
     
@@ -275,15 +350,47 @@ async def handle_join_custom_game(payload: dict, client_id: int, ws, mgr):
     
     logger.info(f"Joining custom game: {pregame_id} for match {match_id}")
     
-    try:
-        valorant_service = current_app.valorant
+    valorant_service = current_app.valorant
+    
+    # VALIDATION: Validate pregame_id before attempting to join
+    if not valorant_service.api._validate_pregame_id(pregame_id, 'join_custom_game', match_id):
+        error_msg = (
+            f"[VALIDATION] CRITICAL: Received mismatched pregame_id in join_custom_game. "
+            f"Expected: {valorant_service.api.expected_pregame_id[:8] if valorant_service.api.expected_pregame_id else 'None'}, "
+            f"Received: {pregame_id[:8] if pregame_id else 'None'}. "
+            "Aborting join attempt."
+        )
+        logger.error(error_msg)
         
+        # Notify server of validation failure
+        await valorant_service.api.pugsocket.send_message('player_join_failed', {
+            'match_id': match_id,
+            'player_puuid': valorant_service.api.client.puuid,
+            'team': team,
+            'error': f'Pregame ID validation failed: {error_msg}'
+        })
+        
+        # Notify frontend of error
+        await mgr.send(ws, 'join_custom_game_failed', {
+            'match_id': match_id,
+            'team': team,
+            'error': 'Pregame ID mismatch detected'
+        })
+        return  # Don't proceed with join
+    
+    try:
         # Join the party/pregame with timeout
         logger.info(f"Attempting to join pregame {pregame_id}...")
         join_result = valorant_service.api.client.party_join(pregame_id)
         
         if join_result:
             logger.info(f"Successfully joined pregame {pregame_id}")
+            
+            # VALIDATION: Before notifying server of successful join, validate again
+            if not valorant_service.api._validate_pregame_id(pregame_id, 'player_joined_game', match_id):
+                logger.warning(
+                    f"[VALIDATION] Validation warning after join, but proceeding with notification"
+                )
             
             # Notify Django that we joined successfully
             await valorant_service.api.pugsocket.send_message('player_joined_game', {
