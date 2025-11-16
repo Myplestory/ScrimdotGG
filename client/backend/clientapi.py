@@ -216,24 +216,21 @@ class ValorantAPI(object):
 
                     async def match_construction_started_callback(data):
                         from quart import current_app
+                        
                         print(f"[MATCH_CONSTRUCTION_STARTED_CALLBACK] Received event: {data}")
                         self.latest_match_state = data
                         await current_app.conn_mgr.broadcast('match_construction_started', data)
                         print(f"[MATCH_CONSTRUCTION_STARTED_CALLBACK] Broadcasted to frontend")
                         
-                        # Check if this client is the constructor
+                        # Handle constructor game creation via service
                         is_constructor = data.get('is_constructor', False)
                         if is_constructor:
+                            valorant_service = current_app.valorant
                             match_id = data.get('match_id')
                             map_name = data.get('map')
                             server = data.get('server')
-                            team = data.get('team')  # Extract team for player_joined_game
-                            
-                            print(f"[MATCH_CONSTRUCTION_STARTED_CALLBACK] This client is CONSTRUCTOR - creating custom game")
-                            print(f"[MATCH_CONSTRUCTION_STARTED_CALLBACK] Match: {match_id}, Map: {map_name}, Server: {server}, Team: {team}")
-                            
-                            # Create custom game in background task
-                            asyncio.create_task(self._create_custom_game(match_id, map_name, server, team))
+                            team = data.get('team')
+                            await valorant_service.create_custom_game(match_id, map_name, server, team)
 
                     async def join_custom_game_callback(data):
                         from quart import current_app
@@ -249,7 +246,16 @@ class ValorantAPI(object):
 
                     async def all_players_joined_callback(data):
                         from quart import current_app
+                        
+                        # Broadcast to frontend
                         await current_app.conn_mgr.broadcast('all_players_joined', data)
+                        
+                        # Handle constructor game start via service
+                        is_constructor = data.get('is_constructor', False)
+                        if is_constructor:
+                            valorant_service = current_app.valorant
+                            match_id = data.get('match_id')
+                            await valorant_service.start_custom_game(match_id)
 
                     async def match_in_progress_callback(data):
                         from quart import current_app
@@ -413,14 +419,13 @@ class ValorantAPI(object):
             logger.info(f"[CREATE_CUSTOM_GAME] Map: {map_name}, Server: {server}")
             
             # Change party to custom mode
-            logger.info("[CREATE_CUSTOM_GAME] Changing to custom game mode...")
             custom_response = self.client.party_change_to_custom()
             pregame_id = custom_response.get('ID')
             
             if not pregame_id:
                 raise ValueError("Failed to get pregame ID from custom game creation")
 
-            logger.info(f"[CREATE_CUSTOM_GAME] Got pregame_id: {pregame_id}")
+            logger.info(f"[CREATE_CUSTOM_GAME] Got pregame_id: {pregame_id} Map: {map_name}, Server: {server}")
             
             # Track the pregame_id we're sending
             self.sent_pregame_id = pregame_id

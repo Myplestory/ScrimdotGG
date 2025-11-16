@@ -360,8 +360,6 @@ class BotWebSocketClient:
 
         self.latest_snapshot_version = version
 
-        logger.info(f" Bot {self.bot_alias} processing match_state_update: state={state}, last_event={last_event}, version={version}")
-
         if match_id:
             self.current_match_id = match_id
 
@@ -375,6 +373,13 @@ class BotWebSocketClient:
         self.total_expected_players = total_players
 
         execution_info = snapshot.get('execution') or {}
+        exec_state = execution_info.get('state') if execution_info else None
+        
+        logger.info(
+            f" Bot {self.bot_alias} processing match_state_update: state={state}, last_event={last_event}, "
+            f"version={version}, execution_state={exec_state}"
+        )
+        
         await self._drive_execution_state(snapshot, execution_info, total_players)
 
         if state == 'SERVER_VETO':
@@ -513,6 +518,17 @@ class BotWebSocketClient:
                 self._pending_start_task = asyncio.create_task(start_wrapper())
 
         else:
+            # Debug logging for join condition
+            if exec_state == 'READY' and pregame_id:
+                logger.info(
+                    f"Bot {self.bot_alias} checking join conditions: "
+                    f"exec_state={exec_state}, pregame_id={pregame_id[:8] if pregame_id else None}, "
+                    f"join_instruction_received={self.join_instruction_received}, "
+                    f"join_reported={self.join_reported}, "
+                    f"bot_in_joined={self.bot_puuid in joined_players}, "
+                    f"pending_join_task={self._pending_join_task is not None}"
+                )
+            
             should_join = (
                 exec_state == 'READY'
                 and pregame_id
@@ -523,6 +539,10 @@ class BotWebSocketClient:
             )
             if should_join:
                 team = self.my_team or 'team_a'
+                logger.info(
+                    f"Bot {self.bot_alias} JOIN CONDITION MET - triggering join for pregame {pregame_id[:8]} "
+                    f"as team {team}"
+                )
 
                 async def join_wrapper():
                     try:
@@ -531,6 +551,19 @@ class BotWebSocketClient:
                         self._pending_join_task = None
 
                 self._pending_join_task = asyncio.create_task(join_wrapper())
+            elif exec_state == 'READY' and pregame_id and self.join_instruction_received:
+                # Log why join condition is not met
+                reasons = []
+                if self.join_reported:
+                    reasons.append("already reported join")
+                if self.bot_puuid in joined_players:
+                    reasons.append("already in joined_players")
+                if self._pending_join_task:
+                    reasons.append("pending join task exists")
+                if reasons:
+                    logger.warning(
+                        f"Bot {self.bot_alias} cannot join: {', '.join(reasons)}"
+                    )
             
             # If bot has joined but hasn't readied yet, ready up
             should_ready = (
@@ -1327,6 +1360,31 @@ class BotWebSocketClient:
         logger.info(
             f"Bot {self.bot_alias} queued to join custom game on next READY snapshot."
         )
+        
+  
+        if self.latest_snapshot:
+            execution_info = self.latest_snapshot.get('execution') or {}
+            exec_state = execution_info.get('state')
+            pregame_id_from_snapshot = execution_info.get('pregame_id')
+            
+            effective_pregame_id = pregame_id or pregame_id_from_snapshot
+            
+            if exec_state == 'READY' and effective_pregame_id:
+                logger.info(
+                    f"Bot {self.bot_alias} received join instruction and latest snapshot is READY. "
+                    f"Checking join conditions immediately (pregame: {effective_pregame_id[:8] if effective_pregame_id else 'None'})"
+                )
+                # sanity check for snapshot state
+                await self._drive_execution_state(
+                    self.latest_snapshot, 
+                    execution_info, 
+                    self.total_expected_players or 10
+                )
+            else:
+                logger.debug(
+                    f"Bot {self.bot_alias} will wait for READY snapshot. "
+                    f"Current exec_state: {exec_state}, pregame_id: {effective_pregame_id[:8] if effective_pregame_id else 'None'}"
+                )
     
     async def _handle_all_players_joined(self, payload: dict):
         """Handle all players joined event (constructor can start game)"""
