@@ -295,10 +295,10 @@ export const WebSocketProvider = ({ children }) => {
         }));
         break;
         
-      case 'match_starting':
+      case 'match_construction_started':
         setMatchData(prev => ({
           ...prev,
-          status: 'starting',
+          status: 'constructing',
           constructor_puuid: payload.constructor_puuid
         }));
         break;

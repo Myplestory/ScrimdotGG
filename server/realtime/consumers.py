@@ -376,6 +376,85 @@ class RealtimeConsumer(AsyncWebsocketConsumer):
             'payload': event.get('payload', {})
         }))
     
+    async def match_construction_started(self, event):
+        """Forward constructor assignment to the client."""
+        await self.send(text_data=json.dumps({
+            'event': 'match_construction_started',
+            'payload': {
+                'match_id': event.get('match_id'),
+                'constructor_puuid': event.get('constructor_puuid'),
+                'is_constructor': event.get('is_constructor', False),
+                'map': event.get('map'),
+                'server': event.get('server'),
+                'team': event.get('team'),
+            }
+        }))
+    
+    async def join_custom_game(self, event):
+        """Forward instruction to join the custom lobby."""
+        await self.send(text_data=json.dumps({
+            'event': 'join_custom_game',
+            'payload': {
+                'match_id': event.get('match_id'),
+                'pregame_id': event.get('pregame_id'),
+                'team': event.get('team'),
+            }
+        }))
+    
+    async def joined_custom_game(self, event):
+        """Confirm the player successfully joined the lobby."""
+        await self.send(text_data=json.dumps({
+            'event': 'joined_custom_game',
+            'payload': {
+                'match_id': event.get('match_id'),
+                'player_puuid': event.get('player_puuid'),
+                'team': event.get('team'),
+            }
+        }))
+    
+    async def player_joined_game(self, event):
+        """Notify that a player joined the custom lobby."""
+        await self.send(text_data=json.dumps({
+            'event': 'player_joined_game',
+            'payload': event
+        }))
+    
+    async def player_join_failed(self, event):
+        """Notify that a player failed to join the lobby."""
+        await self.send(text_data=json.dumps({
+            'event': 'player_join_failed',
+            'payload': event
+        }))
+    
+    async def all_players_joined(self, event):
+        """Inform clients that all players are present in the lobby."""
+        await self.send(text_data=json.dumps({
+            'event': 'all_players_joined',
+            'payload': {
+                'match_id': event.get('match_id'),
+                'is_constructor': event.get('is_constructor', False),
+            }
+        }))
+    
+    async def match_in_progress(self, event):
+        """Notify clients that the match has entered live play."""
+        await self.send(text_data=json.dumps({
+            'event': 'match_in_progress',
+            'payload': {
+                'match_id': event.get('match_id'),
+                'coregame_id': event.get('coregame_id'),
+                'map': event.get('map'),
+                'server': event.get('server'),
+            }
+        }))
+    
+    async def match_completed(self, event):
+        """Forward match completion summary."""
+        await self.send(text_data=json.dumps({
+            'event': 'match_completed',
+            'payload': event
+        }))
+    
     async def direct_message(self, event):
         """Handle direct_message broadcast"""
         await self.send(text_data=json.dumps({'event': 'direct_message', 'payload': event}))

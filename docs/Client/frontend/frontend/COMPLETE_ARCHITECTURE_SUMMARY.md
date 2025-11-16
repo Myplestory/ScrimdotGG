@@ -447,7 +447,7 @@ This document provides a complete overview of the Scrim.GG frontend architecture
 2. ✅ **`realtime`** - WebSocket consumer and handlers
 3. ✅ **`matchmaking`** - Queue management
 4. ✅ **`match_system`** - Match lifecycle
-5. ✅ **`match_execution`** - Live match tracking
+5. ✅ **Execution phase (match_system/phases/execution.py)** - Live match tracking
 6. ✅ **`users`** - Authentication (currently empty, needs expansion)
 7. ✅ **`maps`** - Map data
 8. ✅ **`riotlogin`** - Riot authentication

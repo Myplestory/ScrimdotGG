@@ -655,7 +655,7 @@ class QueueManager:
             player.is_settled = new_sigma < 3.0
             
             logger.info(f"[DECAY] Player {player.alias} returned after {days_since_last:.1f} days")
-            logger.info(f"[DECAY] Sigma: {old_sigma:.2f} → {new_sigma:.2f} (×{multiplier:.2f})")
+            logger.info(f"[DECAY] Sigma: {old_sigma:.2f} -> {new_sigma:.2f} (x{multiplier:.2f})")
             
             player.save()
     

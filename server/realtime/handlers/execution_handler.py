@@ -6,6 +6,7 @@ EXTRACTED FROM: matchmaking/consumers.py
 """
 
 import logging
+from match_system.phases.execution import ExecutionPhaseManager
 from .base import BaseHandler
 
 logger = logging.getLogger(__name__)
@@ -18,14 +19,12 @@ class ExecutionHandler(BaseHandler):
     
     async def handle_custom_game_created(self, data):
         """Handle custom_game_created event."""
-        from match_execution.execution_manager import MatchExecutionManager
-        
         try:
             payload = data.get('payload', {})
             match_id = payload.get('match_id')
             pregame_id = payload.get('pregame_id')
             
-            result = await MatchExecutionManager.handle_custom_game_created(
+            result = await ExecutionPhaseManager.handle_custom_game_created(
                 match_id, pregame_id, self.puuid
             )
             
@@ -40,13 +39,11 @@ class ExecutionHandler(BaseHandler):
     
     async def handle_player_joined_game(self, data):
         """Handle player_joined_game event."""
-        from match_execution.execution_manager import MatchExecutionManager
-        
         try:
             payload = data.get('payload', {})
             match_id = payload.get('match_id')
             
-            result = await MatchExecutionManager.handle_player_joined(match_id, self.puuid)
+            result = await ExecutionPhaseManager.handle_player_joined(match_id, self.puuid)
             
             if result['status'] == 'success':
                 await self.send_success("Player joined successfully")
@@ -59,14 +56,12 @@ class ExecutionHandler(BaseHandler):
     
     async def handle_match_started(self, data):
         """Handle match_started event."""
-        from match_execution.execution_manager import MatchExecutionManager
-        
         try:
             payload = data.get('payload', {})
             match_id = payload.get('match_id')
             coregame_id = payload.get('coregame_id')
             
-            result = await MatchExecutionManager.handle_match_started(match_id, coregame_id)
+            result = await ExecutionPhaseManager.handle_match_started(match_id, coregame_id)
             
             if result['status'] == 'success':
                 await self.send_success("Match started")

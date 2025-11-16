@@ -7,7 +7,7 @@ Usage:
 2. Create a lobby in your client
 3. Run this script
 4. The script will create 9 bots, create a match, and simulate acceptance
-5. You'll receive the match_starting event in your client
+5. You'll receive the match_construction_started event in your client
 6. Follow the flow as the constructor or join the custom game
 
 This allows you to test the complete match flow with just one real client!
@@ -22,8 +22,8 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'scrimgg.settings')
 django.setup()
 
 from scrimgg.models import Match, Player, MatchStatistics, Lobby
-from matchmaking.match_execution import MatchExecutionManager
-from matchmaking.match_monitor import MatchMonitor
+from match_system.phases.execution import ExecutionPhaseManager
+from match_system.monitor import MatchMonitor
 from matchmaking.match_confirmation import MatchConfirmationManager
 from django.utils import timezone
 
@@ -198,7 +198,7 @@ async def simulate_all_players_accept(match_id):
     print(f"\n[ACTION] Simulating all players accepting match...")
     print(f"   [INFO] In real flow, you would see 'match_found' event in your client")
     print(f"   [INFO] You would click 'Accept' button")
-    print(f"   [INFO] When all 10 accept, match_starting event is triggered")
+    print(f"   [INFO] When all 10 accept, match_construction_started event is triggered")
     
     # For testing, we'll directly trigger match start
     await asyncio.sleep(1)
@@ -208,9 +208,9 @@ async def simulate_all_players_accept(match_id):
 async def trigger_match_start(match):
     """Trigger match start - this will send WebSocket events to your client"""
     print(f"\n[TRIGGER] Initiating match start...")
-    print(f"   [IMPORTANT] Watch your dev client for 'match_starting' event!")
+    print(f"   [IMPORTANT] Watch your dev client for 'match_construction_started' event!")
     
-    result = await MatchExecutionManager.initiate_match_start(str(match.id))
+    result = await ExecutionPhaseManager.initiate_match_start(str(match.id))
     
     if result['status'] == 'success':
         print(f"   [OK] Match start initiated")
@@ -220,7 +220,7 @@ async def trigger_match_start(match):
         match = await sync_to_async(Match.objects.get)(id=match.id)
         
         print(f"\n   [WebSocket Event Sent]")
-        print(f"   Event: 'match_starting'")
+        print(f"   Event: 'match_construction_started'")
         print(f"   Data: {{")
         print(f"       match_id: '{match.id}',")
         print(f"       constructor_puuid: '{match.constructor_puuid}',")
@@ -232,7 +232,7 @@ async def trigger_match_start(match):
         
         print(f"\n   [NEXT STEPS FOR YOU]")
         if match.constructor_puuid == result.get('constructor_puuid'):
-            print(f"   1. Your client should receive 'match_starting' with is_constructor=true")
+            print(f"   1. Your client should receive 'match_construction_started' with is_constructor=true")
             print(f"   2. Your client will automatically create Valorant custom game")
             print(f"   3. Bots will automatically 'join' (simulated)")
             print(f"   4. Match will go live")
@@ -303,7 +303,7 @@ async def simulate_match_go_live(match):
     
     fake_coregame_id = f"coregame-live-{match.id}-{timezone.now().timestamp()}"
     
-    result = await MatchExecutionManager.handle_match_started(
+    result = await ExecutionPhaseManager.handle_match_started(
         str(match.id),
         fake_coregame_id
     )
@@ -448,7 +448,7 @@ async def complete_match_with_stats(match, live_player, bot_players):
         'total_rounds': 21
     }
     
-    await MatchExecutionManager.handle_match_completion(str(match.id), final_data)
+    await ExecutionPhaseManager.handle_match_completion(str(match.id), final_data)
     
     print(f"   [OK] Match completed!")
     print(f"   [OK] Final score: Team A 13 - 8 Team B")
@@ -544,7 +544,7 @@ async def main():
         # Wait for your action
         print(f"\n[PAUSED] Script paused for 15 seconds...")
         print(f"   [INFO] This gives you time to:")
-        print(f"   - Check your client received 'match_starting' event")
+        print(f"   - Check your client received 'match_construction_started' event")
         print(f"   - See if custom game creation was triggered")
         print(f"   - Verify WebSocket events are working")
         

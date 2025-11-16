@@ -20,6 +20,7 @@ Key improvements over V4:
 - Added game constructor logic simulation
 - Bots can act as constructor and start games
 - Simulates custom game join process
+- Hybrid execution flow driven by unified match_state_update snapshots
 - Tests the new join tracking system
 - Complete end-to-end game flow testing
 - Realistic delays and error handling
@@ -34,7 +35,7 @@ import uuid
 import json
 import websockets
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
 # Add server directory to Python path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -106,6 +107,51 @@ class BotWebSocketClient:
         self.latest_snapshot_version = None
         self.last_processed_server_state = None
         self.last_processed_map_state = None
+
+        # Hybrid execution simulation state
+        self.custom_game_created = False
+        self.custom_game_acknowledged = False
+        self.simulated_pregame_id = None
+        self.join_instruction_received = False
+        self.join_reported = False
+        self.match_started_reported = False
+        self.ready_to_start = False
+        self.total_expected_players = 0
+        self._pending_creation_task = None
+        self._pending_join_task = None
+        self._pending_start_task = None
+        
+        # Ready status state
+        self.is_ready = False
+        self.ready_reported = False
+        self._pending_ready_task = None
+        
+        # Pregame ID validation tracking
+        self.expected_pregame_id = None  # Pregame ID from match_state_update snapshot (should match constructor's)
+        self.pregame_id_validation_errors = []  # Track validation failures for reporting
+
+    def _reset_match_flow_state(self):
+        """Reset execution-phase state and cancel any pending background tasks."""
+        for attr in ('_pending_creation_task', '_pending_join_task', '_pending_start_task', '_pending_ready_task'):
+            task = getattr(self, attr, None)
+            if task and not task.done():
+                task.cancel()
+            setattr(self, attr, None)
+
+        self.custom_game_created = False
+        self.custom_game_acknowledged = False
+        self.simulated_pregame_id = None
+        self.join_instruction_received = False
+        self.join_reported = False
+        self.match_started_reported = False
+        self.ready_to_start = False
+        self.joined_custom_game = False
+        self.game_started = False
+        self.pregame_id = None
+        self.is_ready = False
+        self.ready_reported = False
+        self.expected_pregame_id = None  # Reset expected pregame_id
+        # Note: Don't clear validation_errors here - they should persist for reporting
         
     async def _handle_side_selection_started(self, payload: dict):
         """Handle side selection phase start."""
@@ -314,14 +360,27 @@ class BotWebSocketClient:
 
         self.latest_snapshot_version = version
 
-        logger.info(f" Bot {self.bot_alias} processing match_state_update: state={state}, last_event={last_event}, version={version}")
-
         if match_id:
             self.current_match_id = match_id
 
         team_a_players = snapshot.get('team_a_players', [])
         team_b_players = snapshot.get('team_b_players', [])
         self._update_team_and_captain(team_a_players, team_b_players)
+
+        total_players = len(team_a_players) + len(team_b_players)
+        if total_players == 0:
+            total_players = 10
+        self.total_expected_players = total_players
+
+        execution_info = snapshot.get('execution') or {}
+        exec_state = execution_info.get('state') if execution_info else None
+        
+        logger.info(
+            f" Bot {self.bot_alias} processing match_state_update: state={state}, last_event={last_event}, "
+            f"version={version}, execution_state={exec_state}"
+        )
+        
+        await self._drive_execution_state(snapshot, execution_info, total_players)
 
         if state == 'SERVER_VETO':
             await self._sync_server_veto(draft.get('servers', {}), last_event)
@@ -348,6 +407,180 @@ class BotWebSocketClient:
                 self.my_team = 'team_b'
                 self.is_captain = player.get('is_captain', False)
                 return
+
+    async def _drive_execution_state(self, snapshot: dict, execution: dict, total_players: int):
+        """Hybrid simulation of the execution phase driven by the unified snapshot."""
+        if not snapshot:
+            return
+
+        match_id = snapshot.get('match_id')
+        if match_id:
+            self.current_match_id = match_id
+
+        exec_state = execution.get('state')
+        pregame_id = execution.get('pregame_id')
+        joined_players = execution.get('joined_players') or []
+        ready_players = execution.get('ready_players') or []
+        constructor_puuid = execution.get('constructor')
+
+        if constructor_puuid:
+            self.is_constructor = constructor_puuid == self.bot_puuid
+
+        if exec_state == 'IN_PROGRESS':
+            self.game_started = True
+            self.match_started_reported = True
+
+        if pregame_id:
+            self.pregame_id = pregame_id
+            
+            # Track expected pregame_id from snapshot (should come from constructor's custom_game_created)
+            # For non-constructors, this is the expected pregame_id they should receive
+            if not self.is_constructor:
+                if self.expected_pregame_id is None:
+                    # First time seeing pregame_id in snapshot
+                    self.expected_pregame_id = pregame_id
+                    logger.info(f"Bot {self.bot_alias} tracking expected pregame_id: {pregame_id[:8]}")
+                elif self.expected_pregame_id != pregame_id:
+                    # Mismatch detected in snapshot itself
+                    error_msg = (
+                        f"PREGAME_ID MISMATCH in snapshot for bot {self.bot_alias}: "
+                        f"expected {self.expected_pregame_id[:8]}, got {pregame_id[:8]}"
+                    )
+                    logger.error(error_msg)
+                    self.pregame_id_validation_errors.append(error_msg)
+
+        if self.bot_puuid in joined_players:
+            self.joined_custom_game = True
+            self.join_reported = True
+
+        # Track ready status from snapshot
+        if self.bot_puuid in ready_players:
+            self.is_ready = True
+
+        if self.is_constructor:
+            # VALIDATION: Constructor should see their own pregame_id in snapshot
+            if self.simulated_pregame_id and pregame_id:
+                if self.simulated_pregame_id != pregame_id:
+                    error_msg = (
+                        f"CONSTRUCTOR PREGAME_ID MISMATCH for bot {self.bot_alias}: "
+                        f"constructor sent {self.simulated_pregame_id[:8]}, "
+                        f"but snapshot shows {pregame_id[:8]}"
+                    )
+                    logger.error(error_msg)
+                    self.pregame_id_validation_errors.append(error_msg)
+                else:
+                    logger.info(
+                        f"Bot {self.bot_alias} (constructor) validated: snapshot pregame_id "
+                        f"matches sent pregame_id: {pregame_id[:8]}"
+                    )
+            
+            if exec_state == 'CREATING' and not self.custom_game_created and not self._pending_creation_task:
+                async def creation_wrapper():
+                    try:
+                        await self._simulate_custom_game_creation()
+                    finally:
+                        self._pending_creation_task = None
+
+                self._pending_creation_task = asyncio.create_task(creation_wrapper())
+
+            if self.simulated_pregame_id and pregame_id == self.simulated_pregame_id and not self.custom_game_acknowledged:
+                logger.info(f"Bot {self.bot_alias} detected server acknowledgement for pregame {pregame_id}")
+                self.custom_game_acknowledged = True
+
+            all_joined = total_players > 0 and len(joined_players) >= total_players
+            all_ready = total_players > 0 and len(ready_players) >= total_players
+            
+            if all_joined:
+                self.ready_to_start = True
+                if all_ready:
+                    logger.info(
+                        f"Bot {self.bot_alias} (constructor) - All players joined and ready! "
+                        f"({len(joined_players)}/{total_players} joined, {len(ready_players)}/{total_players} ready)"
+                    )
+                else:
+                    logger.info(
+                        f"Bot {self.bot_alias} (constructor) - All players joined, starting game "
+                        f"({len(joined_players)}/{total_players} joined, {len(ready_players)}/{total_players} ready - ready optional)"
+                    )
+
+            if (
+                self.custom_game_acknowledged
+                and all_joined
+                and not self.match_started_reported
+                and not self._pending_start_task
+            ):
+                async def start_wrapper():
+                    try:
+                        await self._simulate_match_start(execution, total_players)
+                    finally:
+                        self._pending_start_task = None
+
+                self._pending_start_task = asyncio.create_task(start_wrapper())
+
+        else:
+            # Debug logging for join condition
+            if exec_state == 'READY' and pregame_id:
+                logger.info(
+                    f"Bot {self.bot_alias} checking join conditions: "
+                    f"exec_state={exec_state}, pregame_id={pregame_id[:8] if pregame_id else None}, "
+                    f"join_instruction_received={self.join_instruction_received}, "
+                    f"join_reported={self.join_reported}, "
+                    f"bot_in_joined={self.bot_puuid in joined_players}, "
+                    f"pending_join_task={self._pending_join_task is not None}"
+                )
+            
+            should_join = (
+                exec_state == 'READY'
+                and pregame_id
+                and self.join_instruction_received
+                and not self.join_reported
+                and self.bot_puuid not in joined_players
+                and not self._pending_join_task
+            )
+            if should_join:
+                team = self.my_team or 'team_a'
+                logger.info(
+                    f"Bot {self.bot_alias} JOIN CONDITION MET - triggering join for pregame {pregame_id[:8]} "
+                    f"as team {team}"
+                )
+
+                async def join_wrapper():
+                    try:
+                        await self._simulate_join_custom_game(pregame_id, team)
+                    finally:
+                        self._pending_join_task = None
+
+                self._pending_join_task = asyncio.create_task(join_wrapper())
+            elif exec_state == 'READY' and pregame_id and self.join_instruction_received:
+                # Log why join condition is not met
+                reasons = []
+                if self.join_reported:
+                    reasons.append("already reported join")
+                if self.bot_puuid in joined_players:
+                    reasons.append("already in joined_players")
+                if self._pending_join_task:
+                    reasons.append("pending join task exists")
+                if reasons:
+                    logger.warning(
+                        f"Bot {self.bot_alias} cannot join: {', '.join(reasons)}"
+                    )
+            
+            # If bot has joined but hasn't readied yet, ready up
+            should_ready = (
+                self.bot_puuid in joined_players
+                and self.bot_puuid not in ready_players
+                and not self.ready_reported
+                and not self._pending_ready_task
+            )
+            if should_ready:
+                async def ready_wrapper():
+                    try:
+                        await self._simulate_player_ready()
+                    finally:
+                        self._pending_ready_task = None
+                
+                self._pending_ready_task = asyncio.create_task(ready_wrapper())
+
 
     async def _sync_server_veto(self, servers_info: dict, last_event: str):
         self.server_veto_turn = servers_info.get('turn')
@@ -398,6 +631,163 @@ class BotWebSocketClient:
                 await self._make_map_veto_decision()
         else:
             self.last_processed_map_state = state_key
+
+    async def _simulate_custom_game_creation(self):
+        """Simulate the constructor creating a custom game lobby in Valorant."""
+        if not self.current_match_id:
+            logger.warning(f"Bot {self.bot_alias} has no match ID for custom game creation")
+            return
+
+        await asyncio.sleep(random.uniform(1.0, 2.5))
+
+        self.simulated_pregame_id = f"pregame_{uuid.uuid4().hex[:8]}"
+        self.pregame_id = self.simulated_pregame_id
+        payload = {
+            'match_id': self.current_match_id,
+            'pregame_id': self.simulated_pregame_id,
+            'constructor_puuid': self.bot_puuid,
+        }
+
+        logger.info(
+            f"Bot {self.bot_alias} (constructor) reporting custom game creation: {self.simulated_pregame_id}"
+        )
+        await self._send_message('custom_game_created', payload)
+        self.custom_game_created = True
+        self.custom_game_acknowledged = False
+        
+        # Constructor is already in the pregame after creating it, so mark as joined
+        self.join_reported = True
+        self.joined_custom_game = True
+        
+        # CRITICAL: Constructor must send player_joined_game so server counts it in joined_players
+        # Without this, server will only see 9/10 joined (missing constructor)
+        await asyncio.sleep(random.uniform(0.3, 0.8))  # Small delay before reporting join
+        logger.info(f"Bot {self.bot_alias} (constructor) reporting self as joined")
+        await self._send_message('player_joined_game', {
+            'match_id': self.current_match_id,
+            'player_puuid': self.bot_puuid,
+            'team': self.my_team or 'team_a',  # Constructor should know their team
+        })
+        
+        # Constructor also needs to ready up in the pregame lobby
+        await asyncio.sleep(random.uniform(0.5, 1.0))  # Small delay before readying
+        await self._simulate_player_ready()
+
+    async def _simulate_join_custom_game(self, pregame_id: str, team: str):
+        """Simulate a player joining the custom game lobby."""
+        if not self.current_match_id:
+            logger.warning(f"Bot {self.bot_alias} has no match ID when attempting to join custom game")
+            return
+
+        await asyncio.sleep(random.uniform(2.0, 5.0))
+
+        logger.info(
+            f"Bot {self.bot_alias} joining custom game {pregame_id[:8]}... as team {team}"
+        )
+        await self._send_message('player_joined_game', {
+            'match_id': self.current_match_id,
+            'player_puuid': self.bot_puuid,
+            'team': team,
+        })
+        self.join_reported = True
+        self.join_instruction_received = False
+        
+        # After joining, simulate readying up in the pregame lobby
+        await asyncio.sleep(random.uniform(0.5, 1.5))  # Small delay before readying
+        await self._simulate_player_ready()
+
+    async def _simulate_player_ready(self):
+        """Simulate a player readying up in the pregame lobby."""
+        if not self.current_match_id:
+            logger.warning(f"Bot {self.bot_alias} has no match ID when attempting to ready")
+            return
+
+        if self.ready_reported:
+            return  # Already reported ready
+
+        logger.info(f"Bot {self.bot_alias} readying up in pregame lobby...")
+        await self._send_message('player_ready', {
+            'match_id': self.current_match_id,
+            'player_puuid': self.bot_puuid,
+        })
+        self.is_ready = True
+        self.ready_reported = True
+
+    async def _validate_pregame_id(self, received_pregame_id: str, source: str) -> bool:
+        """
+        Validate that received pregame_id matches expected value.
+        
+        Args:
+            received_pregame_id: The pregame_id received from server/event
+            source: Source of the pregame_id (e.g., 'join_custom_game', 'match_state_update')
+        
+        Returns:
+            True if valid or no expected value set yet, False if mismatch detected
+        """
+        if not received_pregame_id:
+            return True  # No ID to validate
+        
+        # If we have an expected value (from snapshot), validate against it
+        if self.expected_pregame_id:
+            if self.expected_pregame_id != received_pregame_id:
+                error_msg = (
+                    f"PREGAME_ID VALIDATION FAILED for bot {self.bot_alias}: "
+                    f"expected {self.expected_pregame_id[:8]}, got {received_pregame_id[:8]} "
+                    f"(source: {source})"
+                )
+                logger.error(error_msg)
+                self.pregame_id_validation_errors.append(error_msg)
+                return False
+            else:
+                logger.debug(
+                    f"Bot {self.bot_alias} pregame_id validation passed: {received_pregame_id[:8]} (source: {source})"
+                )
+                return True
+        
+        # No expected value yet, store this as the expected value
+        self.expected_pregame_id = received_pregame_id
+        logger.info(
+            f"Bot {self.bot_alias} setting expected pregame_id: {received_pregame_id[:8]} (source: {source})"
+        )
+        return True
+
+    async def _simulate_match_start(self, execution: dict, total_players: int):
+        """Simulate the constructor starting the game once everyone has joined."""
+        if not self.current_match_id:
+            logger.warning(f"Bot {self.bot_alias} has no match ID when attempting to start the game")
+            return
+
+        if not await self._validate_custom_game_lobby(execution, total_players):
+            logger.warning(f"Bot {self.bot_alias} validation failed; skipping match start simulation")
+            return
+
+        await asyncio.sleep(random.uniform(1.0, 2.5))
+
+        simulated_coregame_id = f"coregame_{uuid.uuid4().hex[:8]}"
+        logger.info(
+            f"Bot {self.bot_alias} (constructor) starting simulated game with coregame {simulated_coregame_id}"
+        )
+        await self._send_message('match_started', {
+            'match_id': self.current_match_id,
+            'coregame_id': simulated_coregame_id,
+        })
+        self.match_started_reported = True
+        self.game_started = True
+        self.ready_to_start = False
+
+    async def _validate_custom_game_lobby(self, execution: dict, total_players: int) -> bool:
+        """
+        Stubbed validation that would normally check Valorant lobby membership.
+        Always returns True for automated tests.
+        """
+        joined_players = execution.get('joined_players') or []
+        logger.info(
+            f"Bot {self.bot_alias} validating custom game lobby (simulated): "
+            f"{len(joined_players)}/{total_players} players joined"
+        )
+        await asyncio.sleep(random.uniform(0.2, 0.5))
+        # In a full integration, the constructor would call valclient.pregame_fetch_match here.
+        return True
 
     async def _sync_side_selection(self, side_info: dict, last_event: str):
         selector = side_info.get('selector')
@@ -843,6 +1233,8 @@ class BotWebSocketClient:
         logger.info(f"   Timeout type: {timeout_type}")
         logger.info(f"   Reason: {reason}")
         
+        self._reset_match_flow_state()
+
         # Reset all match-related state
         self.current_match_id = None
         self.veto_complete = False
@@ -926,6 +1318,8 @@ class BotWebSocketClient:
     
     async def _handle_construction_started(self, payload: dict):
         """Handle constructor assignment event."""
+        self._reset_match_flow_state()
+
         self.is_constructor = payload.get('is_constructor', False)
         self.current_match_id = payload.get('match_id')
         self.side_selection_active = False
@@ -952,26 +1346,45 @@ class BotWebSocketClient:
         logger.info(f"   Pregame: {pregame_id[:8] if pregame_id else 'Unknown'}")
         logger.info(f"   Team: {team}")
         
-        # Simulate joining the custom game
-        # In a real scenario, this would call the Valorant API
-        # For testing, we'll simulate a successful join
+        # VALIDATION: Ensure pregame_id matches expected value
+        if not await self._validate_pregame_id(pregame_id, 'join_custom_game'):
+            logger.warning(
+                f"Bot {self.bot_alias} received mismatched pregame_id in join_custom_game, "
+                "but will proceed with join attempt"
+            )
         
-        # Add some realistic delay (2-5 seconds)
-        delay = random.uniform(2.0, 5.0)
-        await asyncio.sleep(delay)
+        self.join_instruction_received = True
+        if pregame_id:
+            self.pregame_id = pregame_id
+
+        logger.info(
+            f"Bot {self.bot_alias} queued to join custom game on next READY snapshot."
+        )
         
-        # Simulate successful join
-        self.joined_custom_game = True
-        self.pregame_id = pregame_id
-        
-        # Notify server that we joined successfully
-        await self._send_message('player_joined_game', {
-            'match_id': match_id,
-            'player_puuid': self.bot_puuid,
-            'team': team
-        })
-        
-        logger.info(f"Bot {self.bot_alias} simulated joining custom game")
+  
+        if self.latest_snapshot:
+            execution_info = self.latest_snapshot.get('execution') or {}
+            exec_state = execution_info.get('state')
+            pregame_id_from_snapshot = execution_info.get('pregame_id')
+            
+            effective_pregame_id = pregame_id or pregame_id_from_snapshot
+            
+            if exec_state == 'READY' and effective_pregame_id:
+                logger.info(
+                    f"Bot {self.bot_alias} received join instruction and latest snapshot is READY. "
+                    f"Checking join conditions immediately (pregame: {effective_pregame_id[:8] if effective_pregame_id else 'None'})"
+                )
+                # sanity check for snapshot state
+                await self._drive_execution_state(
+                    self.latest_snapshot, 
+                    execution_info, 
+                    self.total_expected_players or 10
+                )
+            else:
+                logger.debug(
+                    f"Bot {self.bot_alias} will wait for READY snapshot. "
+                    f"Current exec_state: {exec_state}, pregame_id: {effective_pregame_id[:8] if effective_pregame_id else 'None'}"
+                )
     
     async def _handle_all_players_joined(self, payload: dict):
         """Handle all players joined event (constructor can start game)"""
@@ -979,26 +1392,10 @@ class BotWebSocketClient:
         is_constructor = payload.get('is_constructor', False)
         
         if is_constructor and self.is_constructor:
-            logger.info(f"Bot {self.bot_alias} (CONSTRUCTOR) - All players joined! Starting game...")
-            
-            # Add some realistic delay (1-3 seconds)
-            delay = random.uniform(1.0, 3.0)
-            await asyncio.sleep(delay)
-            
-            # Simulate starting the custom game
-            # In a real scenario, this would call party_start_custom_game()
-            self.game_started = True
-            
-            # Simulate getting coregame ID after game starts
-            simulated_coregame_id = f"coregame_{uuid.uuid4().hex[:8]}"
-            
-            # Notify server that match started
-            await self._send_message('match_started', {
-                'match_id': match_id,
-                'coregame_id': simulated_coregame_id
-            })
-            
-            logger.info(f"Bot {self.bot_alias} (CONSTRUCTOR) started game with coregame {simulated_coregame_id}")
+            logger.info(
+                f"Bot {self.bot_alias} (CONSTRUCTOR) - All players joined! Awaiting snapshot validation before starting game."
+            )
+            self.ready_to_start = True
         else:
             logger.info(f"Bot {self.bot_alias} - All players joined, waiting for constructor to start game...")
     
@@ -1010,6 +1407,8 @@ class BotWebSocketClient:
         logger.warning(f"Bot {self.bot_alias} match cancelled: {reason}")
         logger.warning(f"   Match: {match_id[:8] if match_id else 'Unknown'}")
         
+        self._reset_match_flow_state()
+
         # Reset state
         self.is_constructor = False
         self.pregame_id = None
@@ -1045,6 +1444,19 @@ class BotWebSocketClient:
             await self.websocket.close()
             self.connected = False
             logger.info(f" Bot {self.bot_alias} disconnected")
+    
+    def get_pregame_id_validation_errors(self) -> List[str]:
+        """Get all pregame_id validation errors for this bot."""
+        return self.pregame_id_validation_errors.copy()
+
+    def has_pregame_id_validation_errors(self) -> bool:
+        """Check if this bot has any pregame_id validation errors."""
+        return len(self.pregame_id_validation_errors) > 0
+
+    def reset_validation_errors(self):
+        """Reset validation error tracking (useful for test cleanup)."""
+        self.pregame_id_validation_errors.clear()
+        self.expected_pregame_id = None
 
 
 async def create_bot_with_websocket(bot_num: int, base_elo: int, base_mmr: int, region: str) -> Optional[BotWebSocketClient]:
@@ -1274,6 +1686,33 @@ async def cleanup_bots(bot_clients: List[BotWebSocketClient]):
             logger.error(f"Error disconnecting bot {bot.bot_alias}: {e}")
     
     print("    All bot connections closed")
+
+
+async def validate_all_bots_pregame_ids(bots: List[BotWebSocketClient]) -> Dict[str, Any]:
+    """
+    Collect validation errors from all bots and return a summary.
+    
+    Args:
+        bots: List of all bot clients to check
+    
+    Returns:
+        Dictionary with 'errors' (list of all errors) and 'summary' (count per bot)
+    """
+    all_errors = []
+    error_summary = {}
+    
+    for bot in bots:
+        bot_errors = bot.get_pregame_id_validation_errors()
+        if bot_errors:
+            all_errors.extend(bot_errors)
+            error_summary[bot.bot_alias] = len(bot_errors)
+    
+    return {
+        'errors': all_errors,
+        'summary': error_summary,
+        'total_errors': len(all_errors),
+        'bots_with_errors': len(error_summary)
+    }
 
 
 async def main():

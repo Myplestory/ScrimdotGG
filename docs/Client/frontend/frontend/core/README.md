@@ -504,7 +504,7 @@ MatchPage.jsx
 
 #### Apps Involved
 1. **`match_system`** - Match lifecycle management
-2. **`match_execution`** - Live match data collection
+2. **Execution phase (within `match_system/phases`)** - Live match data collection
 3. **`realtime`** - WebSocket events
 
 #### Handlers
@@ -539,7 +539,7 @@ class MatchManager:
     async def check_veto_timeouts(self) # Background task
     async def assign_random_veto(self, match_id, phase) # On timeout
     
-# match_execution/manager.py
+# match_system/phases/execution.py
 
 class ExecutionManager:
     async def record_pregame_id(self, match_id, pregame_id, constructor_puuid)
@@ -721,13 +721,13 @@ Payload: {
    - ✅ Veto history tracking (VetoAction records)
    - ✅ Automatic state progression (SERVER_VETO → MAP_VETO → SIDE_SELECTION → CREATING)
 
-3. **Match Execution** (`server/match_execution/execution_manager.py`, `server/realtime/handlers/execution_handler.py`)
-   - ✅ MatchExecutionManager:
-     - assign_constructor() - Assign player to create custom game
+3. **Match Execution** (`server/match_system/phases/execution.py`, `server/realtime/handlers/execution_handler.py`)
+   - ✅ ExecutionPhaseManager:
+     - initiate_match_start() - Assign constructor and broadcast snapshot
      - handle_custom_game_created() - Track pregame_id when game is created
-     - handle_player_joined() - Track player joins
-     - check_all_players_joined() - Validate all 10 players joined
-     - start_match() - Transition to IN_PROGRESS state
+     - handle_player_joined() - Track player joins and snapshot updates
+     - handle_match_started() - Transition to IN_PROGRESS state
+     - handle_match_completion() - Record final scores
    - ✅ ExecutionHandler - WebSocket handler for execution events
    - ✅ Custom game creation tracking
    - ✅ Player join monitoring

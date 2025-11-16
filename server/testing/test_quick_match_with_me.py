@@ -12,7 +12,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'scrimgg.settings')
 django.setup()
 
 from scrimgg.models import Match, Player, Lobby
-from matchmaking.match_execution import MatchExecutionManager
+from match_system.phases.execution import ExecutionPhaseManager
 from asgiref.sync import sync_to_async
 import random
 
@@ -103,13 +103,13 @@ async def main():
     print("\n[4/4] Starting match...")
     print(f"   [IMPORTANT] Check your dev client NOW!")
     
-    result = await MatchExecutionManager.initiate_match_start(str(match.id))
+    result = await ExecutionPhaseManager.initiate_match_start(str(match.id))
     
     if result['status'] == 'success':
         print(f"\n   [SUCCESS] Match started!")
-        print(f"   [WebSocket] Sent 'match_starting' event to your client")
+        print(f"   [WebSocket] Sent 'match_construction_started' event to your client")
         print(f"\n   Your client should:")
-        print(f"   1. Receive 'match_starting' event")
+        print(f"   1. Receive 'match_construction_started' event")
         print(f"   2. See is_constructor = True")
         print(f"   3. Automatically call party_change_to_custom()")
         print(f"   4. Send back 'custom_game_created' event")

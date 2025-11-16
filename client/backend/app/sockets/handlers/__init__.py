@@ -5,6 +5,7 @@ from . import status
 from . import auth
 from . import queue
 from . import match
+from . import constructor
 from . import veto
 from . import chat
 from . import lobby
