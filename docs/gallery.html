@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scrim.GG - UI Gallery</title>
+    
+    <!-- Swiper CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css" />
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Source Sans Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #0f0f0f 0%, #151515 50%, #1a1a1a 100%);
+            color: #ececec;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 20px 0;
+        }
+
+        h1 {
+            font-size: 3rem;
+            font-weight: 900;
+            background: linear-gradient(135deg, #FF4655 0%, #ff809c 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        .subtitle {
+            color: #a8a8a8;
+            font-size: 1.1rem;
+            margin-top: 10px;
+        }
+
+        .category {
+            margin-bottom: 60px;
+        }
+
+        .category-title {
+            font-size: 1.8rem;
+            color: #FF4655;
+            margin-bottom: 20px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .swiper {
+            width: 100%;
+            height: auto;
+            padding: 40px 60px;
+            background: rgba(18, 18, 18, 0.6);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 70, 85, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        }
+
+        .swiper-slide {
+            text-align: center;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .swiper-slide img {
+            display: block;
+            width: 100%;
+            height: auto;
+            max-height: 600px;
+            object-fit: contain;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+            transition: transform 0.3s ease;
+        }
+
+        .swiper-slide img:hover {
+            transform: scale(1.02);
+        }
+
+        /* Navigation buttons */
+        .swiper-button-next,
+        .swiper-button-prev {
+            color: #FF4655 !important;
+            background: rgba(255, 70, 85, 0.1);
+            width: 44px !important;
+            height: 44px !important;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+        }
+
+        .swiper-button-next:hover,
+        .swiper-button-prev:hover {
+            background: rgba(255, 70, 85, 0.2);
+            transform: scale(1.1);
+        }
+
+        .swiper-button-next::after,
+        .swiper-button-prev::after {
+            font-size: 20px !important;
+            font-weight: bold;
+        }
+
+        /* Pagination */
+        .swiper-pagination-bullet {
+            background: rgba(255, 70, 85, 0.4);
+            opacity: 1;
+            width: 12px;
+            height: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .swiper-pagination-bullet-active {
+            background: #FF4655;
+            transform: scale(1.3);
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 60px;
+            padding: 30px 0;
+            color: #7c7c7c;
+            border-top: 1px solid rgba(255, 70, 85, 0.1);
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-top: 20px;
+            color: #FF4655;
+            text-decoration: none;
+            font-weight: 600;
+            transition: color 0.3s ease;
+        }
+
+        .back-link:hover {
+            color: #ff809c;
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2rem;
+            }
+
+            .swiper {
+                padding: 30px 40px;
+            }
+
+            .swiper-button-next,
+            .swiper-button-prev {
+                width: 36px !important;
+                height: 36px !important;
+            }
+
+            .swiper-button-next::after,
+            .swiper-button-prev::after {
+                font-size: 16px !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Scrim.GG</h1>
+            <p class="subtitle">UI Gallery - Competitive Valorant Matchmaking Platform</p>
+        </header>
+
+        <!-- Client Interface -->
+        <section class="category">
+            <h2 class="category-title">Main Client Interface</h2>
+            <div class="swiper client-swiper">
+                <div class="swiper-wrapper">
+                    <div class="swiper-slide">
+                        <img src="./images/Client/client.png" alt="ScrimGG Client Interface" />
+                    </div>
+                </div>
+                <div class="swiper-button-next"></div>
+                <div class="swiper-button-prev"></div>
+                <div class="swiper-pagination"></div>
+            </div>
+        </section>
+
+        <!-- Matchmaking & PUGs -->
+        <section class="category">
+            <h2 class="category-title">Play - Community Pickup Games</h2>
+            <div class="swiper play-swiper">
+                <div class="swiper-wrapper">
+                    <div class="swiper-slide">
+                        <img src="./images/Play/pug1.png" alt="PUG Matchmaking" />
+                    </div>
+                    <div class="swiper-slide">
+                        <img src="./images/Play/pug2.png" alt="PUG Lobby" />
+                    </div>
+                    <div class="swiper-slide">
+                        <img src="./images/Play/pug3.png" alt="PUG Game" />
+                    </div>
+                </div>
+                <div class="swiper-button-next"></div>
+                <div class="swiper-button-prev"></div>
+                <div class="swiper-pagination"></div>
+            </div>
+        </section>
+
+        <!-- League System -->
+        <section class="category">
+            <h2 class="category-title">League System</h2>
+            <div class="swiper league-swiper">
+                <div class="swiper-wrapper">
+                    <div class="swiper-slide">
+                        <img src="./images/League/League1.png" alt="League Overview" />
+                    </div>
+                    <div class="swiper-slide">
+                        <img src="./images/League/League2.png" alt="League Standings" />
+                    </div>
+                    <div class="swiper-slide">
+                        <img src="./images/League/League3.png" alt="League Details" />
+                    </div>
+                    <div class="swiper-slide">
+                        <img src="./images/League/League4.png" alt="League Rankings" />
+                    </div>
+                    <div class="swiper-slide">
+                        <img src="./images/League/League5.png" alt="League Stats" />
+                    </div>
+                </div>
+                <div class="swiper-button-next"></div>
+                <div class="swiper-button-prev"></div>
+                <div class="swiper-pagination"></div>
+            </div>
+        </section>
+
+        <!-- Tournaments -->
+        <section class="category">
+            <h2 class="category-title">Tournaments</h2>
+            <div class="swiper tournament-swiper">
+                <div class="swiper-wrapper">
+                    <div class="swiper-slide">
+                        <img src="./images/Tournaments/tournament1.png" alt="Tournament View" />
+                    </div>
+                    <div class="swiper-slide">
+                        <img src="./images/Tournaments/tournament2.png" alt="Tournament Bracket" />
+                    </div>
+                    <div class="swiper-slide">
+                        <img src="./images/Tournaments/tournament3.png" alt="Tournament Details" />
+                    </div>
+                    <div class="swiper-slide">
+                        <img src="./images/Tournaments/tournament4.png" alt="Tournament Results" />
+                    </div>
+                </div>
+                <div class="swiper-button-next"></div>
+                <div class="swiper-button-prev"></div>
+                <div class="swiper-pagination"></div>
+            </div>
+        </section>
+
+        <footer>
+            <p>Scrim.GG - Made for the Valorant competitive community</p>
+            <a href="../README.md" class="back-link">← Back to README</a>
+        </footer>
+    </div>
+
+    <!-- Swiper JS -->
+    <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
+    
+    <script>
+        // Initialize all swipers
+        const swiperConfig = {
+            slidesPerView: 1,
+            spaceBetween: 30,
+            loop: true,
+            autoplay: {
+                delay: 5000,
+                disableOnInteraction: false,
+                pauseOnMouseEnter: true,
+            },
+            pagination: {
+                el: '.swiper-pagination',
+                clickable: true,
+            },
+            navigation: {
+                nextEl: '.swiper-button-next',
+                prevEl: '.swiper-button-prev',
+            },
+            keyboard: {
+                enabled: true,
+            },
+            effect: 'slide',
+            speed: 600,
+        };
+
+        // Initialize each category's swiper
+        new Swiper('.client-swiper', swiperConfig);
+        new Swiper('.play-swiper', swiperConfig);
+        new Swiper('.league-swiper', swiperConfig);
+        new Swiper('.tournament-swiper', swiperConfig);
+    </script>
+</body>
+</html>
+
