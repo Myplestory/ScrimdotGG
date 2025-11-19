@@ -29,30 +29,29 @@ Scrim.GG is a comprehensive matchmaking platform that provides highly engaged pl
 
 ### Easy one click login
 
-![Login](./docs/images/Landing/landing.gif)
+<img src="./docs/images/Landing/landing.gif" alt="Login" width="600">
 
 ### Play community pickup games with ScrimGG
 
-![PUG Lobby](./docs/images/Play/pug2.png)
+<img src="./docs/images/Play/pug2.png" alt="PUG Lobby" width="600">
 
-![PUG Game](./docs/images/Play/pug3.png)
+<img src="./docs/images/Play/pug3.png" alt="PUG Game" width="600">
 
 ### Etch your mark in the community with the official ScrimGG League system, featuring cash prizes and more
 
-![League Details](./docs/images/League/League3.png)
+<img src="./docs/images/League/League3.png" alt="League Details" width="600">
 
-![League Rankings](./docs/images/League/League4.png)
+<img src="./docs/images/League/League4.png" alt="League Rankings" width="600">
 
-![League Stats](./docs/images/League/League5.png)
+<img src="./docs/images/League/League5.png" alt="League Stats" width="600">
 
 ### Host your own tournaments, sponsor them, and grow your own community
 
-<!-- Add your image links here -->
-![Tournament View](./docs/images/Tournaments/tournament1.png)
+<img src="./docs/images/Tournaments/tournament1.png" alt="Tournament View" width="600">
 
-![Tournament Bracket](./docs/images/Tournaments/tournament2.png)
+<img src="./docs/images/Tournaments/tournament2.png" alt="Tournament Bracket" width="600">
 
-![Tournament Results](./docs/images/Tournaments/tournament4.png)
+<img src="./docs/images/Tournaments/tournament4.png" alt="Tournament Results" width="600">
 
 ## Architecture
 
