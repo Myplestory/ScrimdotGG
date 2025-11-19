@@ -30,17 +30,11 @@ Scrim.GG is a comprehensive matchmaking platform that provides highly engaged pl
 
 ### Play community pickup games with ScrimGG
 
-![PUG Matchmaking](./docs/images/Play/pug1.png)
-
 ![PUG Lobby](./docs/images/Play/pug2.png)
 
 ![PUG Game](./docs/images/Play/pug3.png)
 
 ### Etch your mark in the community with the official ScrimGG League system, featuring cash prizes and more
-
-![League Overview](./docs/images/League/League1.png)
-
-![League Standings](./docs/images/League/League2.png)
 
 ![League Details](./docs/images/League/League3.png)
 
@@ -55,8 +49,6 @@ Scrim.GG is a comprehensive matchmaking platform that provides highly engaged pl
 
 ![Tournament Bracket](./docs/images/Tournaments/tournament2.png)
 
-![Tournament Details](./docs/images/Tournaments/tournament3.png)
-
 ![Tournament Results](./docs/images/Tournaments/tournament4.png)
 
 ## Architecture
@@ -64,16 +56,16 @@ Scrim.GG is a comprehensive matchmaking platform that provides highly engaged pl
 ### 1. Django ASGI Server (`server/`)
 - MMR-based matchmaking with time tolerance and priority requeue bias
 - Django Channels for WebSocket consumer support
-- Redis for caching, queues, channels, and async to sync support
+- Redis for caching, queues, state management, and async to sync support
 - PostgreSQL database
 - Celery for concurrent batched synchronous tasks
 
 ### 2. User Client (`client/`)
 - ElectronJs Desktop application
-- React frontend with Material-UI, gsap
+- React frontend with Material-UI
 - Lightweight ASGI Python backend (Quart)
-- Bidirectional WebSocket communication
-- Valorant local game client API
+- WebSocket communication with server
+- Valorant local client API
 
 ## Quick Start
 
@@ -186,7 +178,6 @@ npm start
 - **Electron** - Desktop app framework
 - **React 18** - UI framework
 - **Material-UI** - Component library
-- **GSAP** - Animation Library
 - **Quart** - Async Python web framework (local backend)
 - **valclient** - Valorant local API wrapper
 
@@ -229,9 +220,9 @@ See [DEVELOPMENT_SETUP.md](./docs/DEVELOPMENT_SETUP.md) for development environm
 | **Matchmaking (MMR/ELO)** | ✅ Complete | 100% |
 | **Match Acceptance Flow** | ✅ Complete | 100% |
 | **Requeueing System** | ✅ Complete | 100% |
-| Veto System | ✅ Complete | 100% |
-| Game Monitor | 🚧 In Progress | 50% |
-| Match Coordinator | 🚧 In Progress | 50% |
+| Game Monitor | 🚧 In Progress | 40% |
+| Match Coordinator | 🚧 In Progress | 30% |
+| Veto System | 📋 Planned | 0% |
 | Post-Match Stats/Updates | 📋 Planned | 0% |
 
 **Current Focus:** Game state monitoring and custom game coordination
@@ -248,7 +239,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - Inspired by [FACEIT](https://www.faceit.com)
 - Built with [valclient](https://github.com/colinhartigan/valclient-python)
-- UI design inspired by ESEA and Valorant
+- UI design inspired by ESEA
 - TrueSkill algorithm by Microsoft Research
 
 ---
