@@ -28,6 +28,37 @@ Scrim.GG is a comprehensive matchmaking platform that provides highly engaged pl
 - Forums for team recruitment, community growth, and networking for players of all skill levels
 
 
+### Play community pickup games with ScrimGG
+
+![PUG Matchmaking](./docs/images/Play/pug1.png)
+
+![PUG Lobby](./docs/images/Play/pug2.png)
+
+![PUG Game](./docs/images/Play/pug3.png)
+
+### Etch your mark in the community with the official ScrimGG League system, featuring cash prizes and more
+
+![League Overview](./docs/images/League/League1.png)
+
+![League Standings](./docs/images/League/League2.png)
+
+![League Details](./docs/images/League/League3.png)
+
+![League Rankings](./docs/images/League/League4.png)
+
+![League Stats](./docs/images/League/League5.png)
+
+### Host your own tournaments, sponsor them, and grow your own community
+
+<!-- Add your image links here -->
+![Tournament View](./docs/images/Tournaments/tournament1.png)
+
+![Tournament Bracket](./docs/images/Tournaments/tournament2.png)
+
+![Tournament Details](./docs/images/Tournaments/tournament3.png)
+
+![Tournament Results](./docs/images/Tournaments/tournament4.png)
+
 ## Architecture
 
 ### 1. Django ASGI Server (`server/`)
