@@ -29,31 +29,90 @@ Scrim.GG is a comprehensive matchmaking platform that provides highly engaged pl
 
 ## UI Showcase
 
+<style>
+.play-gallery input, .league-gallery input, .tournament-gallery input { display: none; }
+.play-gallery img, .league-gallery img, .tournament-gallery img { display: none; max-width: 100%; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.6); }
+#play1:checked ~ div img:nth-child(1), #play2:checked ~ div img:nth-child(2), #play3:checked ~ div img:nth-child(3) { display: block; margin: 0 auto; }
+#league1:checked ~ div img:nth-child(1), #league2:checked ~ div img:nth-child(2), #league3:checked ~ div img:nth-child(3), #league4:checked ~ div img:nth-child(4), #league5:checked ~ div img:nth-child(5) { display: block; margin: 0 auto; }
+#tournament1:checked ~ div img:nth-child(1), #tournament2:checked ~ div img:nth-child(2), #tournament3:checked ~ div img:nth-child(3), #tournament4:checked ~ div img:nth-child(4) { display: block; margin: 0 auto; }
+.play-gallery, .league-gallery, .tournament-gallery { text-align: center; margin: 20px 0; }
+.play-gallery label, .league-gallery label, .tournament-gallery label { 
+  background: rgba(255,70,85,0.2); 
+  border: 2px solid #FF4655; 
+  color: #FF4655; 
+  padding: 8px 16px; 
+  margin: 0 5px; 
+  border-radius: 4px; 
+  cursor: pointer; 
+  display: inline-block;
+  font-weight: bold;
+}
+.play-gallery label:hover, .league-gallery label:hover, .tournament-gallery label:hover { 
+  background: rgba(255,70,85,0.3); 
+}
+</style>
+
 ### Play community pickup games with ScrimGG
 
-<div style="overflow-x: auto; white-space: nowrap; margin: 20px 0;">
-  <img src="./docs/images/Play/pug1.png" alt="PUG Matchmaking" style="display: inline-block; max-height: 500px; margin-right: 15px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);">
-  <img src="./docs/images/Play/pug2.png" alt="PUG Lobby" style="display: inline-block; max-height: 500px; margin-right: 15px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);">
-  <img src="./docs/images/Play/pug3.png" alt="PUG Game" style="display: inline-block; max-height: 500px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);">
+<div class="play-gallery">
+  <input type="radio" name="play" id="play1" checked>
+  <input type="radio" name="play" id="play2">
+  <input type="radio" name="play" id="play3">
+  <div>
+    <img src="./docs/images/Play/pug1.png" alt="PUG Matchmaking">
+    <img src="./docs/images/Play/pug2.png" alt="PUG Lobby">
+    <img src="./docs/images/Play/pug3.png" alt="PUG Game">
+  </div>
+  <div style="margin-top: 15px;">
+    <label for="play1">1</label>
+    <label for="play2">2</label>
+    <label for="play3">3</label>
+  </div>
 </div>
 
 ### Etch your mark in the community with the official ScrimGG League system, featuring cash prizes and more
 
-<div style="overflow-x: auto; white-space: nowrap; margin: 20px 0;">
-  <img src="./docs/images/League/League1.png" alt="League Overview" style="display: inline-block; max-height: 500px; margin-right: 15px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);">
-  <img src="./docs/images/League/League2.png" alt="League Standings" style="display: inline-block; max-height: 500px; margin-right: 15px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);">
-  <img src="./docs/images/League/League3.png" alt="League Details" style="display: inline-block; max-height: 500px; margin-right: 15px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);">
-  <img src="./docs/images/League/League4.png" alt="League Rankings" style="display: inline-block; max-height: 500px; margin-right: 15px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);">
-  <img src="./docs/images/League/League5.png" alt="League Stats" style="display: inline-block; max-height: 500px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);">
+<div class="league-gallery">
+  <input type="radio" name="league" id="league1" checked>
+  <input type="radio" name="league" id="league2">
+  <input type="radio" name="league" id="league3">
+  <input type="radio" name="league" id="league4">
+  <input type="radio" name="league" id="league5">
+  <div>
+    <img src="./docs/images/League/League1.png" alt="League Overview">
+    <img src="./docs/images/League/League2.png" alt="League Standings">
+    <img src="./docs/images/League/League3.png" alt="League Details">
+    <img src="./docs/images/League/League4.png" alt="League Rankings">
+    <img src="./docs/images/League/League5.png" alt="League Stats">
+  </div>
+  <div style="margin-top: 15px;">
+    <label for="league1">1</label>
+    <label for="league2">2</label>
+    <label for="league3">3</label>
+    <label for="league4">4</label>
+    <label for="league5">5</label>
+  </div>
 </div>
 
 ### Host your own tournaments, sponsor them, and grow your own community
 
-<div style="overflow-x: auto; white-space: nowrap; margin: 20px 0;">
-  <img src="./docs/images/Tournaments/tournament1.png" alt="Tournament View" style="display: inline-block; max-height: 500px; margin-right: 15px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);">
-  <img src="./docs/images/Tournaments/tournament2.png" alt="Tournament Bracket" style="display: inline-block; max-height: 500px; margin-right: 15px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);">
-  <img src="./docs/images/Tournaments/tournament3.png" alt="Tournament Details" style="display: inline-block; max-height: 500px; margin-right: 15px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);">
-  <img src="./docs/images/Tournaments/tournament4.png" alt="Tournament Results" style="display: inline-block; max-height: 500px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);">
+<div class="tournament-gallery">
+  <input type="radio" name="tournament" id="tournament1" checked>
+  <input type="radio" name="tournament" id="tournament2">
+  <input type="radio" name="tournament" id="tournament3">
+  <input type="radio" name="tournament" id="tournament4">
+  <div>
+    <img src="./docs/images/Tournaments/tournament1.png" alt="Tournament View">
+    <img src="./docs/images/Tournaments/tournament2.png" alt="Tournament Bracket">
+    <img src="./docs/images/Tournaments/tournament3.png" alt="Tournament Details">
+    <img src="./docs/images/Tournaments/tournament4.png" alt="Tournament Results">
+  </div>
+  <div style="margin-top: 15px;">
+    <label for="tournament1">1</label>
+    <label for="tournament2">2</label>
+    <label for="tournament3">3</label>
+    <label for="tournament4">4</label>
+  </div>
 </div>
 
 ## Architecture
