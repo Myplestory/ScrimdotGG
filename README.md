@@ -12,7 +12,7 @@
 
 ---
 
-## Overview
+# Overview
 
 Scrim.GG is a comprehensive matchmaking platform that provides highly engaged players with:
 - ELO/MMR-based competitive matchmaking with TrueSkill integration
@@ -27,31 +27,39 @@ Scrim.GG is a comprehensive matchmaking platform that provides highly engaged pl
 - Karma and social/matchmaking block system for community self governance
 - Forums for team recruitment, community growth, and networking for players of all skill levels
 
-### Easy one click login
+### Easily log in with our one click valorant integration
 
-<img src="./docs/images/Landing/landing.gif" alt="Login" width="600">
+<div align="center">
+  <img src="./docs/images/Landing/landing.gif" alt="Login" width="600" style="border-radius: 8px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4); margin: 20px 0;">
+</div>
 
-### Play community pickup games with ScrimGG
+### Play community pickup games or full 5v5 scrims with ScrimGG with ease
 
-<img src="./docs/images/Play/pug2.png" alt="PUG Lobby" width="600">
-
-<img src="./docs/images/Play/pug3.png" alt="PUG Game" width="600">
+<div align="center">
+  <img src="./docs/images/Play/pug2.png" alt="PUG Lobby" width="600" style="border-radius: 8px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4); margin: 10px 0;">
+  <br>
+  <img src="./docs/images/Play/pug3.png" alt="PUG Game" width="600" style="border-radius: 8px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4); margin: 10px 0;">
+</div>
 
 ### Etch your mark in the community with the official ScrimGG League system, featuring cash prizes and more
 
-<img src="./docs/images/League/League3.png" alt="League Details" width="600">
-
-<img src="./docs/images/League/League4.png" alt="League Rankings" width="600">
-
-<img src="./docs/images/League/League5.png" alt="League Stats" width="600">
+<div align="center">
+  <img src="./docs/images/League/League3.png" alt="League Details" width="600" style="border-radius: 8px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4); margin: 10px 0;">
+  <br>
+  <img src="./docs/images/League/League4.png" alt="League Rankings" width="600" style="border-radius: 8px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4); margin: 10px 0;">
+  <br>
+  <img src="./docs/images/League/League5.png" alt="League Stats" width="600" style="border-radius: 8px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4); margin: 10px 0;">
+</div>
 
 ### Host your own tournaments, sponsor them, and grow your own community
 
-<img src="./docs/images/Tournaments/tournament1.png" alt="Tournament View" width="600">
-
-<img src="./docs/images/Tournaments/tournament2.png" alt="Tournament Bracket" width="600">
-
-<img src="./docs/images/Tournaments/tournament4.png" alt="Tournament Results" width="600">
+<div align="center">
+  <img src="./docs/images/Tournaments/tournament1.png" alt="Tournament View" width="600" style="border-radius: 8px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4); margin: 10px 0;">
+  <br>
+  <img src="./docs/images/Tournaments/tournament2.png" alt="Tournament Bracket" width="600" style="border-radius: 8px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4); margin: 10px 0;">
+  <br>
+  <img src="./docs/images/Tournaments/tournament4.png" alt="Tournament Results" width="600" style="border-radius: 8px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4); margin: 10px 0;">
+</div>
 
 ## Architecture
 
