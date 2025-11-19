@@ -27,6 +27,9 @@ Scrim.GG is a comprehensive matchmaking platform that provides highly engaged pl
 - Karma and social/matchmaking block system for community self governance
 - Forums for team recruitment, community growth, and networking for players of all skill levels
 
+### Easy one click login
+
+![Login](./docs/images/Landing/landing.gif)
 
 ### Play community pickup games with ScrimGG
 
