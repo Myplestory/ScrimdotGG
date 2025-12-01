@@ -553,6 +553,15 @@ export const WebSocketProvider = ({ children }) => {
     // PUG Queue operations
     joinPugQueue: (queueData) => sendEvent('join_pug_queue', queueData),
     leavePugQueue: () => sendEvent('leave_pug_queue', {}),
+    
+    // Lobby Invite operations
+    sendLobbyInvite: (lobbyId, targetPlayerPuuid) => sendEvent('send_lobby_invite', {
+      lobby_id: lobbyId,
+      target_player_puuid: targetPlayerPuuid
+    }),
+    acceptLobbyInvite: (inviteId) => sendEvent('accept_lobby_invite', { invite_id: inviteId }),
+    declineLobbyInvite: (inviteId) => sendEvent('decline_lobby_invite', { invite_id: inviteId }),
+    getAvailablePlayers: (filters = {}) => sendEvent('get_available_players', { filters }),
   };
 
   // Helper function to check queue eligibility

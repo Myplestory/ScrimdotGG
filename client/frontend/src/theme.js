@@ -88,6 +88,59 @@ export const tokens = (mode) => ({
           800: "#003d99",
           900: "#002966",
         },
+        // Valorant Rank Colors - Replace hex values with actual rank colors later
+        rankColors: {
+          iron: {
+            main: "#3b3b3b", // Replace with Iron rank color
+            light: "#5e5e5e",
+            dark: "#2d2d2d",
+          },
+          bronze: {
+            main: "#774f00", // Replace with Bronze rank color
+            light: "#84693c",
+            dark: "#4e3806",
+          },
+          silver: {
+            main: "#9ea2a1", // Replace with Silver rank color
+            light: "#f4faf8",
+            dark: "##8c908f",
+          },
+          gold: {
+            main: "#8c908f", // Replace with Gold rank color
+            light: "#f2ebb7",
+            dark: "#9c6210",
+          },
+          platinum: {
+            main: "#3696a7", // Replace with Platinum rank color
+            light: "#55d2e0",
+            dark: "#2d7b8b",
+          },
+          diamond: {
+            main: "#8a6ab6", // Replace with Diamond rank color
+            light: "#c587f4",
+            dark: "#775b9f",
+          },
+          ascendant: {
+            main: "#000000", // Replace with Ascendant rank color
+            light: "#000000",
+            dark: "#000000",
+          },
+          immortal: {
+            main: "#be344c", // Replace with Immortal rank color
+            light: "#000000",
+            dark: "#000000",
+          },
+          radiant: {
+            main: "#eadd8e", // Replace with Radiant rank color
+            light: "#000000",
+            dark: "#000000",
+          },
+          unrated: {
+            main: "#000000", // Replace with Unrated color
+            light: "#000000",
+            dark: "#000000",
+          },
+        },
       }
     : {
         // Light mode (inverted)
@@ -170,6 +223,59 @@ export const tokens = (mode) => ({
           800: "#cce0ff",
           900: "#e6f0ff",
         },
+        // Valorant Rank Colors - Light mode (same structure)
+        rankColors: {
+          iron: {
+            main: "#3b3b3b", // Replace with Iron rank color
+            light: "#5e5e5e",
+            dark: "#2d2d2d",
+          },
+          bronze: {
+            main: "#774f00", // Replace with Bronze rank color
+            light: "#84693c",
+            dark: "#4e3806",
+          },
+          silver: {
+            main: "#9ea2a1", // Replace with Silver rank color
+            light: "#f4faf8",
+            dark: "##8c908f",
+          },
+          gold: {
+            main: "#8c908f", // Replace with Gold rank color
+            light: "#f2ebb7",
+            dark: "#9c6210",
+          },
+          platinum: {
+            main: "#3696a7", // Replace with Platinum rank color
+            light: "#55d2e0",
+            dark: "#2d7b8b",
+          },
+          diamond: {
+            main: "#8a6ab6", // Replace with Diamond rank color
+            light: "#c587f4",
+            dark: "#775b9f",
+          },
+          ascendant: {
+            main: "#000000", // Replace with Ascendant rank color
+            light: "#000000",
+            dark: "#000000",
+          },
+          immortal: {
+            main: "#be344c", // Replace with Immortal rank color
+            light: "#000000",
+            dark: "#000000",
+          },
+          radiant: {
+            main: "#eadd8e", // Replace with Radiant rank color
+            light: "#000000",
+            dark: "#000000",
+          },
+          unrated: {
+            main: "#000000", // Replace with Unrated color
+            light: "#000000",
+            dark: "#000000",
+          },
+        },
       }),
 });
 
@@ -218,6 +324,19 @@ export const themeSettings = (mode) => {
               primary: colors.grey[100], // White text
               secondary: colors.grey[400], // Muted text
             },
+            // Expose rank colors in palette for easy access
+            ranks: {
+              iron: colors.rankColors.iron.main,
+              bronze: colors.rankColors.bronze.main,
+              silver: colors.rankColors.silver.main,
+              gold: colors.rankColors.gold.main,
+              platinum: colors.rankColors.platinum.main,
+              diamond: colors.rankColors.diamond.main,
+              ascendant: colors.rankColors.ascendant.main,
+              immortal: colors.rankColors.immortal.main,
+              radiant: colors.rankColors.radiant.main,
+              unrated: colors.rankColors.unrated.main,
+            },
           }
         : {
             // palette values for light mode
@@ -234,6 +353,19 @@ export const themeSettings = (mode) => {
             },
             background: {
               default: "#fcfcfc",
+            },
+            // Expose rank colors in palette for light mode too
+            ranks: {
+              iron: colors.rankColors.iron.main,
+              bronze: colors.rankColors.bronze.main,
+              silver: colors.rankColors.silver.main,
+              gold: colors.rankColors.gold.main,
+              platinum: colors.rankColors.platinum.main,
+              diamond: colors.rankColors.diamond.main,
+              ascendant: colors.rankColors.ascendant.main,
+              immortal: colors.rankColors.immortal.main,
+              radiant: colors.rankColors.radiant.main,
+              unrated: colors.rankColors.unrated.main,
             },
           }),
     },

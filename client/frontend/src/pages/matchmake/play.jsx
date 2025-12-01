@@ -85,14 +85,10 @@ const PugQueue = () => {
   
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [availablePlayers, setAvailablePlayers] = useState([
-    // Mock data for testing - will be replaced with API call
-    { puuid: '1', alias: 'Player1', rank: 'Diamond 2', elo: 1850, status: 'online' },
-    { puuid: '2', alias: 'Player2', rank: 'Platinum 3', elo: 1650, status: 'online' },
-    { puuid: '3', alias: 'Player3', rank: 'Diamond 1', elo: 1800, status: 'in_game' },
-    { puuid: '4', alias: 'Player4', rank: 'Ascendant 1', elo: 1950, status: 'online' },
-  ]);
-  const [invitingPlayer, setInvitingPlayer] = useState(null); // Track which player is being invited
+  const [availablePlayers, setAvailablePlayers] = useState([]);
+  const [invitingPlayer, setInvitingPlayer] = useState(null);
+  const [loadingPlayers, setLoadingPlayers] = useState(false);
+  const [inviteError, setInviteError] = useState(null);
 
   // Use WebSocket context
   const { 
@@ -260,27 +256,144 @@ const PugQueue = () => {
       setChatMessages(prev => [...prev, payload]);
     });
 
-    //invite event listeners; not fully implemented
+    // ============================================
+    // INVITE EVENT LISTENERS - Full WebSocket implementation
+    // ============================================
     const unsubscribeInviteSent = on('invite_sent', (payload) => {
-      console.log('Invite sent successfully:', payload);
+      console.log('✅ Invite sent successfully:', payload);
       setInvitingPlayer(null);
-      // Optional: Show success notification
+      setInviteError(null);
+      
+      // Show success notification
+      if (window.showNotification) {
+        window.showNotification({
+          type: 'success',
+          title: 'Invite Sent',
+          message: `Invite sent to ${payload.target_player?.alias || 'player'}`,
+          duration: 3000
+        });
+      }
     });
 
     const unsubscribeInviteAccepted = on('invite_accepted', (payload) => {
-      console.log('Player accepted invite:', payload);
-      // Player will be added to lobby via other events
+      console.log('🎉 Player accepted invite:', payload);
+      
+      // Add player to local players state
+      if (payload.player_data) {
+        setPlayers(prev => {
+          // Check if player already exists to avoid duplicates
+          const exists = prev.some(p => p.puuid === payload.player_data.puuid);
+          if (exists) return prev;
+          
+          return [...prev, {
+            puuid: payload.player_data.puuid,
+            alias: payload.player_data.alias,
+            rank: payload.player_data.rank,
+            elo: payload.player_data.elo,
+            isLeader: false
+          }];
+        });
+      }
+      
+      // Close invite dialog
       setInviteDialogOpen(false);
+      
+      // Show success notification
+      if (window.showNotification) {
+        window.showNotification({
+          type: 'success',
+          title: 'Player Joined',
+          message: `${payload.player_data?.alias || 'Player'} joined the lobby!`,
+          duration: 4000
+        });
+      }
     });
 
     const unsubscribeInviteDeclined = on('invite_declined', (payload) => {
-      console.log('Player declined invite:', payload);
-      // Optional: Show notification that player declined
+      console.log('❌ Player declined invite:', payload);
+      
+      // Show notification that player declined
+      if (window.showNotification) {
+        window.showNotification({
+          type: 'info',
+          title: 'Invite Declined',
+          message: `${payload.player_alias || 'Player'} declined the invitation`,
+          duration: 4000
+        });
+      }
+    });
+
+    const unsubscribeInviteExpired = on('invite_expired', (payload) => {
+      console.log('⏰ Invite expired:', payload);
+      setInvitingPlayer(null);
+      
+      // Show notification about expired invite
+      if (window.showNotification) {
+        window.showNotification({
+          type: 'warning',
+          title: 'Invite Expired',
+          message: 'The player did not respond in time',
+          duration: 4000
+        });
+      }
     });
 
     const unsubscribeLobbyFull = on('lobby_full', (payload) => {
-      console.log('Lobby is full:', payload);
+      console.log('⚠️ Lobby is full:', payload);
       setInviteDialogOpen(false);
+      
+      // Show notification
+      if (window.showNotification) {
+        window.showNotification({
+          type: 'warning',
+          title: 'Lobby Full',
+          message: 'The lobby is already full',
+          duration: 3000
+        });
+      }
+    });
+
+    const unsubscribeAvailablePlayers = on('available_players_list', (payload) => {
+      console.log('📋 Received available players:', payload);
+      setAvailablePlayers(payload.players || []);
+      setLoadingPlayers(false);
+    });
+
+    const unsubscribeInviteError = on('invite_error', (payload) => {
+      console.error('❌ Invite error:', payload);
+      setInvitingPlayer(null);
+      setInviteError(payload.message);
+      
+      // Error message mapping
+      const errorMessages = {
+        'player_offline': 'Player is currently offline',
+        'player_in_match': 'Player is in an active match',
+        'lobby_full': 'Lobby is already full',
+        'permission_denied': 'You do not have permission to invite players',
+        'player_not_found': 'Player not found',
+        'already_in_lobby': 'Player is already in a lobby'
+      };
+      
+      // Show error notification
+      if (window.showNotification) {
+        window.showNotification({
+          type: 'error',
+          title: 'Invite Failed',
+          message: errorMessages[payload.error_code] || payload.message || 'Failed to send invite',
+          duration: 5000
+        });
+      }
+    });
+
+    const unsubscribePlayerStatusUpdate = on('player_status_changed', (payload) => {
+      console.log('🔄 Player status updated:', payload);
+      
+      // Update player status in available players list
+      setAvailablePlayers(prev => prev.map(player =>
+        player.puuid === payload.puuid
+          ? { ...player, status: payload.status }
+          : player
+      ));
     });
 
     return () => {
@@ -296,7 +409,11 @@ const PugQueue = () => {
       if (typeof unsubscribeInviteSent === 'function') unsubscribeInviteSent();
       if (typeof unsubscribeInviteAccepted === 'function') unsubscribeInviteAccepted();
       if (typeof unsubscribeInviteDeclined === 'function') unsubscribeInviteDeclined();
+      if (typeof unsubscribeInviteExpired === 'function') unsubscribeInviteExpired();
       if (typeof unsubscribeLobbyFull === 'function') unsubscribeLobbyFull();
+      if (typeof unsubscribeAvailablePlayers === 'function') unsubscribeAvailablePlayers();
+      if (typeof unsubscribeInviteError === 'function') unsubscribeInviteError();
+      if (typeof unsubscribePlayerStatusUpdate === 'function') unsubscribePlayerStatusUpdate();
     };
   }, [on]);
 
@@ -477,26 +594,75 @@ const PugQueue = () => {
   const handleEmptySlotClick = (slotIndex) => {
     console.log('Empty slot clicked:', slotIndex);
     setInviteDialogOpen(true);
-    setSearchQuery(''); // Reset search when opening
+    setSearchQuery('');
+    setInviteError(null);
+    setLoadingPlayers(true);
     
-    // TODO: Fetch available players from API when backend is ready
-    // if (api.getAvailablePlayers) {
-    //   api.getAvailablePlayers().then(players => {
-    //     setAvailablePlayers(players);
-    //   });
-    // }
+    // Fetch available players via WebSocket
+
+    /*
+    if (api.getAvailablePlayers) {
+      api.getAvailablePlayers({
+        status: 'online',
+        exclude_lobby_members: true,
+        lobby_id: lobbyData?.id
+      });
+    } else {
+      console.warn('getAvailablePlayers API method not available');
+      setLoadingPlayers(false);
+    }*/
+
+      setTimeout(() => {
+      setAvailablePlayers([
+        { puuid: '1', alias: 'Player1', rank: 'Diamond 2', elo: 1850, status: 'online' },
+        { puuid: '2', alias: 'Player2', rank: 'Platinum 3', elo: 1650, status: 'online' },
+        { puuid: '3', alias: 'Player3', rank: 'Diamond 1', elo: 1800, status: 'in_game' },
+        { puuid: '4', alias: 'Player4', rank: 'Ascendant 1', elo: 1950, status: 'online' },
+        { puuid: '5', alias: 'Player5', rank: 'Gold 3', elo: 1450, status: 'online' },
+        { puuid: '6', alias: 'TestUser123', rank: 'Platinum 1', elo: 1550, status: 'online' },
+      ]);
+      setLoadingPlayers(false);
+    }, 500); // Simulate network delay
   };
 
   const handleInvitePlayer = (playerPuuid, playerAlias) => {
     console.log('Inviting player:', playerPuuid, playerAlias);
     setInvitingPlayer(playerPuuid);
+    setInviteError(null);
     
-    // TODO: Call API to send invite when backend is ready
-    if (lobbyData?.id && api.inviteLobby) {
-      api.inviteLobby(lobbyData.id, playerPuuid);
-    } else {
-      console.warn('Cannot invite player - lobby data or API method not available');
+    // Validate lobby data
+    if (!lobbyData?.id) {
+      console.error('Cannot invite: No active lobby');
       setInvitingPlayer(null);
+      setInviteError('No active lobby found');
+      
+      if (window.showNotification) {
+        window.showNotification({
+          type: 'error',
+          title: 'Cannot Invite',
+          message: 'No active lobby found',
+          duration: 3000
+        });
+      }
+      return;
+    }
+    
+    // Send invite via WebSocket
+    if (api.sendLobbyInvite) {
+      api.sendLobbyInvite(lobbyData.id, playerPuuid);
+    } else {
+      console.error('sendLobbyInvite API method not available');
+      setInvitingPlayer(null);
+      setInviteError('Invite feature not available');
+      
+      if (window.showNotification) {
+        window.showNotification({
+          type: 'error',
+          title: 'Cannot Invite',
+          message: 'Invite feature is not available',
+          duration: 3000
+        });
+      }
     }
   };
 
@@ -505,6 +671,19 @@ const PugQueue = () => {
     setSearchQuery('');
     setInvitingPlayer(null);
   };
+
+  // Refresh available players when WebSocket reconnects while dialog is open
+  useEffect(() => {
+    if (connected && inviteDialogOpen && api.getAvailablePlayers) {
+      console.log('🔄 WebSocket reconnected - refreshing available players');
+      setLoadingPlayers(true);
+      api.getAvailablePlayers({
+        status: 'online',
+        exclude_lobby_members: true,
+        lobby_id: lobbyData?.id
+      });
+    }
+  }, [connected, inviteDialogOpen]);
 
   // Filter players based on search query
   const filteredPlayers = availablePlayers.filter(player =>
@@ -560,7 +739,7 @@ const PugQueue = () => {
 
   // Component for showing acceptance progress
   const AcceptanceProgress = () => {
-    console.log('🎯 [DEBUG] AcceptanceProgress render - acceptedCount:', acceptedCount, 'totalPlayers:', totalPlayers);
+    console.log('[DEBUG] AcceptanceProgress render - acceptedCount:', acceptedCount, 'totalPlayers:', totalPlayers);
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', gap: 0.5, mb: 2 }}>
         {Array.from({ length: totalPlayers }).map((_, index) => (
@@ -1051,6 +1230,15 @@ const PugQueue = () => {
               />
             </Box>
 
+            {/* Error Display */}
+            {inviteError && (
+              <Box sx={{ mb: 2, p: 1.5, backgroundColor: 'rgba(244, 67, 54, 0.1)', borderRadius: '4px', border: '1px solid rgba(244, 67, 54, 0.3)' }}>
+                <Typography variant="body2" sx={{ color: '#f44336' }}>
+                  ⚠️ {inviteError}
+                </Typography>
+              </Box>
+            )}
+
             {/* Player List */}
             <List sx={{ 
               maxHeight: '400px', 
@@ -1069,10 +1257,16 @@ const PugQueue = () => {
                 }
               }
             }}>
-              {filteredPlayers.length === 0 ? (
+              {loadingPlayers ? (
                 <Box sx={{ textAlign: 'center', py: 4 }}>
                   <Typography variant="body2" color="text.secondary">
-                    {searchQuery ? 'No players found matching your search' : 'No available players'}
+                    Loading available players...
+                  </Typography>
+                </Box>
+              ) : filteredPlayers.length === 0 ? (
+                <Box sx={{ textAlign: 'center', py: 4 }}>
+                  <Typography variant="body2" color="text.secondary">
+                    {searchQuery ? 'No players found matching your search' : availablePlayers.length === 0 ? 'No players available to invite' : 'No available players'}
                   </Typography>
                 </Box>
               ) : (
@@ -1133,7 +1327,7 @@ const PugQueue = () => {
                             label={player.rank}
                             size="small"
                             sx={{
-                              backgroundColor: theme.palette.secondary.main,
+                              backgroundColor: theme.palette.ranks[player.rank.toLowerCase().split(' ')[0]],
                               color: '#000',
                               fontWeight: 'bold',
                               fontSize: '0.7rem',
