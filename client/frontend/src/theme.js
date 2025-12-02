@@ -96,22 +96,22 @@ export const tokens = (mode) => ({
             dark: "#2d2d2d",
           },
           bronze: {
-            main: "#774f00", // Replace with Bronze rank color
+            main: "#774f00", // Bronze rank color
             light: "#84693c",
             dark: "#4e3806",
           },
           silver: {
-            main: "#9ea2a1", // Replace with Silver rank color
-            light: "#f4faf8",
-            dark: "##8c908f",
+            main: "#9ea2a1", // Silver rank color
+            light: "#c5cac9",
+            dark: "#8c908f",
           },
           gold: {
-            main: "#8c908f", // Replace with Gold rank color
+            main: "#d4af37", // Gold rank color
             light: "#f2ebb7",
             dark: "#9c6210",
           },
           platinum: {
-            main: "#3696a7", // Replace with Platinum rank color
+            main: "#3696a7", // Platinum rank color
             light: "#55d2e0",
             dark: "#2d7b8b",
           },
@@ -121,19 +121,19 @@ export const tokens = (mode) => ({
             dark: "#775b9f",
           },
           ascendant: {
-            main: "#000000", // Replace with Ascendant rank color
-            light: "#000000",
-            dark: "#000000",
+            main: "#0c5531", // Ascendant rank color
+            light: "#a9f0ca",
+            dark: "#0b502e",
           },
           immortal: {
-            main: "#be344c", // Replace with Immortal rank color
-            light: "#000000",
-            dark: "#000000",
+            main: "#be344c", // Immortal rank color
+            light: "#e7776a",
+            dark: "#7e21470",
           },
           radiant: {
-            main: "#eadd8e", // Replace with Radiant rank color
-            light: "#000000",
-            dark: "#000000",
+            main: "#eadd8e", // Radiant rank color
+            light: "#fffda6",
+            dark: "#ac792b",
           },
           unrated: {
             main: "#000000", // Replace with Unrated color
@@ -236,44 +236,44 @@ export const tokens = (mode) => ({
             dark: "#4e3806",
           },
           silver: {
-            main: "#9ea2a1", // Replace with Silver rank color
-            light: "#f4faf8",
-            dark: "##8c908f",
+            main: "#9ea2a1", // Silver rank color
+            light: "#c5cac9",
+            dark: "#8c908f",
           },
           gold: {
-            main: "#8c908f", // Replace with Gold rank color
+            main: "#d4af37", // Gold rank color
             light: "#f2ebb7",
             dark: "#9c6210",
           },
           platinum: {
-            main: "#3696a7", // Replace with Platinum rank color
+            main: "#3696a7", // Platinum rank color
             light: "#55d2e0",
             dark: "#2d7b8b",
           },
           diamond: {
-            main: "#8a6ab6", // Replace with Diamond rank color
+            main: "#8a6ab6", // Diamond rank color
             light: "#c587f4",
             dark: "#775b9f",
           },
           ascendant: {
-            main: "#000000", // Replace with Ascendant rank color
-            light: "#000000",
-            dark: "#000000",
+            main: "#0c5531", // Replace with Ascendant rank color
+            light: "#a9f0ca",
+            dark: "#0b502e",
           },
           immortal: {
             main: "#be344c", // Replace with Immortal rank color
-            light: "#000000",
-            dark: "#000000",
+            light: "#e7776a",
+            dark: "#7e21470",
           },
           radiant: {
             main: "#eadd8e", // Replace with Radiant rank color
-            light: "#000000",
-            dark: "#000000",
+            light: "#fffda6",
+            dark: "#ac792b",
           },
           unrated: {
-            main: "#000000", // Replace with Unrated color
-            light: "#000000",
-            dark: "#000000",
+            main: "#FFFFFF", // Replace with Unrated color
+            light: "#FFFFFF",
+            dark: "#FFFFFF",
           },
         },
       }),
