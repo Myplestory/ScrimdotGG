@@ -24,7 +24,7 @@ import {
   IconButton,
   Badge,
   TextField,
-  Container
+  Container,
 } from '@mui/material';
 import {
   PlayArrow,
@@ -36,7 +36,8 @@ import {
   TrendingUp,
   TrendingDown,
   Search,
-  Add
+  Add,
+  Person
 } from '@mui/icons-material';
 import { useMode } from '../../theme';
 import { useWebSocket } from '../../contexts/WebSocketContext';
@@ -89,6 +90,18 @@ const PugQueue = () => {
   const [invitingPlayer, setInvitingPlayer] = useState(null);
   const [loadingPlayers, setLoadingPlayers] = useState(false);
   const [inviteError, setInviteError] = useState(null);
+  
+  // Match Found Banner state - Triggered by WebSocket 'match_found_banner' event
+  const [showMatchBanner, setShowMatchBanner] = useState(true); // Set to true for testing (false in production)
+  const [matchBannerData, setMatchBannerData] = useState({
+    map: 'Corrode', // Test data - will be populated by WebSocket
+    match_id: null,
+    server: null
+  });
+  const [matchAcceptTimer, setMatchAcceptTimer] = useState(30); // 30 second countdown timer
+  const [showAcceptButton, setShowAcceptButton] = useState(true);
+  const [playerAcceptances, setPlayerAcceptances] = useState(Array(10).fill(false)); // Track which players have accepted
+
 
   // Use WebSocket context
   const { 
@@ -257,6 +270,36 @@ const PugQueue = () => {
     });
 
     // ============================================
+    // MATCH FOUND BANNER - WebSocket event listener
+    // ============================================
+    const unsubscribeMatchFoundBanner = on('match_found_banner', (payload) => {
+      console.log('🎯 [BANNER] Match found banner event received:', payload);
+      setShowMatchBanner(true);
+      setMatchBannerData({
+        map: payload.map || 'Unknown Map',
+        match_id: payload.match_id,
+        server: payload.server
+      });
+      // Reset acceptance tracking when new match is found
+      setPlayerAcceptances(Array(10).fill(false));
+      setShowAcceptButton(true);
+      setMatchAcceptTimer(30);
+    });
+
+    // WebSocket listener: Player accepted match
+    const unsubscribePlayerAcceptedMatch = on('player_accepted_match', (payload) => {
+      console.log('✅ [BANNER] Player accepted match:', payload);
+      // payload: { player_index: number, accepted_count: number, total_players: number }
+      if (payload.player_index !== undefined && payload.player_index >= 0 && payload.player_index < 10) {
+        setPlayerAcceptances(prev => {
+          const newAcceptances = [...prev];
+          newAcceptances[payload.player_index] = true;
+          return newAcceptances;
+        });
+      }
+    });
+
+    // ============================================
     // INVITE EVENT LISTENERS - Full WebSocket implementation
     // ============================================
     const unsubscribeInviteSent = on('invite_sent', (payload) => {
@@ -405,6 +448,7 @@ const PugQueue = () => {
       if (typeof unsubscribeMatchConfirmed === 'function') unsubscribeMatchConfirmed();
       if (typeof unsubscribeMatchTimeout === 'function') unsubscribeMatchTimeout();
       if (typeof unsubscribeLobbyMessage === 'function') unsubscribeLobbyMessage();
+      if (typeof unsubscribeMatchFoundBanner === 'function') unsubscribeMatchFoundBanner();
       // Cleanup invite event listeners
       if (typeof unsubscribeInviteSent === 'function') unsubscribeInviteSent();
       if (typeof unsubscribeInviteAccepted === 'function') unsubscribeInviteAccepted();
@@ -614,12 +658,16 @@ const PugQueue = () => {
 
       setTimeout(() => {
       setAvailablePlayers([
-        { puuid: '1', alias: 'Player1', rank: 'Diamond 2', elo: 1850, status: 'online' },
+        { puuid: '1', alias: 'Player1', rank: 'Immortal 2', elo: 1850, status: 'online' },
         { puuid: '2', alias: 'Player2', rank: 'Platinum 3', elo: 1650, status: 'online' },
         { puuid: '3', alias: 'Player3', rank: 'Diamond 1', elo: 1800, status: 'in_game' },
         { puuid: '4', alias: 'Player4', rank: 'Ascendant 1', elo: 1950, status: 'online' },
         { puuid: '5', alias: 'Player5', rank: 'Gold 3', elo: 1450, status: 'online' },
-        { puuid: '6', alias: 'TestUser123', rank: 'Platinum 1', elo: 1550, status: 'online' },
+        { puuid: '6', alias: 'TestUser123', rank: 'Radiant', elo: 1550, status: 'online' },
+        { puuid: '7', alias: 'Ayprusss', rank: 'Silver 2', elo: 1300, status: 'offline'},
+        { puuid: '8', alias: 'beeprusss', rank: 'bronze 1', elo: 950, status: 'offline'},
+        {puuid: '9', alias: 'ceepruss', rank: 'iron 3', elo: 550, status:'online'},
+        {puuid: '10', alias: 'bich nga cafe', rank: 'unranked', elo: 0, status:'online'}
       ]);
       setLoadingPlayers(false);
     }, 500); // Simulate network delay
@@ -685,12 +733,33 @@ const PugQueue = () => {
     }
   }, [connected, inviteDialogOpen]);
 
+  // Match Accept Timer - Countdown from 30 seconds
+  useEffect(() => {
+    if (!showMatchBanner || matchAcceptTimer <= 0) return;
+
+    const timerInterval = setInterval(() => {
+      setMatchAcceptTimer(prev => {
+        if (prev <= 1) {
+          // Timer expired - auto-close banner
+          setShowMatchBanner(false);
+          setMatchAcceptTimer(30); // Reset timer
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timerInterval);
+  }, [showMatchBanner, matchAcceptTimer]);
+
+
   // Filter players based on search query
   const filteredPlayers = availablePlayers.filter(player =>
     player.alias.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const handleAcceptMatch = () => {
+    setShowAcceptButton(false);
     if (matchData?.match_id) {
       api.acceptMatch(matchData.match_id);
       setUserAccepted(true); // Mark that user has accepted
@@ -786,6 +855,201 @@ const PugQueue = () => {
           position: 'relative',
         }}
       >
+        {/* Match Found Banner with Overlay */}
+        {showMatchBanner && (
+          <>
+            {/* Gray Overlay Background */}
+            <Box
+              sx={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                zIndex: 9998,
+                backdropFilter: 'blur(4px)',
+              }}
+              onClick={(e) => e.stopPropagation()} // Prevent clicks from going through
+            />
+            
+            {/* Match Found Banner */}
+            <Box
+              sx={{
+                position: 'fixed',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                zIndex: 9999,
+                width: '90%',
+                maxWidth: '500px',
+              }}
+            >
+              <Paper
+                elevation={24}
+                sx={{
+                  position: 'relative',
+                  backgroundColor: theme.palette.background.paper,
+                  border: `3px solid ${theme.palette.secondary.main}`,
+                  borderRadius: '12px',
+                  padding: theme.spacing(4),
+                  textAlign: 'center',
+                  boxShadow: `0 0 40px ${theme.palette.secondary.main}80`,
+                  overflow: 'hidden',
+                  // Background image setup
+                  '&::before': {
+                    content: '""',
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundImage: `url(/maps/${matchBannerData.map?.toLowerCase().replace(/\s+/g, '')}.jpg)`,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                    opacity: 0.2,
+                    zIndex: 0,
+                  }
+                }}
+              >
+                {/* Content wrapper with relative positioning */}
+                <Box sx={{ position: 'relative', zIndex: 1 }}>
+                  {/* Header */}
+                  <Typography
+                    variant="h2"
+                    sx={{
+                      color: theme.palette.secondary.main,
+                      fontWeight: 'bold',
+                      textTransform: 'uppercase',
+                      letterSpacing: '3px',
+                      mb: 2,
+                      textShadow: `0 0 20px ${theme.palette.secondary.main}60`,
+                    }}
+                  >
+                    MATCH FOUND
+                  </Typography>
+                  
+                  {/* Subheader - Map Name */}
+                  <Typography
+                    variant="h5"
+                    sx={{
+                      color: theme.palette.text.primary,
+                      fontWeight: 500,
+                      mb: 3,
+                    }}
+                  >
+                    {matchBannerData.map || 'Unknown Map'}
+                  </Typography>
+                  
+                  {/* Timer Display */}
+                  <Box
+                    sx={{
+                      mb: 3,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: 1,
+                    }}
+                  >
+                    <Typography
+                      variant="h3"
+                      sx={{
+                        color: matchAcceptTimer <= 10 
+                          ? theme.palette.error.main 
+                          : theme.palette.success.main,
+                        fontWeight: 'bold',
+                        fontSize: '2rem',
+                      }}
+                    >
+                      {matchAcceptTimer}
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        color: theme.palette.text.secondary,
+                        textTransform: 'uppercase',
+                        letterSpacing: '1px',
+                      }}
+                    >
+                      Accept within time limit
+                    </Typography>
+                  </Box>
+                  
+                  {/*User list Showing Number of Players Accepting Match*/}
+                  {!showAcceptButton && (
+                    <Box
+                      sx={{
+                        mb: 3,
+                        display: 'flex',
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 1.5,
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      {Array.from({length: 10}).map((_, index) => (
+                        <Person
+                          key={index}
+                          sx={{
+                            fontSize: '2rem',
+                            color: playerAcceptances[index] 
+                              ? theme.palette.common.white 
+                              : theme.palette.action.disabled,
+                            transition: 'all 0.3s ease',
+                            filter: playerAcceptances[index] 
+                              ? 'drop-shadow(0 0 8px rgba(255, 255, 255, 0.8))' 
+                              : 'none',
+                          }}
+                        />
+                      ))}
+                    </Box>
+                  )}
+                  {/* Accept Match Button */}
+                  {showAcceptButton && (
+                    <Button
+                      variant="contained"
+                      onClick={() => {
+                        // Send WebSocket event to notify server of acceptance
+                        if (matchBannerData.match_id) {
+                          api.emit('accept_match', {
+                            match_id: matchBannerData.match_id,
+                          });
+                        }
+                        
+                        // Hide the accept button and show the acceptance tracker
+                        setShowAcceptButton(false);
+                        
+                        // Mark current user as accepted (assume player index 0 for now, server will broadcast actual index)
+                        setPlayerAcceptances(prev => {
+                          const newAcceptances = [...prev];
+                          newAcceptances[0] = true; // This will be overridden by server broadcast
+                          return newAcceptances;
+                        });
+                      }}
+                      sx={{
+                        backgroundColor: theme.palette.success.main,
+                        color: theme.palette.getContrastText(theme.palette.success.main),
+                        fontWeight: 'bold',
+                        fontSize: '1.1rem',
+                        px: 6,
+                        py: 1.5,
+                        textTransform: 'uppercase',
+                        letterSpacing: '2px',
+                        '&:hover': {
+                          backgroundColor: theme.palette.success.dark,
+                        },
+                      }}
+                    >
+                      ACCEPT
+                    </Button>
+                    )}
+                </Box>
+              </Paper>
+            </Box>
+          </>
+        )}
+
         {/* Header */}
         <Typography variant="h4" align="center" gutterBottom sx={{ color: theme.palette.secondary.main }}>
           {getQueueTitle()}
