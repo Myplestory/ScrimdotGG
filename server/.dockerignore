@@ -1,0 +1,60 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Django
+*.log
+db.sqlite3
+db.sqlite3-journal
+/media
+/static
+/logs
+
+# Pipenv
+# Note: Pipfile.lock is needed for Docker build, so it's not ignored
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Build artifacts
+node_modules/
+build/
+dist/
+
+# Documentation
+*.md
+docs/
+
+

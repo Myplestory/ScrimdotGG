@@ -1,0 +1,214 @@
+version: 2.1
+
+# CircleCI configuration for ScrimGG
+# This config handles testing, building Docker images, and deployment
+
+orbs:
+  docker: circleci/docker@2.2.0
+  aws-ecr: circleci/aws-ecr@8.0.0
+  aws-ecs: circleci/aws-ecs@2.0.0
+
+jobs:
+  # Test job - runs Django tests
+  test:
+    docker:
+      - image: cimg/python:3.12
+      - image: cimg/postgres:15.0
+        environment:
+          POSTGRES_DB: scrimgg_test
+          POSTGRES_USER: scrimgg
+          POSTGRES_PASSWORD: test_password
+      - image: valkey/valkey:7-alpine
+    working_directory: ~/project/server
+    steps:
+      - checkout:
+          path: ~/project
+      
+      - run:
+          name: Install pipenv
+          command: pip install pipenv
+      
+      - run:
+          name: Install dependencies
+          command: |
+            cd ~/project/server
+            pipenv install --dev
+      
+      - run:
+          name: Wait for PostgreSQL
+          command: |
+            for i in `seq 1 30`; do
+              nc -z localhost 5432 && break
+              echo "Waiting for PostgreSQL..."
+              sleep 1
+            done
+      
+      - run:
+          name: Wait for Valkey
+          command: |
+            for i in `seq 1 30`; do
+              nc -z localhost 6379 && break
+              echo "Waiting for Valkey..."
+              sleep 1
+            done
+      
+      - run:
+          name: Run migrations
+          command: |
+            cd ~/project/server
+            export DATABASE_URL="postgresql://scrimgg:test_password@localhost:5432/scrimgg_test"
+            export REDIS_URL="redis://localhost:6379/0"
+            pipenv run python manage.py migrate --noinput
+      
+      - run:
+          name: Run Django tests
+          command: |
+            cd ~/project/server
+            export DATABASE_URL="postgresql://scrimgg:test_password@localhost:5432/scrimgg_test"
+            export REDIS_URL="redis://localhost:6379/0"
+            export DJANGO_SECRET_KEY="test-secret-key-for-ci"
+            export DEBUG="True"
+            pipenv run python manage.py test --noinput
+          environment:
+            DJANGO_SETTINGS_MODULE: scrimgg.settings
+      
+      - run:
+          name: Check code formatting (optional)
+          command: |
+            cd ~/project/server
+            pipenv run python -m flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics || true
+          when: on_fail
+
+  # Build Docker images
+  build:
+    docker:
+      - image: cimg/base:stable
+    working_directory: ~/project
+    steps:
+      - checkout
+      
+      - setup_remote_docker:
+          version: 20.10.14
+      
+      - run:
+          name: Build Docker images
+          command: |
+            cd server
+            docker build -t scrimgg-django:${CIRCLE_SHA1} .
+            docker tag scrimgg-django:${CIRCLE_SHA1} scrimgg-django:latest
+      
+      - run:
+          name: Save Docker image
+          command: |
+            docker save scrimgg-django:${CIRCLE_SHA1} | gzip > /tmp/scrimgg-django-${CIRCLE_SHA1}.tar.gz
+      
+      - persist_to_workspace:
+          root: /tmp
+          paths:
+            - scrimgg-django-*.tar.gz
+
+  # Build and push to AWS ECR (if using AWS)
+  build-and-push-ecr:
+    executor: aws-ecr/default
+    working_directory: ~/project
+    steps:
+      - checkout
+      
+      - aws-ecr/build-and-push-image:
+          account-url: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com
+          aws-access-key-id: AWS_ACCESS_KEY_ID
+          aws-secret-access-key: AWS_SECRET_ACCESS_KEY
+          region: ${AWS_DEFAULT_REGION}
+          repo: scrimgg-django
+          tag: ${CIRCLE_SHA1},latest
+          path: ./server
+
+  # Deploy Django to AWS ECS
+  deploy-django:
+    executor: aws-ecr/default
+    working_directory: ~/project
+    steps:
+      - aws-ecs/update-service:
+          family: scrimgg-django
+          cluster-name: scrimgg-cluster
+          container-image-name-updates: "container=django,tag=${CIRCLE_SHA1}"
+
+  # Deploy Celery Worker to AWS ECS
+  deploy-celery-worker:
+    executor: aws-ecr/default
+    working_directory: ~/project
+    steps:
+      - aws-ecs/update-service:
+          family: scrimgg-celery-worker
+          cluster-name: scrimgg-cluster
+          container-image-name-updates: "container=celery-worker,tag=${CIRCLE_SHA1}"
+
+  # Deploy Celery Beat to AWS ECS
+  deploy-celery-beat:
+    executor: aws-ecr/default
+    working_directory: ~/project
+    steps:
+      - aws-ecs/update-service:
+          family: scrimgg-celery-beat
+          cluster-name: scrimgg-cluster
+          container-image-name-updates: "container=celery-beat,tag=${CIRCLE_SHA1}"
+
+  # Deploy to generic cloud (Railway, Render, etc.)
+  deploy:
+    docker:
+      - image: cimg/base:stable
+    working_directory: ~/project
+    steps:
+      - checkout
+      
+      - run:
+          name: Deploy to cloud platform
+          command: |
+            echo "Deploy to your cloud platform here"
+            # Example for Railway:
+            # railway up --service django
+            # Example for Render:
+            # render deploy
+          when: on_success
+
+workflows:
+  # Main workflow - runs on every push
+  test-and-build:
+    jobs:
+      - test
+      - build:
+          requires:
+            - test
+          filters:
+            branches:
+              only: main
+  
+  # Deployment workflow - runs on main branch after successful build
+  deploy-production:
+    jobs:
+      - test
+      - build-and-push-ecr:
+          requires:
+            - test
+          filters:
+            branches:
+              only: main
+      - deploy-django:
+          requires:
+            - build-and-push-ecr
+          filters:
+            branches:
+              only: main
+      - deploy-celery-worker:
+          requires:
+            - build-and-push-ecr
+          filters:
+            branches:
+              only: main
+      - deploy-celery-beat:
+          requires:
+            - build-and-push-ecr
+          filters:
+            branches:
+              only: main
+

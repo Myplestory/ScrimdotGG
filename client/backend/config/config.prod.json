@@ -1,0 +1,23 @@
+{
+  "environment": "production",
+  "django": {
+    "api_url": "http://34.226.121.133:8000",
+    "ws_url": "ws://34.226.121.133:8000/ws/matchmaking/"
+  },
+  "client": {
+    "host": "127.0.0.1",
+    "port": 5888,
+    "debug": false
+  },
+  "cors": {
+    "origin": "*"
+  },
+  "timeouts": {
+    "player_model": 5,
+    "lobby_creation": 5
+  },
+  "heartbeat": {
+    "interval": 3
+  }
+}
+

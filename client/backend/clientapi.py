@@ -14,10 +14,12 @@ file_path = os.path.join(os.path.dirname(__file__), folder_name, file_name)
 
 class ValorantAPI(object):
     def __init__(self):
+        from app.settings import DJANGO_WS_URL, DJANGO_API_URL
         self.client = None
         self.args = None
         self.pugsocket = None
-        self.pugsocket_url = "ws://localhost:8000/ws/matchmaking/"
+        self.django_api_url = DJANGO_API_URL.rstrip('/')
+        self.pugsocket_url = DJANGO_WS_URL.rstrip('/')
         self.session_id = None
         self.puuid = None
         self.latest_match_state = None
@@ -50,11 +52,13 @@ class ValorantAPI(object):
                     'username': f'{self.client.player_name}#{self.client.player_tag}',
                     'alias': f'{self.client.player_name}#{self.client.player_tag}',
                 }
-                url = 'http://127.0.0.1:8000/login/login/'
+                url = f'{self.django_api_url}/login/login/'
                 try:
                     response = requests.post(url, json=jsonargs)
                     if response.status_code == 200:
-                        self.pugsocket_url = f"ws://localhost:8000/ws/matchmaking/{self.client.puuid}/"
+                        # Build WebSocket URL from base URL + puuid
+                        base_ws_url = self.pugsocket_url.rstrip('/')
+                        self.pugsocket_url = f"{base_ws_url}/{self.client.puuid}/"
                         data = response.json()
                         self.session_id = data.get('sessionid')
                         print(f"Client successfully activated for: {self.client.puuid}")

@@ -1,0 +1,82 @@
+version: '3.8'
+
+# Production Docker Compose
+# Usage: docker-compose -f docker-compose.prod.yml up -d
+# Note: In production, you'll likely use managed services for PostgreSQL and Valkey/Redis
+# This file is for reference or if deploying to a single server
+# Connection strings use redis:// protocol (compatible with both Redis and Valkey)
+
+services:
+  # Django ASGI Server (Daphne)
+  django:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: scrimgg_django_prod
+    command: pipenv run daphne -b 0.0.0.0 -p 8000 scrimgg.asgi:application
+    volumes:
+      - static_volume:/app/static
+      - media_volume:/app/media
+      - logs_volume:/app/logs
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=${DEBUG:-False}
+      - SECRET_KEY=${DJANGO_SECRET_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS}
+      - CHANNEL_LAYERS_REDIS=${REDIS_URL}
+    restart: always
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/').read()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Celery Worker
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: scrimgg_celery_worker_prod
+    command: pipenv run celery -A scrimgg worker --loglevel=info --pool=gevent -Q celery,matchmaking,cleanup --concurrency=4
+    volumes:
+      - logs_volume:/app/logs
+    environment:
+      - DEBUG=${DEBUG:-False}
+      - SECRET_KEY=${DJANGO_SECRET_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
+    restart: always
+    deploy:
+      replicas: 2  # Scale workers as needed
+
+  # Celery Beat Scheduler
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: scrimgg_celery_beat_prod
+    command: pipenv run celery -A scrimgg beat --loglevel=info
+    volumes:
+      - logs_volume:/app/logs
+    environment:
+      - DEBUG=${DEBUG:-False}
+      - SECRET_KEY=${DJANGO_SECRET_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
+    restart: always
+
+volumes:
+  static_volume:
+  media_volume:
+  logs_volume:
+

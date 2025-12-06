@@ -1,0 +1,81 @@
+{
+  "family": "scrimgg-django",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::207108490770:role/ecsTaskExecutionRole",
+  "containerDefinitions": [
+    {
+      "name": "django",
+      "image": "207108490770.dkr.ecr.us-east-1.amazonaws.com/scrimgg-django:latest",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "DEBUG",
+          "value": "False"
+        },
+        {
+          "name": "ALLOWED_HOSTS",
+          "value": "*"
+        },
+        {
+          "name": "SECURE_SSL_REDIRECT",
+          "value": "False"
+        },
+        {
+          "name": "DJANGO_SETTINGS_MODULE",
+          "value": "scrimgg.settings_production"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "DJANGO_SECRET_KEY",
+          "valueFrom": "arn:aws:secretsmanager:us-east-2:207108490770:secret:scrimgg/django-secret-key-6TqnlP"
+        },
+        {
+          "name": "DATABASE_URL",
+          "valueFrom": "arn:aws:secretsmanager:us-east-2:207108490770:secret:scrimgg/database-url-ERNbSp"
+        },
+        {
+          "name": "REDIS_URL",
+          "valueFrom": "arn:aws:secretsmanager:us-east-2:207108490770:secret:scrimgg/redis-url-hrjvZt"
+        },
+        {
+          "name": "CELERY_BROKER_URL",
+          "valueFrom": "arn:aws:secretsmanager:us-east-2:207108490770:secret:scrimgg/redis-url-hrjvZt"
+        },
+        {
+          "name": "CELERY_RESULT_BACKEND",
+          "valueFrom": "arn:aws:secretsmanager:us-east-2:207108490770:secret:scrimgg/redis-url-hrjvZt"
+        },
+        {
+          "name": "CHANNEL_LAYERS_REDIS",
+          "valueFrom": "arn:aws:secretsmanager:us-east-2:207108490770:secret:scrimgg/redis-url-hrjvZt"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/scrimgg-django",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "healthCheck": {
+        "command": ["CMD-SHELL", "curl -f http://localhost:8000/health/ || exit 1"],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 60
+      }
+    }
+  ]
+}
+

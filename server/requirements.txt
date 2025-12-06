@@ -1,0 +1,38 @@
+# Requirements file for ScrimGG
+# Generated from Pipfile - use: pipenv requirements > requirements.txt
+# This file is useful for platforms that don't support Pipfile directly
+
+# Core Django
+Django>=5.0.0
+djangorestframework
+django-cors-headers
+django-redis
+django-celery-beat
+
+# WebSocket & ASGI
+channels
+channels-redis
+daphne
+websockets
+
+# Database
+psycopg2-binary
+
+# Task Queue
+celery
+gevent
+
+# HTTP Clients
+requests
+httpx
+
+# Image Processing
+Pillow
+
+# Rating System
+trueskill
+
+# Environment Variables (for production)
+dj-database-url
+
+

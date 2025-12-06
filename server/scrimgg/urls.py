@@ -23,6 +23,7 @@ from . import views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('health/', views.health_check, name='health_check'),  # Health check for Docker/monitoring
     path('api/check_authentication/', views.check_authentication, name='check_authentication'),
     path('api/logout/', views.logout_view, name='logout'),
     path('api/csrf_cookie/', views.getCSRFToken, name='getCSRFToken'),

@@ -3,6 +3,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from django.http import JsonResponse
 from django.contrib.auth import logout
 from django.shortcuts import get_object_or_404
+from django.db import connection
 from rest_framework.permissions import IsAuthenticated
 from scrimgg.models import Player
 
@@ -33,4 +34,23 @@ def logout_view(request):
 @ensure_csrf_cookie
 def getCSRFToken(request):
     return JsonResponse({ 'success': 'CSRF cookie set' }, status=200)
+
+@api_view(["GET"])
+def health_check(request):
+    """
+    Health check endpoint for Docker and monitoring.
+    Checks database connectivity.
+    """
+    try:
+        # Check database connection
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+            db_status = "ok"
+    except Exception as e:
+        db_status = f"error: {str(e)}"
+    
+    return JsonResponse({
+        'status': 'healthy',
+        'database': db_status
+    }, status=200)
 
