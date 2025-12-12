@@ -2,7 +2,7 @@
     "containerOverrides": [
       {
         "name": "django",
-        "command": ["sh", "-c", "python manage.py migrate scrimgg 0001 --fake && python manage.py migrate"]
+        "command": ["python", "manage.py", "showmigrations", "scrimgg"]
       }
     ]
   }
