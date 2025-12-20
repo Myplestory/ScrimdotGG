@@ -1,8 +1,5 @@
 {
-    "containerOverrides": [
-      {
-        "name": "django",
-        "command": ["python", "manage.py", "showmigrations", "scrimgg"]
-      }
-    ]
-  }
+  "containerOverrides": [{
+    "name": "django"
+  }]
+}

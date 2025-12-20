@@ -2,6 +2,50 @@
 
 import django.utils.timezone
 from django.db import migrations, models
+from django.db import connection
+
+
+def add_lobby_fields_if_not_exist(apps, schema_editor):
+    """Add lobby fields only if they don't already exist."""
+    with connection.cursor() as cursor:
+        # List of fields to add with their SQL types and defaults
+        fields_to_add = [
+            ('created_at', "TIMESTAMP WITH TIME ZONE", "DEFAULT CURRENT_TIMESTAMP"),
+            ('elo_range', 'JSONB', "DEFAULT '{}'::jsonb"),
+            ('map_preferences', 'JSONB', "DEFAULT '[]'::jsonb"),
+            ('max_size', 'INTEGER', 'DEFAULT 5'),
+            ('queue_type', 'VARCHAR(20)', "DEFAULT 'pug'"),
+            ('queued_at', 'TIMESTAMP WITH TIME ZONE', 'DEFAULT NULL'),
+            ('server_preferences', 'JSONB', "DEFAULT '[]'::jsonb"),
+        ]
+        
+        # Check and add each field if it doesn't exist
+        for field_name, sql_type, default in fields_to_add:
+            cursor.execute("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name='scrimgg_lobby' AND column_name=%s
+            """, [field_name])
+            if not cursor.fetchone():
+                # Column doesn't exist, add it
+                cursor.execute(f"ALTER TABLE scrimgg_lobby ADD COLUMN {field_name} {sql_type} {default}")
+
+
+def reverse_add_lobby_fields(apps, schema_editor):
+    """Remove lobby fields if they exist."""
+    with connection.cursor() as cursor:
+        fields_to_remove = [
+            'created_at', 'elo_range', 'map_preferences', 'max_size',
+            'queue_type', 'queued_at', 'server_preferences'
+        ]
+        for field_name in fields_to_remove:
+            cursor.execute("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name='scrimgg_lobby' AND column_name=%s
+            """, [field_name])
+            if cursor.fetchone():
+                cursor.execute(f"ALTER TABLE scrimgg_lobby DROP COLUMN {field_name}")
 
 
 class Migration(migrations.Migration):
@@ -11,40 +55,52 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AddField(
-            model_name='lobby',
-            name='created_at',
-            field=models.DateTimeField(auto_now_add=True, default=django.utils.timezone.now),
-            preserve_default=False,
-        ),
-        migrations.AddField(
-            model_name='lobby',
-            name='elo_range',
-            field=models.JSONField(default=dict),
-        ),
-        migrations.AddField(
-            model_name='lobby',
-            name='map_preferences',
-            field=models.JSONField(default=list),
-        ),
-        migrations.AddField(
-            model_name='lobby',
-            name='max_size',
-            field=models.IntegerField(default=5),
-        ),
-        migrations.AddField(
-            model_name='lobby',
-            name='queue_type',
-            field=models.CharField(default='pug', max_length=20),
-        ),
-        migrations.AddField(
-            model_name='lobby',
-            name='queued_at',
-            field=models.DateTimeField(blank=True, null=True),
-        ),
-        migrations.AddField(
-            model_name='lobby',
-            name='server_preferences',
-            field=models.JSONField(default=list),
+        migrations.SeparateDatabaseAndState(
+            # Database operation: conditionally add columns
+            database_operations=[
+                migrations.RunPython(
+                    add_lobby_fields_if_not_exist,
+                    reverse_add_lobby_fields,
+                ),
+            ],
+            # State operation: update Django's model state
+            state_operations=[
+                migrations.AddField(
+                    model_name='lobby',
+                    name='created_at',
+                    field=models.DateTimeField(auto_now_add=True, default=django.utils.timezone.now),
+                    preserve_default=False,
+                ),
+                migrations.AddField(
+                    model_name='lobby',
+                    name='elo_range',
+                    field=models.JSONField(default=dict),
+                ),
+                migrations.AddField(
+                    model_name='lobby',
+                    name='map_preferences',
+                    field=models.JSONField(default=list),
+                ),
+                migrations.AddField(
+                    model_name='lobby',
+                    name='max_size',
+                    field=models.IntegerField(default=5),
+                ),
+                migrations.AddField(
+                    model_name='lobby',
+                    name='queue_type',
+                    field=models.CharField(default='pug', max_length=20),
+                ),
+                migrations.AddField(
+                    model_name='lobby',
+                    name='queued_at',
+                    field=models.DateTimeField(blank=True, null=True),
+                ),
+                migrations.AddField(
+                    model_name='lobby',
+                    name='server_preferences',
+                    field=models.JSONField(default=list),
+                ),
+            ],
         ),
     ]

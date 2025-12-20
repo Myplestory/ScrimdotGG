@@ -3,6 +3,59 @@
 import django.db.models.deletion
 import uuid
 from django.db import migrations, models
+from django.db import connection
+
+
+def add_match_fields_if_not_exist(apps, schema_editor):
+    """Add match fields only if they don't already exist."""
+    with connection.cursor() as cursor:
+        # List of fields to add with their SQL types and defaults
+        fields_to_add = [
+            ('completed_at', "TIMESTAMP WITH TIME ZONE", "DEFAULT NULL"),
+            ('confirmation_completed_at', "TIMESTAMP WITH TIME ZONE", "DEFAULT NULL"),
+            ('constructor_puuid', "VARCHAR(100)", "DEFAULT NULL"),
+            ('coregame_id', "VARCHAR(100)", "DEFAULT NULL"),
+            ('current_round', 'INTEGER', 'DEFAULT 0'),
+            ('game_server', "VARCHAR(100)", "DEFAULT NULL"),
+            ('last_updated', "TIMESTAMP WITH TIME ZONE", "DEFAULT CURRENT_TIMESTAMP"),
+            ('selected_map', "VARCHAR(50)", "DEFAULT NULL"),
+            ('started_at', "TIMESTAMP WITH TIME ZONE", "DEFAULT NULL"),
+            ('status', "VARCHAR(20)", "DEFAULT 'confirmed'"),
+            ('team_a_data', 'JSONB', "DEFAULT '{}'::jsonb"),
+            ('team_a_score', 'INTEGER', 'DEFAULT 0'),
+            ('team_b_data', 'JSONB', "DEFAULT '{}'::jsonb"),
+            ('team_b_score', 'INTEGER', 'DEFAULT 0'),
+        ]
+        
+        # Check and add each field if it doesn't exist
+        for field_name, sql_type, default in fields_to_add:
+            cursor.execute("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name='scrimgg_match' AND column_name=%s
+            """, [field_name])
+            if not cursor.fetchone():
+                # Column doesn't exist, add it
+                cursor.execute(f"ALTER TABLE scrimgg_match ADD COLUMN {field_name} {sql_type} {default}")
+
+
+def reverse_add_match_fields(apps, schema_editor):
+    """Remove match fields if they exist."""
+    with connection.cursor() as cursor:
+        fields_to_remove = [
+            'completed_at', 'confirmation_completed_at', 'constructor_puuid',
+            'coregame_id', 'current_round', 'game_server', 'last_updated',
+            'selected_map', 'started_at', 'status', 'team_a_data', 'team_a_score',
+            'team_b_data', 'team_b_score'
+        ]
+        for field_name in fields_to_remove:
+            cursor.execute("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name='scrimgg_match' AND column_name=%s
+            """, [field_name])
+            if cursor.fetchone():
+                cursor.execute(f"ALTER TABLE scrimgg_match DROP COLUMN {field_name}")
 
 
 class Migration(migrations.Migration):
@@ -12,75 +65,87 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AddField(
-            model_name='match',
-            name='completed_at',
-            field=models.DateTimeField(blank=True, null=True),
-        ),
-        migrations.AddField(
-            model_name='match',
-            name='confirmation_completed_at',
-            field=models.DateTimeField(blank=True, null=True),
-        ),
-        migrations.AddField(
-            model_name='match',
-            name='constructor_puuid',
-            field=models.CharField(blank=True, max_length=100, null=True),
-        ),
-        migrations.AddField(
-            model_name='match',
-            name='coregame_id',
-            field=models.CharField(blank=True, max_length=100, null=True),
-        ),
-        migrations.AddField(
-            model_name='match',
-            name='current_round',
-            field=models.IntegerField(default=0),
-        ),
-        migrations.AddField(
-            model_name='match',
-            name='game_server',
-            field=models.CharField(blank=True, max_length=100, null=True),
-        ),
-        migrations.AddField(
-            model_name='match',
-            name='last_updated',
-            field=models.DateTimeField(auto_now=True),
-        ),
-        migrations.AddField(
-            model_name='match',
-            name='selected_map',
-            field=models.CharField(blank=True, max_length=50, null=True),
-        ),
-        migrations.AddField(
-            model_name='match',
-            name='started_at',
-            field=models.DateTimeField(blank=True, null=True),
-        ),
-        migrations.AddField(
-            model_name='match',
-            name='status',
-            field=models.CharField(choices=[('confirmed', 'All Players Accepted'), ('starting', 'Creating Custom Game'), ('in_progress', 'Match Live'), ('paused', 'Match Paused'), ('completed', 'Match Finished'), ('cancelled', 'Match Cancelled')], default='confirmed', max_length=20),
-        ),
-        migrations.AddField(
-            model_name='match',
-            name='team_a_data',
-            field=models.JSONField(default=dict),
-        ),
-        migrations.AddField(
-            model_name='match',
-            name='team_a_score',
-            field=models.IntegerField(default=0),
-        ),
-        migrations.AddField(
-            model_name='match',
-            name='team_b_data',
-            field=models.JSONField(default=dict),
-        ),
-        migrations.AddField(
-            model_name='match',
-            name='team_b_score',
-            field=models.IntegerField(default=0),
+        migrations.SeparateDatabaseAndState(
+            # Database operation: conditionally add columns
+            database_operations=[
+                migrations.RunPython(
+                    add_match_fields_if_not_exist,
+                    reverse_add_match_fields,
+                ),
+            ],
+            # State operation: update Django's model state
+            state_operations=[
+                migrations.AddField(
+                    model_name='match',
+                    name='completed_at',
+                    field=models.DateTimeField(blank=True, null=True),
+                ),
+                migrations.AddField(
+                    model_name='match',
+                    name='confirmation_completed_at',
+                    field=models.DateTimeField(blank=True, null=True),
+                ),
+                migrations.AddField(
+                    model_name='match',
+                    name='constructor_puuid',
+                    field=models.CharField(blank=True, max_length=100, null=True),
+                ),
+                migrations.AddField(
+                    model_name='match',
+                    name='coregame_id',
+                    field=models.CharField(blank=True, max_length=100, null=True),
+                ),
+                migrations.AddField(
+                    model_name='match',
+                    name='current_round',
+                    field=models.IntegerField(default=0),
+                ),
+                migrations.AddField(
+                    model_name='match',
+                    name='game_server',
+                    field=models.CharField(blank=True, max_length=100, null=True),
+                ),
+                migrations.AddField(
+                    model_name='match',
+                    name='last_updated',
+                    field=models.DateTimeField(auto_now=True),
+                ),
+                migrations.AddField(
+                    model_name='match',
+                    name='selected_map',
+                    field=models.CharField(blank=True, max_length=50, null=True),
+                ),
+                migrations.AddField(
+                    model_name='match',
+                    name='started_at',
+                    field=models.DateTimeField(blank=True, null=True),
+                ),
+                migrations.AddField(
+                    model_name='match',
+                    name='status',
+                    field=models.CharField(choices=[('confirmed', 'All Players Accepted'), ('starting', 'Creating Custom Game'), ('in_progress', 'Match Live'), ('paused', 'Match Paused'), ('completed', 'Match Finished'), ('cancelled', 'Match Cancelled')], default='confirmed', max_length=20),
+                ),
+                migrations.AddField(
+                    model_name='match',
+                    name='team_a_data',
+                    field=models.JSONField(default=dict),
+                ),
+                migrations.AddField(
+                    model_name='match',
+                    name='team_a_score',
+                    field=models.IntegerField(default=0),
+                ),
+                migrations.AddField(
+                    model_name='match',
+                    name='team_b_data',
+                    field=models.JSONField(default=dict),
+                ),
+                migrations.AddField(
+                    model_name='match',
+                    name='team_b_score',
+                    field=models.IntegerField(default=0),
+                ),
+            ],
         ),
         migrations.AlterField(
             model_name='match',
