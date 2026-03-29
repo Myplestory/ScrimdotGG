@@ -3,7 +3,7 @@
 This section documents the actual engineering ownership of ScrimGG based on system-level and commit-level contribution history.
 ---
 
-### 🧠 Core System Architecture & Backend (Primary Author)
+### 🧠 Core System Architecture & Backend **Primary Author: Myplestory**
 
 - Designed full matchmaking system architecture (MMR/ELO + TrueSkill integration)
 - Implemented Django backend (server/)
@@ -15,10 +15,9 @@ This section documents the actual engineering ownership of ScrimGG based on syst
 - Implemented core matchmaking logic and system orchestration
 - Developed the majority of frontend UI and application structure outside of explicitly listed contributions
 
-**Primary Author: Myplestory**
 ---
 
-### 🎨 Frontend / Feature-Level Contributions (Contributor)
+### 🎨 Frontend / Feature-Level Contributions **Contributor: Twoos123**
 
 The following discrete features were implemented by the contributor:
 
@@ -29,7 +28,6 @@ The following discrete features were implemented by the contributor:
 - Frontend page restructuring and navigation updates
 - League system UI module (team creation, standings, schedule, rules)
 
-**Contributor: Twoos123**
 ---
 
 ### ⚙️ Scope Definition (Non-Overlapping Ownership)
