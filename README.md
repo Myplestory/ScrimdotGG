@@ -1,3 +1,48 @@
+## 🔐 Authorship & Contribution Ledger (Source of Truth)
+
+This section documents the actual engineering ownership of ScrimGG based on system-level and commit-level contribution history.
+---
+
+### 🧠 Core System Architecture & Backend (Primary Author)
+
+- Designed full matchmaking system architecture (MMR/ELO + TrueSkill integration)
+- Implemented Django backend (server/)
+- Built WebSocket infrastructure using Django Channels (Daphne ASGI)
+- Designed Redis queueing, caching, and matchmaking state system
+- Implemented Celery task system and scheduling pipeline
+- Designed PostgreSQL schema and data models
+- Built full match lifecycle system (queue → accept → match → results → rating updates)
+- Implemented core matchmaking logic and system orchestration
+- Developed the majority of frontend UI and application structure outside of explicitly listed contributions
+
+**Primary Author: [Myplestory]**
+---
+
+### 🎨 Frontend / Feature-Level Contributions (Contributor)
+
+The following discrete features were implemented by the contributor:
+
+- Forum WebSocket integration (frontend integration feature)
+- Tournament sponsorship functionality
+- GSAP animation system for frontend transitions
+- Login page rotating video background feature
+- Frontend page restructuring and navigation updates
+- League system UI module (team creation, standings, schedule, rules)
+
+**Contributor: Twoos123**
+---
+
+### ⚙️ Scope Definition (Non-Overlapping Ownership)
+
+- Core backend architecture, matchmaking system, infrastructure, client executable and majority of UI/UX were designed and implemented EXCLUSIVELY by the Primary Author.
+- Contributor work consisted of isolated frontend features, UI systems, and integration-level components. NO SYSTEMS WORK WAS DONE BY CONTRIBUTORS.
+- NO SHARED AUTHORITY EXISTS ON BACKEND SYSTEMS, MATCHMAKING LOGIC, OR INFRASTRUCTURE AND SYSTEM DESIGN.
+---
+
+### 📌 Purpose of This Ledger
+
+This document exists to clearly define engineering ownership of ScrimGG at the system level for transparency and technical accuracy.
+
 # Scrim.GG - Competitive Valorant Matchmaking Platform
 
 <div align="center">
@@ -218,24 +263,6 @@ Contributions are welcome!
 5. Open a Pull Request
 
 See [DEVELOPMENT_SETUP.md](./docs/DEVELOPMENT_SETUP.md) for development environment setup.
-
-## Development Status
-
-| Component | Status | Progress |
-|-----------|--------|----------|
-| WebSocket Communication | ✅ Complete | 100% |
-| Lobby System | ✅ Complete | 100% |
-| Chat System | ✅ Complete | 100% |
-| Queue System | ✅ Complete | 100% |
-| **Matchmaking (MMR/ELO)** | ✅ Complete | 100% |
-| **Match Acceptance Flow** | ✅ Complete | 100% |
-| **Requeueing System** | ✅ Complete | 100% |
-| Game Monitor | 🚧 In Progress | 40% |
-| Match Coordinator | 🚧 In Progress | 30% |
-| Veto System | 📋 Planned | 0% |
-| Post-Match Stats/Updates | 📋 Planned | 0% |
-
-**Current Focus:** Game state monitoring and custom game coordination
 
 ## Disclaimer
 
