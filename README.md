@@ -1,3 +1,15 @@
+# Scrim.GG - Competitive Valorant Matchmaking Platform
+
+<div align="center">
+
+![Scrim.GG](https://img.shields.io/badge/Scrim.GG-Valorant-ff4655?style=for-the-badge)
+![Status](https://img.shields.io/badge/Status-In%20Development-yellow?style=for-the-badge)
+![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
+
+**A third-party competitive matchmaking and scrim service for Valorant, tailored specifically for serious players who want to elevate their gameplay to the next level.**
+
+</div>
+
 ## 🔐 Authorship & Contribution Ledger (Source of Truth)
 
 This section documents the actual engineering ownership of ScrimGG based on system-level and commit-level contribution history.
@@ -14,7 +26,6 @@ This section documents the actual engineering ownership of ScrimGG based on syst
 - Built full match lifecycle system (queue → accept → match → results → rating updates)
 - Implemented core matchmaking logic and system orchestration
 - Developed the majority of frontend UI and application structure outside of explicitly listed contributions
-
 ---
 
 ### 🎨 Frontend / Feature-Level Contributions **Contributor: Twoos123**
@@ -27,7 +38,6 @@ The following discrete features were implemented by the contributor:
 - Login page rotating video background feature
 - Frontend page restructuring and navigation updates
 - League system UI module (team creation, standings, schedule, rules)
-
 ---
 
 ### ⚙️ Scope Definition (Non-Overlapping Ownership)
@@ -40,19 +50,6 @@ The following discrete features were implemented by the contributor:
 ### 📌 Purpose of This Ledger
 
 This document exists to clearly define engineering ownership of ScrimGG at the system level for transparency and technical accuracy.
-
-# Scrim.GG - Competitive Valorant Matchmaking Platform
-
-<div align="center">
-
-![Scrim.GG](https://img.shields.io/badge/Scrim.GG-Valorant-ff4655?style=for-the-badge)
-![Status](https://img.shields.io/badge/Status-In%20Development-yellow?style=for-the-badge)
-![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
-
-**A third-party competitive matchmaking and scrim service for Valorant, tailored specifically for serious players who want to elevate their gameplay to the next level.**
-
-</div>
-
 ---
 
 # Overview
