@@ -15,7 +15,7 @@ This section documents the actual engineering ownership of ScrimGG based on syst
 - Implemented core matchmaking logic and system orchestration
 - Developed the majority of frontend UI and application structure outside of explicitly listed contributions
 
-**Primary Author: [Myplestory]**
+**Primary Author: Myplestory**
 ---
 
 ### 🎨 Frontend / Feature-Level Contributions (Contributor)
