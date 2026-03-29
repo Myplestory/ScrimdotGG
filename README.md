@@ -265,7 +265,7 @@ This is a third-party application and is not affiliated with, endorsed by, or co
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is All Rights Reserved - see the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 
