@@ -3,6 +3,82 @@
 import django.db.models.deletion
 import uuid
 from django.db import migrations, models
+from django.db import connection
+
+
+def add_match_fields_if_not_exist(apps, schema_editor):
+    """Add match fields only if they don't already exist."""
+    with connection.cursor() as cursor:
+        # List of fields to add with their SQL types and defaults
+        fields_to_add = [
+            ('completed_at', "TIMESTAMP WITH TIME ZONE", "DEFAULT NULL"),
+            ('confirmation_completed_at', "TIMESTAMP WITH TIME ZONE", "DEFAULT NULL"),
+            ('constructor_puuid', "VARCHAR(100)", "DEFAULT NULL"),
+            ('coregame_id', "VARCHAR(100)", "DEFAULT NULL"),
+            ('current_round', 'INTEGER', 'DEFAULT 0'),
+            ('game_server', "VARCHAR(100)", "DEFAULT NULL"),
+            ('last_updated', "TIMESTAMP WITH TIME ZONE", "DEFAULT CURRENT_TIMESTAMP"),
+            ('selected_map', "VARCHAR(50)", "DEFAULT NULL"),
+            ('started_at', "TIMESTAMP WITH TIME ZONE", "DEFAULT NULL"),
+            ('status', "VARCHAR(20)", "DEFAULT 'confirmed'"),
+            ('team_a_data', 'JSONB', "DEFAULT '{}'::jsonb"),
+            ('team_a_score', 'INTEGER', 'DEFAULT 0'),
+            ('team_b_data', 'JSONB', "DEFAULT '{}'::jsonb"),
+            ('team_b_score', 'INTEGER', 'DEFAULT 0'),
+        ]
+        
+        # Check and add each field if it doesn't exist
+        for field_name, sql_type, default in fields_to_add:
+            cursor.execute("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name='scrimgg_match' AND column_name=%s
+            """, [field_name])
+            if not cursor.fetchone():
+                # Column doesn't exist, add it
+                cursor.execute(f"ALTER TABLE scrimgg_match ADD COLUMN {field_name} {sql_type} {default}")
+
+
+def reverse_add_match_fields(apps, schema_editor):
+    """Remove match fields if they exist."""
+    with connection.cursor() as cursor:
+        fields_to_remove = [
+            'completed_at', 'confirmation_completed_at', 'constructor_puuid',
+            'coregame_id', 'current_round', 'game_server', 'last_updated',
+            'selected_map', 'started_at', 'status', 'team_a_data', 'team_a_score',
+            'team_b_data', 'team_b_score'
+        ]
+        for field_name in fields_to_remove:
+            cursor.execute("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name='scrimgg_match' AND column_name=%s
+            """, [field_name])
+            if cursor.fetchone():
+                cursor.execute(f"ALTER TABLE scrimgg_match DROP COLUMN {field_name}")
+
+
+def create_tables_if_not_exist(apps, schema_editor):
+    """Skip table creation if tables already exist."""
+    # Tables already exist in the database, so we skip creating them
+    # The state_operations will update Django's migration state to reflect that these models exist
+    # This prevents Django from trying to create tables that already exist
+    with connection.cursor() as cursor:
+        # Check if tables exist - if they do, we've already handled them
+        cursor.execute("""
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_name IN ('scrimgg_matchrejointoken', 'scrimgg_matchstatistics')
+        """)
+        existing_tables = [row[0] for row in cursor.fetchall()]
+        # Tables exist, so we do nothing - Django state will be updated by state_operations
+        if 'scrimgg_matchrejointoken' in existing_tables and 'scrimgg_matchstatistics' in existing_tables:
+            pass  # Tables already exist, skip
+
+
+def reverse_create_tables(apps, schema_editor):
+    """Do nothing on reverse - we don't want to drop tables that might have data."""
+    pass
 
 
 class Migration(migrations.Migration):
@@ -12,123 +88,145 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AddField(
-            model_name='match',
-            name='completed_at',
-            field=models.DateTimeField(blank=True, null=True),
-        ),
-        migrations.AddField(
-            model_name='match',
-            name='confirmation_completed_at',
-            field=models.DateTimeField(blank=True, null=True),
-        ),
-        migrations.AddField(
-            model_name='match',
-            name='constructor_puuid',
-            field=models.CharField(blank=True, max_length=100, null=True),
-        ),
-        migrations.AddField(
-            model_name='match',
-            name='coregame_id',
-            field=models.CharField(blank=True, max_length=100, null=True),
-        ),
-        migrations.AddField(
-            model_name='match',
-            name='current_round',
-            field=models.IntegerField(default=0),
-        ),
-        migrations.AddField(
-            model_name='match',
-            name='game_server',
-            field=models.CharField(blank=True, max_length=100, null=True),
-        ),
-        migrations.AddField(
-            model_name='match',
-            name='last_updated',
-            field=models.DateTimeField(auto_now=True),
-        ),
-        migrations.AddField(
-            model_name='match',
-            name='selected_map',
-            field=models.CharField(blank=True, max_length=50, null=True),
-        ),
-        migrations.AddField(
-            model_name='match',
-            name='started_at',
-            field=models.DateTimeField(blank=True, null=True),
-        ),
-        migrations.AddField(
-            model_name='match',
-            name='status',
-            field=models.CharField(choices=[('confirmed', 'All Players Accepted'), ('starting', 'Creating Custom Game'), ('in_progress', 'Match Live'), ('paused', 'Match Paused'), ('completed', 'Match Finished'), ('cancelled', 'Match Cancelled')], default='confirmed', max_length=20),
-        ),
-        migrations.AddField(
-            model_name='match',
-            name='team_a_data',
-            field=models.JSONField(default=dict),
-        ),
-        migrations.AddField(
-            model_name='match',
-            name='team_a_score',
-            field=models.IntegerField(default=0),
-        ),
-        migrations.AddField(
-            model_name='match',
-            name='team_b_data',
-            field=models.JSONField(default=dict),
-        ),
-        migrations.AddField(
-            model_name='match',
-            name='team_b_score',
-            field=models.IntegerField(default=0),
+        migrations.SeparateDatabaseAndState(
+            # Database operation: conditionally add columns
+            database_operations=[
+                migrations.RunPython(
+                    add_match_fields_if_not_exist,
+                    reverse_add_match_fields,
+                ),
+            ],
+            # State operation: update Django's model state
+            state_operations=[
+                migrations.AddField(
+                    model_name='match',
+                    name='completed_at',
+                    field=models.DateTimeField(blank=True, null=True),
+                ),
+                migrations.AddField(
+                    model_name='match',
+                    name='confirmation_completed_at',
+                    field=models.DateTimeField(blank=True, null=True),
+                ),
+                migrations.AddField(
+                    model_name='match',
+                    name='constructor_puuid',
+                    field=models.CharField(blank=True, max_length=100, null=True),
+                ),
+                migrations.AddField(
+                    model_name='match',
+                    name='coregame_id',
+                    field=models.CharField(blank=True, max_length=100, null=True),
+                ),
+                migrations.AddField(
+                    model_name='match',
+                    name='current_round',
+                    field=models.IntegerField(default=0),
+                ),
+                migrations.AddField(
+                    model_name='match',
+                    name='game_server',
+                    field=models.CharField(blank=True, max_length=100, null=True),
+                ),
+                migrations.AddField(
+                    model_name='match',
+                    name='last_updated',
+                    field=models.DateTimeField(auto_now=True),
+                ),
+                migrations.AddField(
+                    model_name='match',
+                    name='selected_map',
+                    field=models.CharField(blank=True, max_length=50, null=True),
+                ),
+                migrations.AddField(
+                    model_name='match',
+                    name='started_at',
+                    field=models.DateTimeField(blank=True, null=True),
+                ),
+                migrations.AddField(
+                    model_name='match',
+                    name='status',
+                    field=models.CharField(choices=[('confirmed', 'All Players Accepted'), ('starting', 'Creating Custom Game'), ('in_progress', 'Match Live'), ('paused', 'Match Paused'), ('completed', 'Match Finished'), ('cancelled', 'Match Cancelled')], default='confirmed', max_length=20),
+                ),
+                migrations.AddField(
+                    model_name='match',
+                    name='team_a_data',
+                    field=models.JSONField(default=dict),
+                ),
+                migrations.AddField(
+                    model_name='match',
+                    name='team_a_score',
+                    field=models.IntegerField(default=0),
+                ),
+                migrations.AddField(
+                    model_name='match',
+                    name='team_b_data',
+                    field=models.JSONField(default=dict),
+                ),
+                migrations.AddField(
+                    model_name='match',
+                    name='team_b_score',
+                    field=models.IntegerField(default=0),
+                ),
+            ],
         ),
         migrations.AlterField(
             model_name='match',
             name='finish_time',
             field=models.DateTimeField(blank=True, null=True),
         ),
-        migrations.CreateModel(
-            name='MatchRejoinToken',
-            fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('token', models.UUIDField(default=uuid.uuid4, unique=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('expires_at', models.DateTimeField()),
-                ('used', models.BooleanField(default=False)),
-                ('used_at', models.DateTimeField(blank=True, null=True)),
-                ('match', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='rejoin_tokens', to='scrimgg.match')),
-                ('player', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='scrimgg.player')),
+        migrations.SeparateDatabaseAndState(
+            database_operations=[
+                migrations.RunPython(
+                    create_tables_if_not_exist,
+                    reverse_create_tables,
+                ),
             ],
-            options={
-                'indexes': [models.Index(fields=['token'], name='scrimgg_mat_token_db007c_idx'), models.Index(fields=['match', 'player'], name='scrimgg_mat_match_i_ed3413_idx')],
-                'unique_together': {('match', 'player')},
-            },
-        ),
-        migrations.CreateModel(
-            name='MatchStatistics',
-            fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('team', models.CharField(max_length=10)),
-                ('kills', models.IntegerField(default=0)),
-                ('deaths', models.IntegerField(default=0)),
-                ('assists', models.IntegerField(default=0)),
-                ('headshots', models.IntegerField(default=0)),
-                ('bodyshots', models.IntegerField(default=0)),
-                ('legshots', models.IntegerField(default=0)),
-                ('damage_dealt', models.IntegerField(default=0)),
-                ('damage_received', models.IntegerField(default=0)),
-                ('adr', models.FloatField(default=0.0)),
-                ('rws', models.FloatField(default=0.0)),
-                ('headshot_percentage', models.FloatField(default=0.0)),
-                ('kd_ratio', models.FloatField(default=0.0)),
-                ('round_stats', models.JSONField(default=dict)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('match', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='statistics', to='scrimgg.match')),
-                ('player', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='scrimgg.player')),
+            state_operations=[
+                migrations.CreateModel(
+                    name='MatchRejoinToken',
+                    fields=[
+                        ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                        ('token', models.UUIDField(default=uuid.uuid4, unique=True)),
+                        ('created_at', models.DateTimeField(auto_now_add=True)),
+                        ('expires_at', models.DateTimeField()),
+                        ('used', models.BooleanField(default=False)),
+                        ('used_at', models.DateTimeField(blank=True, null=True)),
+                        ('match', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='rejoin_tokens', to='scrimgg.match')),
+                        ('player', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='scrimgg.player')),
+                    ],
+                    options={
+                        'indexes': [models.Index(fields=['token'], name='scrimgg_mat_token_db007c_idx'), models.Index(fields=['match', 'player'], name='scrimgg_mat_match_i_ed3413_idx')],
+                        'unique_together': {('match', 'player')},
+                    },
+                ),
+                migrations.CreateModel(
+                    name='MatchStatistics',
+                    fields=[
+                        ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                        ('team', models.CharField(max_length=10)),
+                        ('kills', models.IntegerField(default=0)),
+                        ('deaths', models.IntegerField(default=0)),
+                        ('assists', models.IntegerField(default=0)),
+                        ('headshots', models.IntegerField(default=0)),
+                        ('bodyshots', models.IntegerField(default=0)),
+                        ('legshots', models.IntegerField(default=0)),
+                        ('damage_dealt', models.IntegerField(default=0)),
+                        ('damage_received', models.IntegerField(default=0)),
+                        ('adr', models.FloatField(default=0.0)),
+                        ('rws', models.FloatField(default=0.0)),
+                        ('headshot_percentage', models.FloatField(default=0.0)),
+                        ('kd_ratio', models.FloatField(default=0.0)),
+                        ('round_stats', models.JSONField(default=dict)),
+                        ('updated_at', models.DateTimeField(auto_now=True)),
+                        ('match', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='statistics', to='scrimgg.match')),
+                        ('player', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='scrimgg.player')),
+                    ],
+                    options={
+                        'indexes': [models.Index(fields=['match', 'team'], name='scrimgg_mat_match_i_2e230f_idx')],
+                        'unique_together': {('match', 'player')},
+                    },
+                ),
             ],
-            options={
-                'indexes': [models.Index(fields=['match', 'team'], name='scrimgg_mat_match_i_2e230f_idx')],
-                'unique_together': {('match', 'player')},
-            },
         ),
     ]

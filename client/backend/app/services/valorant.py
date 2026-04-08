@@ -158,7 +158,7 @@ class ValorantService:
                 "GameRules": {
                     "AllowGameModifiers": "true",
                     "PlayOutAllRounds": "true",
-                    "SkipMatchHistory": "true",
+                    "SkipMatchHistory": "false",
                     "TournamentMode": "false",
                     "IsOvertimeWinByTwo": "true",
                 },

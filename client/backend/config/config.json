@@ -1,16 +1,16 @@
 {
-  "environment": "production",
+  "environment": "development",
   "django": {
-    "api_url": "http://34.226.121.133:8000",
-    "ws_url": "ws://34.226.121.133:8000/ws/matchmaking/"
+    "api_url": "http://127.0.0.1:8000",
+    "ws_url": "ws://localhost:8000/ws/matchmaking/"
   },
   "client": {
     "host": "127.0.0.1",
     "port": 5888,
-    "debug": false
+    "debug": true
   },
   "cors": {
-    "origin": "*"
+    "origin": "http://localhost:3000"
   },
   "timeouts": {
     "player_model": 5,
